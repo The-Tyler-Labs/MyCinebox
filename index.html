@@ -617,7 +617,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <span>⊞</span>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-top:6px">
-        <span>1 (grandes)</span><span id="cols-label">2 colonnes</span><span>6 (petites)</span>
+        <span>1 (grandes)</span><span id="cols-label">2 colonnes</span><span>10 (petites)</span>
       </div>
       <div class="size-preview" id="size-preview" style="margin-top:12px"></div>
     </div>
@@ -2048,6 +2048,20 @@ function afficherDetail(f){
     +'<div id="empl-suggestions-'+f.id+'" style="display:none;position:absolute;top:100%;left:0;right:0;background:#222;border:1px solid #333;border-radius:0 0 8px 8px;z-index:50"></div>'
     +'<button class="btn btn-primary btn-sm" style="margin-top:6px;width:100%" onclick="sauvegarderEmplacement('+f.id+')">Sauvegarder l\'emplacement</button>'
     +'</div>'
+    // Langues
+    +'<p style="font-size:11px;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">🗣 Langues disponibles</p>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">'
+    +['VFF','VFQ','VOSTFR','VO','EN','ES','DE','IT','PT','JA','ZH'].map(l=>{
+      const actif=(f.langues||[]).includes(l);
+      return '<button class="qualite-btn'+(actif?' active':'')+'" onclick="toggleLangue('+f.id+',\''+l+'\',this)">'+l+'</button>';
+    }).join('')
+    // Langues custom
+    +(f.langues||[]).filter(l=>!['VFF','VFQ','VOSTFR','VO','EN','ES','DE','IT','PT','JA','ZH'].includes(l)).map(l=>'<span class="genre-tag-edit" style="background:var(--green);color:#fff;padding:3px 10px;border-radius:8px;font-size:12px;display:inline-flex;align-items:center;gap:2px">'+esc(l)+'<span class="genre-del" onclick="supprimerLangue('+f.id+',\''+esc(l)+'\')">✕</span></span>').join('')
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:16px">'
+    +'<input class="version-input" id="langue-custom-'+f.id+'" placeholder="Autre langue..." style="flex:1" onkeydown="if(event.key===\'Enter\'){event.preventDefault();ajouterLangueCustom('+f.id+')}">'
+    +'<button class="btn btn-primary btn-sm" onclick="ajouterLangueCustom('+f.id+')">+</button>'
+    +'</div>'
     // Galerie photos
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">📸 Galerie (jaquettes, photos...)</p>'
     +'<div id="galerie-'+f.id+'" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">'
@@ -2234,15 +2248,13 @@ async function ouvrirFicheFilm(tmdbId,type){
   document.getElementById('modal-fiche-titre').textContent='Chargement...';
   document.getElementById('modal-fiche-body').innerHTML='<div class="loader"><div class="spinner"></div></div>';
   document.getElementById('modal-fiche').classList.add('open');
-  pushModalState('modal-fiche');
   document.getElementById('modal-fiche-add').onclick=()=>ajouterTmdbDepuisModal(tmdbId,type);
   try{
     const endpoint=type==='tv'?'/tv/':'/movie/';
-    const controller=new AbortController();
-    const timeout=setTimeout(()=>controller.abort(),10000);
-    const r=await fetch(TMDB_API+endpoint+tmdbId+'?api_key='+prefs.apiKey+'&language=fr-FR&append_to_response=credits',{signal:controller.signal});
-    clearTimeout(timeout);
+    const r=await fetch(TMDB_API+endpoint+tmdbId+'?api_key='+prefs.apiKey+'&language=fr-FR&append_to_response=credits');
+    if(!r.ok) throw new Error('HTTP '+r.status);
     const d=await r.json();
+    if(!d||d.success===false) throw new Error('Données invalides');
     ficheFilmCourante={...d,_type:type};
     const titre=d.title||d.name||'';
     const date=d.release_date||d.first_air_date||'';
@@ -2611,7 +2623,10 @@ async function ajouterTouteLaCollection(collectionId, nom){
 function renderVisionnagesGlobal(){
   const container=document.getElementById('visionnages-global-list');
   if(!container) return;
-
+  if(!films||films.length===0){
+    container.innerHTML='<p style="color:var(--text2);text-align:center;padding:40px">Aucun film dans la collection</p>';
+    return;
+  }
   // Collecter tous les visionnages de tous les films
   const tous=[];
   films.forEach(f=>{
@@ -3287,6 +3302,38 @@ function ajouterPhotos(id, input){
     };
     reader.readAsDataURL(file);
   });
+}
+
+// ── LANGUES ──
+function toggleLangue(id,langue,btn){
+  const f=films.find(f=>f.id===id);if(!f) return;
+  if(!f.langues) f.langues=[];
+  const idx=f.langues.indexOf(langue);
+  if(idx>=0){f.langues.splice(idx,1);btn.classList.remove('active');}
+  else{f.langues.push(langue);btn.classList.add('active');}
+  sauvegarder();
+}
+
+function ajouterLangueCustom(id){
+  const f=films.find(f=>f.id===id);if(!f) return;
+  const input=document.getElementById('langue-custom-'+id);
+  const l=(input.value||'').trim().toUpperCase();
+  if(!l) return;
+  if(!f.langues) f.langues=[];
+  if(f.langues.includes(l)){snack('Langue déjà présente');return;}
+  f.langues.push(l);
+  sauvegarder();
+  input.value='';
+  afficherDetail(f);
+  snack('✓ Langue ajoutée : '+l);
+}
+
+function supprimerLangue(id,langue){
+  const f=films.find(f=>f.id===id);if(!f) return;
+  f.langues=(f.langues||[]).filter(l=>l!==langue);
+  sauvegarder();
+  afficherDetail(f);
+  snack('Langue supprimée');
 }
 
 function supprimerPhoto(id,idx){
