@@ -2,7 +2,7 @@
   "name": "Vidéothèque",
   "short_name": "Vidéothèque",
   "description": "Ma collection de films et séries",
-  "start_url": "/Videotheque/",
+  "start_url": "/MyCinebox/",
   "display": "standalone",
   "background_color": "#0a0a0a",
   "theme_color": "#1a5c4a",

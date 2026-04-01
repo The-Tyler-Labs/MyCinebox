@@ -2,12 +2,12 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-  <link rel="manifest" href="/Videotheque/manifest.json">
+  <link rel="manifest" href="/MyCinebox/manifest.json">
   <meta name="theme-color" content="#1a5c4a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-  <link rel="apple-touch-icon" href="/Videotheque/icon-192.png">
+  <link rel="apple-touch-icon" href="/MyCinebox/icon-192.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="theme-color" content="#1a5c4a">
 <meta name="mobile-web-app-capable" content="yes">
@@ -3625,7 +3625,7 @@ async function chargerDrive(auto=false){
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('/Videotheque/sw.js')
+    navigator.serviceWorker.register('/MyCinebox/sw.js')
       .then(()=>console.log('Service Worker enregistré'))
       .catch(e=>console.log('SW erreur:', e));
   });

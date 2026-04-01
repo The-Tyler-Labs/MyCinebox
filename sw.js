@@ -1,5 +1,5 @@
-const CACHE_NAME = 'videotheque-202603261112';
-const FILES_TO_CACHE = ['/Videotheque/', '/Videotheque/index.html'];
+const CACHE_NAME = 'videotheque-202603312321';
+const FILES_TO_CACHE = ['/MyCinebox/', '/MyCinebox/index.html'];
 
 self.addEventListener('install', e => {
   e.waitUntil(
