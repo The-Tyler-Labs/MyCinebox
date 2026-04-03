@@ -481,6 +481,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <button onclick="suggestionAleatoire()" style="background:linear-gradient(135deg,#6e3d1a,#1a3d6e);border:none;color:#fff;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:bold;cursor:pointer">🎲 Suggestion</button>
         <button id="btn-selectionner" onclick="toggleModeSelection()" style="background:var(--surface2);border:1px solid #333;color:var(--text2);border-radius:20px;padding:7px 14px;font-size:12px;font-weight:bold;cursor:pointer">☑ Sélect.</button>
     </div>
+    <div id="cat-filter-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
     <div class="films-grid" id="coll-grid"></div>
     <div class="empty" id="coll-empty" style="display:none">Aucun contenu trouvé.</div>
   </div>
@@ -908,7 +909,7 @@ let films=[],prefs={apiKey:'1847535cfa0ee0cdcd25f1954cd9614f',cols:2};
 let triActuel='date',prevPage='collection',currentPage='home';
 let _listeFiltreCourante=[];
 let catTab='tous';
-let tagFiltres={statut:'tous',decennie:new Set(),annee:'',genre:'',nationalite:'',qualite:'',saga:''};
+let tagFiltres={statut:'tous',decennie:new Set(),annee:'',genre:'',nationalite:'',qualite:'',saga:'',catFilter:''};
 let manuelType='films';
 let ficheFilmCourante=null;
 
@@ -937,15 +938,9 @@ function charger(){
   try{prefs={...prefs,...JSON.parse(localStorage.getItem(PREFS_KEY)||'{}') };}catch(e){}
 }
 let _saveCount=0;
-let _autoJsonTimer=null;
 function sauvegarder(){
   localStorage.setItem(DB_KEY,JSON.stringify(films));
-  // Sauvegarde JSON auto après 30s d'inactivité
-  clearTimeout(_autoJsonTimer);
-  _autoJsonTimer=setTimeout(()=>{
-    exporterJSON();
-    snack('💾 Sauvegarde JSON automatique');
-  }, 30000);
+
   localStorage.setItem(DB_KEY+'_backup',JSON.stringify(films));
   localStorage.setItem(DB_KEY+'_backup_date',new Date().toISOString());
   _saveCount++;
@@ -1293,7 +1288,7 @@ function buildFiltresDynamiques(){
 }
 
 function resetFiltres(){
-  tagFiltres={statut:'tous',decennie:new Set(),annee:'',genre:'',nationalite:'',qualite:'',saga:''};
+  tagFiltres={statut:'tous',decennie:new Set(),annee:'',genre:'',nationalite:'',qualite:'',saga:'',catFilter:''};
   document.getElementById('filtre-acteur').value='';
   buildFiltresDynamiques();
   renderCollection();
@@ -1345,8 +1340,8 @@ function renderCollection(){
   }
 
   let liste=films.filter(f=>{
-    if(catTab==='atrouver') return f.statut==='trouver';
-    if(catTab==='acritique') return f.statut==='critique';
+    if(catTab==='atrouver') return f.statut==='trouver'&&(tagFiltres.catFilter===''||f.categorie===tagFiltres.catFilter);
+    if(catTab==='acritique') return f.statut==='critique'&&(tagFiltres.catFilter===''||f.categorie===tagFiltres.catFilter);
     // Animation : afficher tout ce qui a catégorie animation OU genre Animation
     if(catTab==='animation'){
       const estAnimation=f.categorie==='animation'||(f.genres||'').toLowerCase().split(',').map(g=>g.trim()).includes('animation');
@@ -1362,7 +1357,7 @@ function renderCollection(){
     if(tagFiltres.qualite&&!(f.qualites||[]).includes(tagFiltres.qualite)) return false;
     if(tagFiltres.saga&&(f.saga||'')!==tagFiltres.saga) return false;
     if(acteurFiltre&&!(f.casting||'').toLowerCase().includes(acteurFiltre)) return false;
-    if(q&&!(f.titre||'').toLowerCase().includes(q)) return false;
+    if(q&&!(f.titre||'').toLowerCase().includes(q)&&!(f.titreAlt||'').toLowerCase().includes(q)) return false;
     return true;
   });
   // Regrouper les films avec saga : n'afficher qu'une fiche par saga
@@ -1376,6 +1371,20 @@ function renderCollection(){
   });
   liste=trierItems(liste);
   _listeFiltreCourante=liste;
+
+  // Mini-tabs catégorie pour atrouver/acritique
+  if(catTab==='atrouver'||catTab==='acritique'){
+    const cats=['','films','series','spectacles','documentaires','theatre','animation','humour'];
+    const catLabels={'':'Tout','films':'🎬','series':'📺','spectacles':'🎭','documentaires':'🎥','theatre':'🎪','animation':'🎨','humour':'😂'};
+    const catTabsEl=document.getElementById('cat-filter-tabs');
+    if(catTabsEl) catTabsEl.innerHTML=cats.map(c=>
+      '<button class="sort-btn'+(tagFiltres.catFilter===c?' active':'')+'" onclick="tagFiltres.catFilter=\''+c+'\';renderCollection()">'+catLabels[c]+'</button>'
+    ).join('');
+  } else {
+    tagFiltres.catFilter='';
+    const catTabsEl=document.getElementById('cat-filter-tabs');
+    if(catTabsEl) catTabsEl.innerHTML='';
+  }
 
   const actifs=[];
   const statutLabels={trouver:'🔍 À trouver',avoir:'📋 À voir',cours:'▶️ En cours',vu:'👁 Vus'};
@@ -1891,7 +1900,10 @@ function afficherDetail(f){
     episodesHtml+='<div style="display:none">';
     f.saisons.forEach(s=>{
       episodesHtml+='<div style="margin-bottom:8px">'
-        +'<button onclick="const ep=this.nextElementSibling;ep.style.display=ep.style.display===\'none\'?\'flex\':\'none\'" style="width:100%;text-align:left;background:var(--surface);border:1px solid #333;border-radius:8px;padding:8px 12px;color:var(--green-light);font-size:13px;font-weight:bold;cursor:pointer;margin-bottom:4px">'+esc(s.nom)+' ('+s.episodes.length+' épisodes)</button>'
+        +'<button onclick="const ep=this.nextElementSibling;ep.style.display=ep.style.display===\'none\'?\'flex\':\'none\'" style="width:100%;text-align:left;background:var(--surface);border:1px solid #333;border-radius:8px;padding:8px 12px;color:var(--green-light);font-size:13px;font-weight:bold;cursor:pointer;margin-bottom:4px">'+esc(s.nom)+' ('+s.episodes.length+' épisodes)'
+        +(f.saisonQualites&&f.saisonQualites['s'+s.num]?' · '+esc(f.saisonQualites['s'+s.num]):'')
+        +'</button>'
+        +'<div style="display:flex;gap:6px;margin-bottom:4px"><span style="font-size:11px;color:var(--text2)">Qualité :</span><input style="flex:1;background:var(--surface2);border:1px solid #333;border-radius:6px;padding:3px 8px;color:var(--text);font-size:11px" placeholder="ex: BluRay" value="'+(f.saisonQualites&&f.saisonQualites['s'+s.num]?esc(f.saisonQualites['s'+s.num]):'')+'" onblur="sauvegarderQualiteSaison('+f.id+','+s.num+',this.value)"></div>'
         +'<div style="display:none;flex-direction:column;gap:4px">'
         +s.episodes.map(e=>{
           const epKey=f.id+'_s'+s.num+'_e'+e.num;
@@ -1942,9 +1954,8 @@ function afficherDetail(f){
     +'<img class="detail-poster" src="'+(f.affichePath||'')+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="" onclick="voirPhoto(\''+(f.affichePath||'')+'\')" style="cursor:pointer" title="Voir en grand">'
     +'<div style="font-size:9px;color:var(--text2);text-align:center;margin-top:3px;cursor:pointer" onclick="choisirAfficheFilm('+f.id+')">🖼 Changer</div>'
     +'<div class="detail-info">'
-    +'<h2 style="margin-bottom:2px">'+esc(f.titre)+'</h2>'
-    +(f.titreAlt?'<p style="font-size:13px;color:var(--text2);margin-bottom:4px;font-style:italic">('+esc(f.titreAlt)+')</p>':'')
-    +'<div style="margin-bottom:4px"><input class="version-input" id="titrealt-'+f.id+'" value="'+esc(f.titreAlt||'')+'" placeholder="Titre alternatif..." style="font-size:12px;padding:4px 8px" onblur="sauvegarderTitreAlt('+f.id+')"></div>'
+    +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px"><h2 style="margin:0">'+esc(f.titre)+'</h2><button onclick="modifierTitre('+f.id+')" style="background:none;border:none;color:var(--text2);font-size:14px;cursor:pointer;padding:2px">✏️</button></div>'
+    +(f.titreAlt?'<p style="font-size:12px;color:var(--text2);margin-bottom:4px;font-style:italic;cursor:pointer" onclick="modifierTitreAlt('+f.id+')">('+esc(f.titreAlt)+')</p>':'<p style="font-size:11px;color:var(--text2);opacity:.5;cursor:pointer;margin-bottom:4px" onclick="modifierTitreAlt('+f.id+')">+ Ajouter un titre alternatif</p>')
     +'<div class="dmeta">'
     +(f.dateSortie?'📅 '+f.dateSortie+'<br>':'')
     +(f.duree>0?'⏱ '+formatDuree(f.duree)+'<br>':'')
@@ -2077,20 +2088,6 @@ function afficherDetail(f){
     +'<input class="version-input" id="empl-input-'+f.id+'" value="'+(f.emplacement||'')+'" placeholder="ex: Disque dur 1, DVD, NAS..." oninput="showEmplSuggestions('+f.id+')" onblur="setTimeout(()=>hideEmplSuggestions('+f.id+'),200)" onfocus="showEmplSuggestions('+f.id+')">'
     +'<div id="empl-suggestions-'+f.id+'" style="display:none;position:absolute;top:100%;left:0;right:0;background:#222;border:1px solid #333;border-radius:0 0 8px 8px;z-index:50"></div>'
     +'<button class="btn btn-primary btn-sm" style="margin-top:6px;width:100%" onclick="sauvegarderEmplacement('+f.id+')">Sauvegarder l\'emplacement</button>'
-    +'</div>'
-    // Langues
-    +'<p style="font-size:11px;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">🗣 Langues disponibles</p>'
-    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">'
-    +['VFF','VFI','VFQ','VOSTFR','VO','EN','ES','DE','IT','PT','JA','ZH'].map(l=>{
-      const actif=(f.langues||[]).includes(l);
-      return '<button class="qualite-btn'+(actif?' active':'')+'" onclick="toggleLangue('+f.id+',\''+l+'\',this)">'+l+'</button>';
-    }).join('')
-    // Langues custom
-    +(f.langues||[]).filter(l=>!['VFF','VFQ','VOSTFR','VO','EN','ES','DE','IT','PT','JA','ZH'].includes(l)).map(l=>'<span class="genre-tag-edit" style="background:var(--green);color:#fff;padding:3px 10px;border-radius:8px;font-size:12px;display:inline-flex;align-items:center;gap:2px">'+esc(l)+'<span class="genre-del" onclick="supprimerLangue('+f.id+',\''+esc(l)+'\')">✕</span></span>').join('')
-    +'</div>'
-    +'<div style="display:flex;gap:8px;margin-bottom:16px">'
-    +'<input class="version-input" id="langue-custom-'+f.id+'" placeholder="Autre langue..." style="flex:1" onkeydown="if(event.key===\'Enter\'){event.preventDefault();ajouterLangueCustom('+f.id+')}">'
-    +'<button class="btn btn-primary btn-sm" onclick="ajouterLangueCustom('+f.id+')">+</button>'
     +'</div>'
     // Galerie photos
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">📸 Galerie (jaquettes, photos...)</p>'
@@ -3402,6 +3399,35 @@ function voirPhoto(url){
 }
 
 
+function modifierTitre(id){
+  const f=films.find(f=>f.id===id);if(!f) return;
+  const nouveau=prompt('Nouveau titre :',f.titre);
+  if(nouveau===null||nouveau.trim()==='') return;
+  f.titre=nouveau.trim();
+  sauvegarder();
+  afficherDetail(f);
+  snack('✓ Titre modifié');
+}
+
+function modifierTitreAlt(id){
+  const f=films.find(f=>f.id===id);if(!f) return;
+  const nouveau=prompt('Titre alternatif (entre parenthèses) :', f.titreAlt||'');
+  if(nouveau===null) return;
+  f.titreAlt=nouveau.trim();
+  sauvegarder();
+  afficherDetail(f);
+  snack(f.titreAlt?'✓ Titre alternatif ajouté':'Titre alternatif supprimé');
+}
+
+function sauvegarderQualiteSaison(id,numSaison,valeur){
+  const f=films.find(f=>f.id===id);if(!f) return;
+  if(!f.saisonQualites) f.saisonQualites={};
+  if(valeur.trim()) f.saisonQualites['s'+numSaison]=valeur.trim();
+  else delete f.saisonQualites['s'+numSaison];
+  sauvegarder();
+  snack(valeur.trim()?'✓ Qualité saison '+numSaison+' : '+valeur:'Qualité saison supprimée');
+}
+
 function sauvegarderTitreAlt(id){
   const f=films.find(f=>f.id===id);if(!f) return;
   const input=document.getElementById('titrealt-'+id);
@@ -3711,7 +3737,7 @@ async function sauvegarderDrive(silencieux=false){
     if(statusEl) statusEl.textContent='✓ Drive : '+now;
     localStorage.setItem('drive_save_date', now);
     const totEl=document.getElementById('drive-total');
-    if(totEl) totEl.textContent='📊 '+films.length+' titre(s) · '+films.filter(f=>f.statut==='vu').length+' vus';
+    if(totEl) totEl.textContent='📊 '+films.length+' titre(s)';
     if(!silencieux) snack('✓ Sauvegardé sur Google Drive !');
   }catch(e){if(!silencieux) snack('⚠️ Erreur sauvegarde Drive');}
   if(!silencieux&&btn){btn.textContent='☁️ Sauvegarder sur Drive';btn.disabled=false;}
