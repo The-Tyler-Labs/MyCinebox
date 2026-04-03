@@ -636,7 +636,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <h3>🔑 Clé API TMDB</h3>
       <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Pour la recherche en ligne.</p>
       <div class="input-group"><input type="password" id="api-key-input" placeholder="Votre clé API TMDB"></div>
-      <button class="btn btn-primary" style="width:100%" onclick="saveApiKey()">Sauvegarder</button>
+      <button class="btn btn-primary" style="width:100%" onclick="saveApiKey()">Sauvegarder</button></div>
     </div>
     <div class="settings-section">
       <h3>☁️ Google Drive</h3>
@@ -650,12 +650,14 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <button id="btn-drive-save" class="btn btn-primary" style="width:100%;margin-bottom:8px;display:none;background:#0f9d58" onclick="sauvegarderDrive()">☁️ Sauvegarder sur Drive</button>
       <button id="btn-drive-load" class="btn" style="width:100%;margin-bottom:8px;display:none;background:var(--surface2);color:var(--text2);border:1px solid #333" onclick="chargerDrive()">☁️ Charger depuis Drive</button>
       <div id="drive-status" style="font-size:11px;color:var(--text2);text-align:center"></div>
+      <div id="drive-total" style="font-size:11px;color:var(--text2);text-align:center"></div>
     </div>
     <div class="settings-section">
       <h3>💾 Sauvegarde</h3>
       <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Compatible avec l'app <strong style="color:var(--green-light)">Android Studio</strong>.</p>
       <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="exporterJSON()">💾 Sauvegarder ma collection (JSON)</button>
       <div id="json-status" style="font-size:11px;color:var(--text2);text-align:center;margin-bottom:4px"></div>
+      <div id="json-total" style="font-size:11px;color:var(--text2);text-align:center;margin-bottom:4px"></div>
       <label class="btn btn-outline" style="width:100%;display:block;text-align:center;cursor:pointer;padding:10px 16px;border-radius:10px;font-size:14px;font-weight:600">
         📥 Importer (JSON)
         <input type="file" accept=".json" style="display:none" onchange="importerJSON(event)">
@@ -831,7 +833,14 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- PAGE VISIONNAGES -->
 <div class="page" id="page-visionnages">
   <div style="padding-top:8px">
-    <h2 style="font-size:16px;font-weight:bold;margin-bottom:14px">👁 Historique de visionnages</h2>
+    <h2 style="font-size:16px;font-weight:bold;margin-bottom:10px">👁 Historique de visionnages</h2>
+    <input type="search" id="vis-search" placeholder="🔍 Rechercher un titre..." style="width:100%;background:var(--surface);border:1px solid #333;border-radius:10px;padding:10px 14px;color:var(--text);font-size:14px;outline:none;margin-bottom:8px;box-sizing:border-box" oninput="renderVisionnagesGlobal()">
+    <div style="display:flex;gap:6px;margin-bottom:12px">
+      <button class="sort-btn active" id="vis-sort-desc" onclick="setVisSort('desc',this)">📅 + récent</button>
+      <button class="sort-btn" id="vis-sort-asc" onclick="setVisSort('asc',this)">📅 + ancien</button>
+      <button class="sort-btn" id="vis-sort-az" onclick="setVisSort('az',this)">🔤 A→Z</button>
+      <button class="sort-btn" id="vis-sort-za" onclick="setVisSort('za',this)">🔤 Z→A</button>
+    </div>
     <div id="visionnages-global-list"></div>
   </div>
 </div>
@@ -1878,11 +1887,12 @@ function afficherDetail(f){
   // Bloc épisodes pour séries
   let episodesHtml='';
   if(f.categorie==='series' && f.saisons && f.saisons.length>0){
-    episodesHtml='<p style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">📺 Saisons & Épisodes</p>';
+    episodesHtml='<button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\';this.textContent=this.textContent.includes(\'+\')?this.textContent.replace(\'+\',\'-\'):this.textContent.replace(\'-\',\'+\')" style="width:100%;text-align:left;background:var(--surface2);border:1px solid #333;border-radius:10px;padding:10px 14px;color:var(--text);font-size:13px;font-weight:bold;cursor:pointer;margin-bottom:8px">📺 Saisons & Épisodes +</button>';
+    episodesHtml+='<div style="display:none">';
     f.saisons.forEach(s=>{
-      episodesHtml+='<div style="margin-bottom:12px">'
-        +'<p style="font-weight:bold;font-size:13px;margin-bottom:6px;color:var(--green-light)">'+esc(s.nom)+' ('+s.episodes.length+' épisodes)</p>'
-        +'<div style="display:flex;flex-direction:column;gap:4px">'
+      episodesHtml+='<div style="margin-bottom:8px">'
+        +'<button onclick="const ep=this.nextElementSibling;ep.style.display=ep.style.display===\'none\'?\'flex\':\'none\'" style="width:100%;text-align:left;background:var(--surface);border:1px solid #333;border-radius:8px;padding:8px 12px;color:var(--green-light);font-size:13px;font-weight:bold;cursor:pointer;margin-bottom:4px">'+esc(s.nom)+' ('+s.episodes.length+' épisodes)</button>'
+        +'<div style="display:none;flex-direction:column;gap:4px">'
         +s.episodes.map(e=>{
           const epKey=f.id+'_s'+s.num+'_e'+e.num;
           const epVis=(f.episodesVus&&f.episodesVus[epKey])||[];
@@ -1916,6 +1926,7 @@ function afficherDetail(f){
     if(f.nbSaisons>5){
       episodesHtml+='<p style="font-size:12px;color:var(--text2);text-align:center;padding:8px">+ '+(f.nbSaisons-5)+' saison(s) non affichée(s)</p>';
     }
+    episodesHtml+='</div>'; // Fermer le bloc saisons
   } else if(f.categorie==='series' && f.tmdbId){
     episodesHtml='<p style="font-size:12px;color:var(--text2);padding:8px 0">📺 Chargement des épisodes...</p>';
   }
@@ -1930,7 +1941,10 @@ function afficherDetail(f){
     +'<div class="detail-header">'
     +'<img class="detail-poster" src="'+(f.affichePath||'')+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="" onclick="voirPhoto(\''+(f.affichePath||'')+'\')" style="cursor:pointer" title="Voir en grand">'
     +'<div style="font-size:9px;color:var(--text2);text-align:center;margin-top:3px;cursor:pointer" onclick="choisirAfficheFilm('+f.id+')">🖼 Changer</div>'
-    +'<div class="detail-info"><h2>'+esc(f.titre)+'</h2>'
+    +'<div class="detail-info">'
+    +'<h2 style="margin-bottom:2px">'+esc(f.titre)+'</h2>'
+    +(f.titreAlt?'<p style="font-size:13px;color:var(--text2);margin-bottom:4px;font-style:italic">('+esc(f.titreAlt)+')</p>':'')
+    +'<div style="margin-bottom:4px"><input class="version-input" id="titrealt-'+f.id+'" value="'+esc(f.titreAlt||'')+'" placeholder="Titre alternatif..." style="font-size:12px;padding:4px 8px" onblur="sauvegarderTitreAlt('+f.id+')"></div>'
     +'<div class="dmeta">'
     +(f.dateSortie?'📅 '+f.dateSortie+'<br>':'')
     +(f.duree>0?'⏱ '+formatDuree(f.duree)+'<br>':'')
@@ -2017,8 +2031,24 @@ function afficherDetail(f){
     })()
     +'</div>'
     +'<div style="display:flex;gap:8px;margin-bottom:12px">'
-    +'<input class="version-input" id="qualite-custom-'+f.id+'" placeholder="Qualité personnalisée..." style="flex:1" onkeydown="if(event.key===\'Enter\'){event.preventDefault();ajouterQualiteCustom('+f.id+')}">'
+    +'<div style="position:relative;flex:1">'
+    +'<input class="version-input" id="qualite-custom-'+f.id+'" placeholder="Qualité personnalisée..." style="width:100%" onkeydown="if(event.key===\'Enter\'){event.preventDefault();ajouterQualiteCustom('+f.id+')}" oninput="showQualiteCustomSugg('+f.id+')" onfocus="showQualiteCustomSugg('+f.id+')" onblur="setTimeout(()=>hideQualiteCustomSugg('+f.id+'),200)">'
+    +'<div id="qualite-custom-sugg-'+f.id+'" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid #333;border-radius:0 0 8px 8px;z-index:50;max-height:150px;overflow-y:auto"></div>'
+    +'</div>'
     +'<button class="btn btn-primary btn-sm" onclick="ajouterQualiteCustom('+f.id+')">+</button>'
+    +'</div>'
+    // Langues
+    +'<p style="font-size:11px;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">🗣 Langues disponibles</p>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">'
+    +['VFF','VFI','VFQ','VOSTFR','VO','EN','ES','DE','IT','PT','JA','ZH'].map(l=>{
+      const actif=(f.langues||[]).includes(l);
+      return '<button class="qualite-btn'+(actif?' active':'')+'" onclick="toggleLangue('+f.id+',\''+l+'\',this)">'+l+'</button>';
+    }).join('')
+    +(f.langues||[]).filter(l=>!['VFF','VFI','VFQ','VOSTFR','VO','EN','ES','DE','IT','PT','JA','ZH'].includes(l)).map(l=>'<span class="genre-tag-edit" style="background:var(--green);color:#fff;padding:3px 10px;border-radius:8px;font-size:12px;display:inline-flex;align-items:center;gap:2px">'+esc(l)+'<span class="genre-del" onclick="supprimerLangue('+f.id+',\''+esc(l)+'\')">✕</span></span>').join('')
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:16px">'
+    +'<input class="version-input" id="langue-custom-'+f.id+'" placeholder="Autre langue..." style="flex:1" onkeydown="if(event.key===\'Enter\'){event.preventDefault();ajouterLangueCustom('+f.id+')}">'
+    +'<button class="btn btn-primary btn-sm" onclick="ajouterLangueCustom('+f.id+')">+</button>'
     +'</div>'
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Versions</p>'
     +'<div class="version-tags" id="version-tags-'+f.id+'">'
@@ -2051,7 +2081,7 @@ function afficherDetail(f){
     // Langues
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">🗣 Langues disponibles</p>'
     +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">'
-    +['VFF','VFQ','VOSTFR','VO','EN','ES','DE','IT','PT','JA','ZH'].map(l=>{
+    +['VFF','VFI','VFQ','VOSTFR','VO','EN','ES','DE','IT','PT','JA','ZH'].map(l=>{
       const actif=(f.langues||[]).includes(l);
       return '<button class="qualite-btn'+(actif?' active':'')+'" onclick="toggleLangue('+f.id+',\''+l+'\',this)">'+l+'</button>';
     }).join('')
@@ -2620,6 +2650,14 @@ async function ajouterTouteLaCollection(collectionId, nom){
 
 
 // ── HISTORIQUE GLOBAL DE VISIONNAGES ──
+let _visSort='desc';
+function setVisSort(tri,btn){
+  _visSort=tri;
+  document.querySelectorAll('[id^="vis-sort-"]').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderVisionnagesGlobal();
+}
+
 function renderVisionnagesGlobal(){
   const container=document.getElementById('visionnages-global-list');
   if(!container) return;
@@ -2670,29 +2708,33 @@ function renderVisionnagesGlobal(){
     }
   });
 
-  // Trier par date décroissante
-  tous.sort((a,b)=>{
-    const da=new Date(a.date), db=new Date(b.date);
-    if(isNaN(da)) return 1;
-    if(isNaN(db)) return -1;
-    return db-da;
-  });
+  // Filtre recherche
+  const visQ=(document.getElementById('vis-search')?document.getElementById('vis-search').value||'':'').toLowerCase();
+  let liste_vis=visQ?tous.filter(v=>(v.titre||'').toLowerCase().includes(visQ)):[...tous];
 
-  if(tous.length===0){
+  // Trier selon le critère
+  liste_vis.sort((a,b)=>{
+    if(_visSort==='az') return (a.titre||'').localeCompare(b.titre||'','fr');
+    if(_visSort==='za') return (b.titre||'').localeCompare(a.titre||'','fr');
+    const da=new Date(a.date), db=new Date(b.date);
+    if(isNaN(da)) return 1; if(isNaN(db)) return -1;
+    return _visSort==='asc'?da-db:db-da;
+  });
+  if(liste_vis.length===0){
     container.innerHTML='<p style="color:var(--text2);text-align:center;padding:40px">Aucun visionnage enregistré</p>';
     return;
   }
 
   // Grouper par mois
   const parMois={};
-  tous.forEach(v=>{
+  liste_vis.forEach(v=>{
     const d=new Date(v.date);
     const mois=d.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
     if(!parMois[mois]) parMois[mois]=[];
     parMois[mois].push(v);
   });
 
-  container.innerHTML='<p style="font-size:12px;color:var(--text2);margin-bottom:12px">'+tous.length+' visionnage(s) au total</p>'
+  container.innerHTML='<p style="font-size:12px;color:var(--text2);margin-bottom:12px">'+liste_vis.length+' visionnage(s) au total</p>'
     +Object.entries(parMois).map(([mois,vis])=>
       '<div style="margin-bottom:20px">'
       +'<p style="font-size:12px;font-weight:bold;color:var(--green-light);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;border-bottom:1px solid #333;padding-bottom:4px">'+mois+'</p>'
@@ -3359,6 +3401,49 @@ function voirPhoto(url){
   modal.style.display='flex';
 }
 
+
+function sauvegarderTitreAlt(id){
+  const f=films.find(f=>f.id===id);if(!f) return;
+  const input=document.getElementById('titrealt-'+id);
+  if(!input) return;
+  f.titreAlt=(input.value||'').trim();
+  sauvegarder();
+}
+
+function showQualiteCustomSugg(id){
+  const input=document.getElementById('qualite-custom-'+id);
+  const box=document.getElementById('qualite-custom-sugg-'+id);
+  if(!input||!box) return;
+  const val=(input.value||'').toLowerCase();
+  const f=films.find(f=>f.id===id);
+  const standard=['DVD','DVDRip','BDRip','720p','1080p','4K UHD','HDTV','WEBRip','BluRay','H264','H265'];
+  // Récupérer toutes les qualités custom utilisées
+  const toutesCustom=[...new Set(films.flatMap(x=>(x.qualites||[]).filter(q=>!standard.includes(q))))].sort();
+  const filtres=val?toutesCustom.filter(q=>q.toLowerCase().startsWith(val)):toutesCustom;
+  const dejaPres=(f?f.qualites||[]:[]);
+  const disponibles=filtres.filter(q=>!dejaPres.includes(q));
+  if(!disponibles.length){box.style.display='none';return;}
+  box.style.display='block';
+  box.innerHTML=disponibles.map(q=>'<div style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #222" onclick="choisirQualiteCustom('+id+',\''+esc(q)+'\')">'+esc(q)+'</div>').join('');
+}
+
+function hideQualiteCustomSugg(id){
+  const b=document.getElementById('qualite-custom-sugg-'+id);
+  if(b) b.style.display='none';
+}
+
+function choisirQualiteCustom(id,q){
+  const input=document.getElementById('qualite-custom-'+id);
+  if(input) input.value=q;
+  hideQualiteCustomSugg(id);
+  ajouterQualiteCustom(id);
+}
+
+function toggleApiKeySection(){
+  const s=document.getElementById('api-key-section');
+  if(s) s.style.display=s.style.display==='none'?'block':'none';
+}
+
 function sauvegarderEmplacement(id){
   const f=films.find(f=>f.id===id);if(!f) return;
   const val=(document.getElementById('empl-input-'+id).value||'').trim();
@@ -3623,8 +3708,10 @@ async function sauvegarderDrive(silencieux=false){
     }
     const now=new Date().toLocaleString('fr-FR');
     const statusEl=document.getElementById('drive-status');
-    if(statusEl) statusEl.textContent='✓ Sauvegardé le '+now;
+    if(statusEl) statusEl.textContent='✓ Drive : '+now;
     localStorage.setItem('drive_save_date', now);
+    const totEl=document.getElementById('drive-total');
+    if(totEl) totEl.textContent='📊 '+films.length+' titre(s) · '+films.filter(f=>f.statut==='vu').length+' vus';
     if(!silencieux) snack('✓ Sauvegardé sur Google Drive !');
   }catch(e){if(!silencieux) snack('⚠️ Erreur sauvegarde Drive');}
   if(!silencieux&&btn){btn.textContent='☁️ Sauvegarder sur Drive';btn.disabled=false;}
