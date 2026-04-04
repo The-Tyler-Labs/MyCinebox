@@ -2,12 +2,12 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-  <link rel="manifest" href="/MyCinebox/manifest.json">
+  <link rel="manifest" href="/Videotheque/manifest.json">
   <meta name="theme-color" content="#1a5c4a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-  <link rel="apple-touch-icon" href="/MyCinebox/icon-192.png">
+  <link rel="apple-touch-icon" href="/Videotheque/icon-192.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="theme-color" content="#1a5c4a">
 <meta name="mobile-web-app-capable" content="yes">
@@ -401,7 +401,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <button class="cat-tab theatre" id="ctab-theatre" onclick="setCatTab('theatre')">🎪 Théâtre</button>
       <button class="cat-tab animation" id="ctab-animation" onclick="setCatTab('animation')">🎨 Animation</button>
       <button class="cat-tab humour" id="ctab-humour" onclick="setCatTab('humour')">😂 Humour/Sketchs</button>
-      <button class="cat-tab" id="ctab-saga" onclick="setCatTab('saga')" style="background:var(--surface);border:1px solid #333;color:var(--text2)">🎯 Sagas</button>
+      <button class="cat-tab" id="ctab-saga" onclick="setCatTab('saga')" style="background:var(--surface);border:1px solid #333;color:var(--text2)">🎯 Sagas/Filmo</button>
       <button class="cat-tab" id="ctab-atrouver" onclick="setCatTab('atrouver')" style="background:var(--surface);border:1px solid #333;color:#f5a623">🔍 À trouver</button>
       <button class="cat-tab" id="ctab-acritique" onclick="setCatTab('acritique')" style="background:var(--surface);border:1px solid #333;color:#f0a0ff">🎬 Critiques</button>
     </div>
@@ -933,6 +933,9 @@ function charger(){
     const pays=(f.pays||(f.nationalite?f.nationalite.split(',').map(p=>p.trim()).filter(Boolean):[])).map(p=>tradPays(p));
     // Normaliser la catégorie en minuscules
     const categorie=(f.categorie||'films').toLowerCase();
+    // Migration saga -> sagas (tableau)
+    if(f.saga&&!f.sagas) f.sagas=[f.saga];
+    else if(!f.sagas) f.sagas=[];
     return{...f,categorie,statut,qualite:f.qualite||'',qualites,versions:f.versions||[],pays};
   });
   try{prefs={...prefs,...JSON.parse(localStorage.getItem(PREFS_KEY)||'{}') };}catch(e){}
@@ -944,10 +947,6 @@ function sauvegarder(){
   localStorage.setItem(DB_KEY+'_backup',JSON.stringify(films));
   localStorage.setItem(DB_KEY+'_backup_date',new Date().toISOString());
   _saveCount++;
-  if(_saveCount>=10){
-    _saveCount=0;
-    autoExportJSON();
-  }
   // Sauvegarde auto Drive si connecté (avec délai pour éviter trop d'appels)
   if(_googleToken){
     clearTimeout(_driveAutoSaveTimer);
@@ -1279,7 +1278,7 @@ function buildFiltresDynamiques(){
     +toutesQualites.map(q=>'<button class="tag" onclick="setTagFiltre(\'qualite\',\''+esc(q)+'\',this)">'+esc(q)+'</button>').join('');
 
   // Saga
-  const toutesSagas=[...new Set(src.map(f=>f.saga||'').filter(Boolean))].sort();
+  const toutesSagas=[...new Set(src.flatMap(f=>f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[])))].sort();
   const tagsSaga=document.getElementById('tags-saga');
   if(tagsSaga) tagsSaga.innerHTML=toutesSagas.length===0
     ?'<span style="font-size:12px;color:var(--text2)">Aucune saga</span>'
@@ -1300,7 +1299,7 @@ function renderCollection(){
 
   // Mode saga avec filtre actif — afficher les films de la saga
   if(catTab==='saga'&&tagFiltres.saga){
-    const filmsS=films.filter(f=>f.saga===tagFiltres.saga);
+    const filmsS=films.filter(f=>{const fs=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);return fs.includes(tagFiltres.saga);});
     const grid=document.getElementById('coll-grid');
     const empty=document.getElementById('coll-empty');
     document.getElementById('coll-count').textContent=filmsS.length+' film(s)';
@@ -1309,7 +1308,8 @@ function renderCollection(){
     const back='<div style="grid-column:1/-1;margin-bottom:10px;display:flex;align-items:center;gap:10px">'
       +'<button onclick="retourSagas()" style="background:var(--surface2);border:1px solid #333;color:var(--text2);border-radius:20px;padding:6px 14px;font-size:12px;cursor:pointer">← Sagas</button>'
       +'<span style="font-size:14px;font-weight:bold;color:#90d0ff">🎯 '+esc(tagFiltres.saga)+'</span>'
-      +'<button onclick="choisirAfficheSagaCourante()" style="margin-left:auto;background:var(--surface2);border:1px solid #333;color:var(--text2);border-radius:20px;padding:6px 14px;font-size:12px;cursor:pointer">🖼 Affiche</button>'
+      +'<button onclick="choisirAfficheSagaCourante()" style="background:var(--surface2);border:1px solid #333;color:var(--text2);border-radius:20px;padding:6px 14px;font-size:12px;cursor:pointer">🖼 Affiche</button>'
+      +'<button onclick="modifierNomSaga(\''+esc(tagFiltres.saga)+'\')" style="margin-left:auto;background:var(--surface2);border:1px solid #333;color:var(--text2);border-radius:20px;padding:6px 14px;font-size:12px;cursor:pointer">✏️ Renommer</button>'
       +'</div>';
     grid.innerHTML=back+trierItems(filmsS).map(itemCard).join('');
     grid.oncontextmenu=e=>e.preventDefault();
@@ -1326,7 +1326,7 @@ function renderCollection(){
     empty.style.display='none';
     grid.style.display='grid';
     grid.innerHTML=sagas.map(saga=>{
-      const filmsS=films.filter(f=>f.saga===saga);
+      const filmsS=films.filter(f=>{const fs=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);return fs.includes(saga);});
       const premier=filmsS.find(f=>f.affichePath)||filmsS[0];
       const affiche=premier&&premier.affichePath?premier.affichePath:'';
       return '<div style="background:var(--surface);border-radius:12px;overflow:hidden;cursor:pointer" onclick="voirSaga(this.getAttribute(\'data-saga\'))" data-saga="'+esc(saga)+'">'
@@ -1355,7 +1355,7 @@ function renderCollection(){
     if(tagFiltres.genre&&!(f.genres||'').toLowerCase().includes(tagFiltres.genre.toLowerCase())) return false;
     if(tagFiltres.nationalite&&!(f.pays||[]).includes(tagFiltres.nationalite)) return false;
     if(tagFiltres.qualite&&!(f.qualites||[]).includes(tagFiltres.qualite)) return false;
-    if(tagFiltres.saga&&(f.saga||'')!==tagFiltres.saga) return false;
+    if(tagFiltres.saga){const fSagas=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);if(!fSagas.includes(tagFiltres.saga)) return false;}
     if(acteurFiltre&&!(f.casting||'').toLowerCase().includes(acteurFiltre)) return false;
     if(q&&!(f.titre||'').toLowerCase().includes(q)&&!(f.titreAlt||'').toLowerCase().includes(q)) return false;
     return true;
@@ -1364,9 +1364,11 @@ function renderCollection(){
   // La fiche représente tous les films de la saga (pas seulement ceux filtrés)
   const sagasVues=new Set();
   liste=liste.filter(f=>{
-    if(!f.saga) return true;
-    if(sagasVues.has(f.saga)) return false;
-    sagasVues.add(f.saga);
+    const fSagas2=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);
+    if(!fSagas2.length) return true;
+    const firstSaga=fSagas2[0];
+    if(sagasVues.has(firstSaga)) return false;
+    sagasVues.add(firstSaga);
     return true;
   });
   liste=trierItems(liste);
@@ -1459,17 +1461,17 @@ let _selectionIds=new Set();
 
 function itemCard(f){
   // Si le film fait partie d'une saga, afficher la fiche saga
-  if(f.saga&&!_modeSelection&&catTab!=='saga'){
-    const filmsS=films.filter(x=>x.saga===f.saga);
-    const afficheSaga=f.sagaAffiche||(filmsS.find(x=>x.affichePath)||filmsS[0]||f).affichePath||'';
+  const fSagas_=(f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]));if(fSagas_.length>0&&!_modeSelection&&catTab!=='saga'){
+    const saga_=fSagas_[0]; const filmsS=films.filter(x=>{const xs=x.sagas&&x.sagas.length?x.sagas:(x.saga?[x.saga]:[]);return xs.includes(saga_);});
+    const afficheSaga=f.sagaAffiche||(filmsS.find(x=>x.sagaAffiche)||filmsS.find(x=>x.affichePath)||filmsS[0]||f).affichePath||'';
     const selClass=_selectionIds.has(f.id)?' selected':'';
-    return '<div class="film-card'+selClass+'" onclick="voirSagaCollection(this.dataset.saga)" data-saga="'+esc(f.saga)+'" oncontextmenu="event.preventDefault();ouvrirActionsRapides('+f.id+')" ontouchstart="startLongPress(event,'+f.id+')" ontouchend="cancelLongPress()" ontouchmove="cancelLongPress()">'
+    return '<div class="film-card'+selClass+'" onclick="voirSagaCollection(this.dataset.saga)" data-saga="'+esc(saga_)+'" oncontextmenu="event.preventDefault();ouvrirActionsRapides('+f.id+')" ontouchstart="startLongPress(event,'+f.id+')" ontouchend="cancelLongPress()" ontouchmove="cancelLongPress()">'
       +'<div class="poster-wrap">'
       +(afficheSaga?'<img src="'+afficheSaga+'" onerror="this.style.display=\'none\'" alt="">':'<div class="no-img" style="display:flex">🎯</div>')
       +'<span class="cat-badge films">🎯</span>'
       +'</div>'
       +'<div class="fc-body">'
-      +'<div class="fc-title">'+esc(f.saga)+'</div>'
+      +'<div class="fc-title">'+esc(saga_)+'</div>'
       +'<div class="fc-meta"><span class="fc-year" style="color:#90d0ff">'+filmsS.length+' film(s)</span></div>'
       +'</div></div>';
   }
@@ -1585,7 +1587,7 @@ function assignerSaga(){
   sauvegarderSnapshot('Saga "'+saga+'" assignée à '+ids.length+' film(s)');
   ids.forEach(id=>{
     const f=films.find(f=>f.id===id);
-    if(f) f.saga=saga;
+    if(f){if(!f.sagas)f.sagas=[];if(!f.sagas.includes(saga))f.sagas.push(saga);f.saga=f.sagas[0];}
   });
   sauvegarder();
   fermerModal('modal-saga');
@@ -1719,7 +1721,7 @@ function assignerSaga(){
   sauvegarderSnapshot('Saga "'+saga+'" sur '+ids.length+' film(s)');
   ids.forEach(id=>{
     const f=films.find(f=>f.id===id);
-    if(f) f.saga=saga;
+    if(f){if(!f.sagas)f.sagas=[];if(!f.sagas.includes(saga))f.sagas.push(saga);f.saga=f.sagas[0];}
   });
   sauvegarder();
   fermerModal('modal-saga');
@@ -1903,8 +1905,13 @@ function afficherDetail(f){
         +'<button onclick="const ep=this.nextElementSibling;ep.style.display=ep.style.display===\'none\'?\'flex\':\'none\'" style="width:100%;text-align:left;background:var(--surface);border:1px solid #333;border-radius:8px;padding:8px 12px;color:var(--green-light);font-size:13px;font-weight:bold;cursor:pointer;margin-bottom:4px">'+esc(s.nom)+' ('+s.episodes.length+' épisodes)'
         +(f.saisonQualites&&f.saisonQualites['s'+s.num]?' · '+esc(f.saisonQualites['s'+s.num]):'')
         +'</button>'
-        +'<div style="display:flex;gap:6px;margin-bottom:4px"><span style="font-size:11px;color:var(--text2)">Qualité :</span><input style="flex:1;background:var(--surface2);border:1px solid #333;border-radius:6px;padding:3px 8px;color:var(--text);font-size:11px" placeholder="ex: BluRay" value="'+(f.saisonQualites&&f.saisonQualites['s'+s.num]?esc(f.saisonQualites['s'+s.num]):'')+'" onblur="sauvegarderQualiteSaison('+f.id+','+s.num+',this.value)"></div>'
-        +'<div style="display:none;flex-direction:column;gap:4px">'
+        +'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">'
+        +['DVD','DVDRip','BDRip','720p','1080p','4K UHD','HDTV','WEBRip','BluRay','H264','H265'].map(q=>{
+          const actif=(f.saisonQualites&&f.saisonQualites['s'+s.num])?f.saisonQualites['s'+s.num]===q:false;
+          return '<button class="qualite-btn'+(actif?' active':'')+'" style="font-size:10px;padding:3px 7px" onclick="setSaisonQualite('+f.id+','+s.num+',\''+q+'\',this)">'+q+'</button>';
+        }).join('')
+        +'</div>'
+        +'<div style="flex-direction:column;gap:4px;display:flex">'
         +s.episodes.map(e=>{
           const epKey=f.id+'_s'+s.num+'_e'+e.num;
           const epVis=(f.episodesVus&&f.episodesVus[epKey])||[];
@@ -1956,6 +1963,7 @@ function afficherDetail(f){
     +'<div class="detail-info">'
     +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px"><h2 style="margin:0">'+esc(f.titre)+'</h2><button onclick="modifierTitre('+f.id+')" style="background:none;border:none;color:var(--text2);font-size:14px;cursor:pointer;padding:2px">✏️</button></div>'
     +(f.titreAlt?'<p style="font-size:12px;color:var(--text2);margin-bottom:4px;font-style:italic;cursor:pointer" onclick="modifierTitreAlt('+f.id+')">('+esc(f.titreAlt)+')</p>':'<p style="font-size:11px;color:var(--text2);opacity:.5;cursor:pointer;margin-bottom:4px" onclick="modifierTitreAlt('+f.id+')">+ Ajouter un titre alternatif</p>')
+    +((f.sagas&&f.sagas.length>0)?'<p style="font-size:11px;color:#90d0ff;margin-bottom:4px">🎯 '+f.sagas.join(' · ')+'</p>':'')
     +'<div class="dmeta">'
     +(f.dateSortie?'📅 '+f.dateSortie+'<br>':'')
     +(f.duree>0?'⏱ '+formatDuree(f.duree)+'<br>':'')
@@ -3198,7 +3206,10 @@ function choisirAfficheSaga(saga){
 
 function setAfficheSaga(saga,affiche){
   // Stocker l'affiche choisie sur tous les films de la saga
-  films.filter(f=>f.saga===saga).forEach(f=>f.sagaAffiche=affiche);
+  films.forEach(f=>{
+    const fSagas=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);
+    if(fSagas.includes(saga)) f.sagaAffiche=affiche;
+  });
   sauvegarder();
   fermerModal('modal-affiche-saga');
   renderCollection();
@@ -3417,6 +3428,41 @@ function modifierTitreAlt(id){
   sauvegarder();
   afficherDetail(f);
   snack(f.titreAlt?'✓ Titre alternatif ajouté':'Titre alternatif supprimé');
+}
+
+
+function setSaisonQualite(id,numSaison,qualite,btn){
+  const f=films.find(f=>f.id===id);if(!f) return;
+  if(!f.saisonQualites) f.saisonQualites={};
+  const key='s'+numSaison;
+  if(f.saisonQualites[key]===qualite){
+    delete f.saisonQualites[key];
+    btn.classList.remove('active');
+  } else {
+    f.saisonQualites[key]=qualite;
+    // Désactiver les autres boutons de la même saison
+    btn.closest('div').querySelectorAll('.qualite-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+  sauvegarder();
+}
+
+function modifierNomSaga(ancienNom){
+  const nouveau=prompt('Nouveau nom de la saga :', ancienNom);
+  if(!nouveau||nouveau.trim()===''||nouveau.trim()===ancienNom) return;
+  const nouveauNom=nouveau.trim();
+  // Renommer dans tous les films
+  let count=0;
+  films.forEach(f=>{
+    if(f.sagas){
+      const idx=f.sagas.indexOf(ancienNom);
+      if(idx>=0){f.sagas[idx]=nouveauNom;count++;}
+    }
+    if(f.saga===ancienNom) f.saga=nouveauNom;
+  });
+  sauvegarder();
+  renderCollection();
+  snack('✓ Saga renommée en "'+nouveauNom+'" ('+count+' films)');
 }
 
 function sauvegarderQualiteSaison(id,numSaison,valeur){
@@ -3785,7 +3831,7 @@ async function chargerDrive(auto=false){
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('/MyCinebox/sw.js')
+    navigator.serviceWorker.register('/Videotheque/sw.js')
       .then(()=>console.log('Service Worker enregistré'))
       .catch(e=>console.log('SW erreur:', e));
   });
