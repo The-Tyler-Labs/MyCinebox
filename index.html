@@ -146,7 +146,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .cat-tab.active.animation{background:#1a4a6e;border-color:#1a4a6e}
 
 /* FILTRES */
-.filtres-panel{background:var(--surface);border-radius:12px;padding:12px;margin-bottom:12px;display:none}
+.filtres-panel{background:var(--surface);border-radius:12px;padding:8px;margin-bottom:8px;display:none}
 .filtres-panel.open{display:block}
 .filtre-groupe{margin-bottom:12px}
 .filtre-groupe:last-child{margin-bottom:0}
@@ -424,7 +424,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <span class="filtre-label">Décennie</span>
         <div class="tags-scroll" id="tags-decennie"></div>
       </div>
-      <div class="filtre-groupe">
+      <div class="filtre-groupe" id="fg-annee" style="display:none">
         <span class="filtre-label">Année</span>
         <div class="tags-scroll" id="tags-annee"></div>
       </div>
@@ -2337,11 +2337,14 @@ async function ouvrirFicheFilm(tmdbId,type){
       +(d.overview?'<p class="modal-film-overview">'+esc(d.overview)+'</p>':'')
       +(cast.length>0?
         '<p class="section-sub">🎭 Casting</p><div class="cast-grid">'
-        +cast.map(a=>'<div class="cast-card" data-actorid="'+a.id+'" data-actorname="'+esc(a.name)+'" onclick="ouvrirFilmographie(this.dataset.actorid,this.dataset.actorname)">'
-          +'<img src="'+(a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:'')+'" onerror="this.style.background=\'var(--surface)\';this.src=\'\'" alt="">'
-          +'<div class="cast-name">'+esc(a.name)+'</div>'
-          +'<div class="cast-role">'+esc(a.character||'')+'</div>'
-          +'</div>').join('')+'</div>'
+        +cast.map(a=>{
+          const aid=a.id, aname=esc(a.name);
+          return '<div class="cast-card" onclick="ouvrirFilmographie('+aid+',\''+aname+'\''+')" style="cursor:pointer">'
+            +'<img src="'+(a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:'')+'" onerror="this.style.background=\'var(--surface)\';this.src=\'\'" alt="">'
+            +'<div class="cast-name">'+esc(a.name)+'</div>'
+            +'<div class="cast-role">'+esc(a.character||'')+'</div>'
+            +'</div>';
+        }).join('')+'</div>'
       :'');
   }catch(e){document.getElementById('modal-fiche-body').innerHTML='<p style="color:var(--red);text-align:center;padding:20px">Erreur de chargement</p>';}
 }
@@ -3756,9 +3759,8 @@ async function chargerProfilGoogle(){
     document.getElementById('google-email').textContent=u.email||'';
     if(u.picture) document.getElementById('google-avatar').src=u.picture;
     localStorage.setItem('google_was_connected','1');
-    snack('✓ Connecté : '+u.name+' — chargement depuis Drive...');
-    // Charger automatiquement depuis Drive au login
-    await chargerDrive(true);
+    snack('✓ Connecté : '+u.name+' — synchronisation Drive...');
+    await mergeAutoDrive();
   }catch(e){snack('Erreur profil Google');}
 }
 
@@ -3833,6 +3835,26 @@ async function chargerDriveAvecMerge(){
       snack('\u2714 Merge : +'+depuisDrive.length+' reçus, '+versDriver.length+' envoyés');
     }
   }catch(e){snack('\u26a0\ufe0f Erreur : '+e.message);}
+}
+
+async function mergeAutoDrive(){
+  try{
+    const fichier=await trouverFichierDrive();
+    if(!fichier){await sauvegarderDrive(true);snack('✓ Collection sauvegardée sur Drive');return;}
+    const r=await fetch('https://www.googleapis.com/drive/v3/files/'+fichier.id+'?alt=media',{headers:{Authorization:'Bearer '+_googleToken}});
+    const driveFilms=await r.json();
+    if(!Array.isArray(driveFilms)){await chargerDrive(true);return;}
+    const localKeys=new Set(films.map(f=>f.tmdbId?'id:'+f.tmdbId:'titre:'+f.titre));
+    const driveKeys=new Set(driveFilms.map(f=>f.tmdbId?'id:'+f.tmdbId:'titre:'+f.titre));
+    const depuisDrive=driveFilms.filter(f=>!localKeys.has(f.tmdbId?'id:'+f.tmdbId:'titre:'+f.titre));
+    const versDrive=films.filter(f=>!driveKeys.has(f.tmdbId?'id:'+f.tmdbId:'titre:'+f.titre));
+    if(depuisDrive.length===0&&versDrive.length===0){snack('✓ Drive synchronisé ('+films.length+' titres)');return;}
+    depuisDrive.forEach(f=>films.push({...f,categorie:(f.categorie||'films').toLowerCase()}));
+    sauvegarder();
+    await sauvegarderDrive(true);
+    renderHome();renderCollection();
+    snack('✓ Sync : +'+depuisDrive.length+' depuis Drive, +'+versDrive.length+' envoyés');
+  }catch(e){snack('Connexion OK (sync échouée)');}
 }
 
 async function chargerDrive(auto=false){
