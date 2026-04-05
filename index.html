@@ -506,7 +506,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <button class="btn btn-primary" onclick="searchTmdb('movie')">🔍</button>
       </div>
       <div id="search-loader" class="loader" style="display:none"><div class="spinner"></div></div>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:4px 0"><span style="font-size:11px;color:var(--text2)">🔎 Taille :</span><input type="range" min="2" max="6" step="1" value="3" style="flex:1;accent-color:var(--green)" oninput="setSearchCols(this.value)"><span id="search-cols-label" style="font-size:11px;color:var(--text2);min-width:20px">3</span></div><div id="search-results"></div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:11px;color:var(--text2)">🔎 Taille :</span><input type="range" min="2" max="6" step="1" value="3" style="width:80px;accent-color:var(--green)" oninput="setSearchCols(this.value)"><span id="search-cols-label" style="font-size:11px;color:var(--text2)">3</span><button class="sort-btn active" id="search-sort-pop" onclick="setSearchSort('pop',this)">⭐ Popularité</button><button class="sort-btn" id="search-sort-date" onclick="setSearchSort('date',this)">📅 Date</button></div><div id="search-results"></div>
     </div>
 
     <!-- Acteur -->
@@ -650,6 +650,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <button id="btn-google-signin" class="btn btn-primary" style="width:100%;margin-bottom:8px;background:#4285f4" onclick="googleSignIn()">G Se connecter avec Google</button>
       <button id="btn-drive-save" class="btn btn-primary" style="width:100%;margin-bottom:8px;display:none;background:#0f9d58" onclick="sauvegarderDrive()">☁️ Sauvegarder sur Drive</button>
       <button id="btn-drive-load" class="btn" style="width:100%;margin-bottom:8px;display:none;background:var(--surface2);color:var(--text2);border:1px solid #333" onclick="chargerDrive()">☁️ Charger depuis Drive</button>
+      <button id="btn-drive-merge" class="btn" style="width:100%;margin-bottom:8px;display:none;background:#1a3a5c;color:#90d0ff;border:1px solid #333" onclick="chargerDriveAvecMerge()">🔀 Merger local + Drive</button>
       <div id="drive-status" style="font-size:11px;color:var(--text2);text-align:center"></div>
       <div id="drive-total" style="font-size:11px;color:var(--text2);text-align:center"></div>
     </div>
@@ -899,6 +900,14 @@ const PAYS_FR={
   'Montenegro':'Monténégro'
 };
 function tradPays(p){ return PAYS_FR[p]||p; }
+
+
+const TMDB_GENRES={28:'Action',12:'Aventure',16:'Animation',35:'Comédie',80:'Crime',
+  99:'Documentaire',18:'Drame',10751:'Famille',14:'Fantastique',36:'Histoire',
+  27:'Horreur',10402:'Musique',9648:'Mystère',10749:'Romance',878:'Science-Fiction',
+  10770:'Téléfilm',53:'Thriller',10752:'Guerre',37:'Western',
+  10759:'Action & Aventure',10762:'Enfants',10763:'Actualités',10764:'Réalité',
+  10765:'Science-Fiction & Fantastique',10766:'Soap',10767:'Talk',10768:'Guerre & Politique'};
 
 const TMDB_API='https://api.themoviedb.org/3';
 
@@ -1675,6 +1684,13 @@ function assignerGenreSelection(){
 
 // ── TAILLE RÉSULTATS RECHERCHE ──
 let _searchResultSize=1;
+let _searchSort='pop';
+function setSearchSort(tri,btn){
+  _searchSort=tri;
+  document.querySelectorAll('[id^="search-sort-"]').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+}
+
 function setSearchCols(val){
   const n=parseInt(val);
   document.documentElement.style.setProperty('--search-cols',n);
@@ -1902,7 +1918,7 @@ function afficherDetail(f){
     episodesHtml+='<div style="display:none">';
     f.saisons.forEach(s=>{
       episodesHtml+='<div style="margin-bottom:8px">'
-        +'<button onclick="const ep=this.nextElementSibling;ep.style.display=ep.style.display===\'none\'?\'flex\':\'none\'" style="width:100%;text-align:left;background:var(--surface);border:1px solid #333;border-radius:8px;padding:8px 12px;color:var(--green-light);font-size:13px;font-weight:bold;cursor:pointer;margin-bottom:4px">'+esc(s.nom)+' ('+s.episodes.length+' épisodes)'
+        +'<button onclick="const ep=this.parentElement.querySelector(\'.ep-list\');ep.style.display=ep.style.display===\'none\'?\'flex\':\'none\'" style="width:100%;text-align:left;background:var(--surface);border:1px solid #333;border-radius:8px;padding:8px 12px;color:var(--green-light);font-size:13px;font-weight:bold;cursor:pointer;margin-bottom:4px">'+esc(s.nom)+' ('+s.episodes.length+' épisodes)'
         +(f.saisonQualites&&f.saisonQualites['s'+s.num]?' · '+esc(f.saisonQualites['s'+s.num]):'')
         +'</button>'
         +'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">'
@@ -1911,7 +1927,7 @@ function afficherDetail(f){
           return '<button class="qualite-btn'+(actif?' active':'')+'" style="font-size:10px;padding:3px 7px" onclick="setSaisonQualite('+f.id+','+s.num+',\''+q+'\',this)">'+q+'</button>';
         }).join('')
         +'</div>'
-        +'<div style="flex-direction:column;gap:4px;display:flex">'
+        +'<div class="ep-list" style="display:none;flex-direction:column;gap:4px">'
         +s.episodes.map(e=>{
           const epKey=f.id+'_s'+s.num+'_e'+e.num;
           const epVis=(f.episodesVus&&f.episodesVus[epKey])||[];
@@ -1952,7 +1968,7 @@ function afficherDetail(f){
 
   document.getElementById('detail-content').innerHTML=
     '<div style="position:relative">'
-    +'<img class="detail-backdrop" src="'+(f.backdropPath||f.affichePath||'')+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="">'
+    +'<img class="detail-backdrop" src="'+(f.backdropPath||f.affichePath||'')+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="" onclick="voirPhoto(this.src)" style="cursor:pointer" title="Cliquer pour agrandir">'
     +'<button onclick="goPage(prevPage)" style="position:absolute;top:12px;left:12px;background:rgba(0,0,0,.6);border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-size:20px;border:none;color:#fff;cursor:pointer">←</button>'
     +'<span style="position:absolute;top:12px;right:12px;background:rgba(0,0,0,.6);padding:4px 10px;border-radius:12px;font-size:13px">'+cat.icon+' '+cat.label+'</span>'
     +'</div>'
@@ -2257,15 +2273,18 @@ async function searchTmdb(type){
       document.getElementById(resultsId).innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">Aucun résultat</p>';
       return;
     }
-    document.getElementById(resultsId).innerHTML=data.results.slice(0,15).map(f=>{
+    let results_=data.results.slice(0,20);
+    if(_searchSort==='date') results_.sort((a,b)=>(b.release_date||b.first_air_date||'').localeCompare(a.release_date||a.first_air_date||''));
+    document.getElementById(resultsId).innerHTML=results_.map(f=>{
       const titre=f.title||f.name||'';
       const date=(f.release_date||f.first_air_date||'').slice(0,4);
       const img=f.poster_path?TMDB_IMG+f.poster_path:'';
       const deja=films.some(x=>x.tmdbId===f.id);
+      const genres_=(f.genre_ids||[]).slice(0,3).map(id=>TMDB_GENRES[id]).filter(Boolean).join(', ');
       return '<div class="result-item" onclick="ouvrirFicheFilm('+f.id+',\''+type+'\')">'
         +'<img src="'+img+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="">'
         +'<div class="result-info"><h4>'+esc(titre)+'</h4>'
-        +'<div class="rmeta">'+date+(f.vote_average>0?' • ⭐ '+f.vote_average.toFixed(1):'')+'</div>'
+        +'<div class="rmeta">'+date+(f.vote_average>0?' • ⭐ '+f.vote_average.toFixed(1):'')+(genres_?' • '+esc(genres_):'')+'</div>'
         +'<div class="roverview">'+esc(f.overview||'')+'</div></div>'
         +'<button class="btn '+(deja?'':'btn-primary')+' add-btn" style="flex-shrink:0;padding:6px 12px;font-size:13px;'+(deja?'background:#333;color:var(--text2)':'')+'" onclick="event.stopPropagation();event.preventDefault();ajouterTmdb('+f.id+',\''+type+'\',this)" '+(deja?'disabled':'')+'>'
         +(deja?'✓':'+')+'</button></div>';
@@ -2843,6 +2862,7 @@ async function chargerFilmographie(acteurId,nom){
 }
 
 async function ouvrirFilmographie(acteurId,nom){
+  if(!acteurId||acteurId==='undefined'){snack('⚠️ Acteur non trouvé');return;}
   fermerModal('modal-fiche');
   document.getElementById('modal-filmo-titre').textContent=nom;
   document.getElementById('modal-filmo-body').innerHTML='<div class="loader"><div class="spinner"></div></div>';
@@ -3787,6 +3807,32 @@ async function sauvegarderDrive(silencieux=false){
     if(!silencieux) snack('✓ Sauvegardé sur Google Drive !');
   }catch(e){if(!silencieux) snack('⚠️ Erreur sauvegarde Drive');}
   if(!silencieux&&btn){btn.textContent='☁️ Sauvegarder sur Drive';btn.disabled=false;}
+}
+
+
+// ── MERGE LOCAL + DRIVE ──
+async function chargerDriveAvecMerge(){
+  if(!_googleToken){snack('\u26a0\ufe0f Connectez-vous à Google');return;}
+  try{
+    const fichier=await trouverFichierDrive();
+    if(!fichier){snack('\u26a0\ufe0f Aucune sauvegarde Drive');return;}
+    const r=await fetch('https://www.googleapis.com/drive/v3/files/'+fichier.id+'?alt=media',
+      {headers:{Authorization:'Bearer '+_googleToken}});
+    const driveFilms=await r.json();
+    if(!Array.isArray(driveFilms)){snack('\u26a0\ufe0f Format invalide');return;}
+    const localIds=new Set(films.map(f=>String(f.tmdbId||'')+f.titre));
+    const driveIds=new Set(driveFilms.map(f=>String(f.tmdbId||'')+f.titre));
+    const depuisDrive=driveFilms.filter(f=>!localIds.has(String(f.tmdbId||'')+f.titre));
+    const versDriver=films.filter(f=>!driveIds.has(String(f.tmdbId||'')+f.titre));
+    if(depuisDrive.length===0&&versDriver.length===0){snack('\u2714 Collections identiques');return;}
+    if(confirm('Merger '+depuisDrive.length+' films depuis Drive et envoyer '+versDriver.length+' films vers Drive ?')){
+      depuisDrive.forEach(f=>films.push({...f,categorie:(f.categorie||'films').toLowerCase()}));
+      sauvegarder();
+      await sauvegarderDrive(true);
+      renderHome();renderCollection();
+      snack('\u2714 Merge : +'+depuisDrive.length+' reçus, '+versDriver.length+' envoyés');
+    }
+  }catch(e){snack('\u26a0\ufe0f Erreur : '+e.message);}
 }
 
 async function chargerDrive(auto=false){
