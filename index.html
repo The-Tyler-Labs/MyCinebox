@@ -1365,7 +1365,7 @@ function renderCollection(){
     if(tagFiltres.nationalite&&!(f.pays||[]).includes(tagFiltres.nationalite)) return false;
     if(tagFiltres.qualite&&!(f.qualites||[]).includes(tagFiltres.qualite)) return false;
     if(tagFiltres.saga){const fSagas=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);if(!fSagas.includes(tagFiltres.saga)) return false;}
-    if(acteurFiltre&&!(f.casting||'').toLowerCase().includes(acteurFiltre)) return false;
+    if(acteurFiltre&&!normaliser(f.casting).includes(normaliser(acteurFiltre))) return false;
     if(q&&!(f.titre||'').toLowerCase().includes(q)&&!(f.titreAlt||'').toLowerCase().includes(q)) return false;
     return true;
   });
@@ -2364,9 +2364,9 @@ async function ajouterTmdbDepuisModal(tmdbId,type){
     dateSortie:date,notesTmdb:d.vote_average||0,
     genres:(d.genres||[]).map(g=>g.name).join(','),
     casting:(d.credits?.cast||[]).slice(0,10).map(a=>a.name).join(','),
-            castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
+            castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({id:a.id,name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
             realisateur:(d.credits?.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', '),
-    castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
+    castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({id:a.id,name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
     realisateur:(d.credits?.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', '),
     nationalite:nat, pays,
     duree:d.runtime||((d.episode_run_time&&d.episode_run_time[0])||0)
@@ -2406,7 +2406,7 @@ async function ajouterTmdb(tmdbId,type,btn){
       dateSortie:date,notesTmdb:d.vote_average||0,
       genres:(d.genres||[]).map(g=>g.name).join(','),
       casting:(d.credits?.cast||[]).slice(0,10).map(a=>a.name).join(','),
-            castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
+            castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({id:a.id,name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
             realisateur:(d.credits?.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', '),
       nationalite:nat, pays,
       duree:d.runtime||((d.episode_run_time&&d.episode_run_time[0])||0)
@@ -2546,7 +2546,7 @@ async function ajouterTousFilmsStudio(ids, label, btn){
         dateSortie:d.release_date||'',notesTmdb:d.vote_average||0,
         genres:(d.genres||[]).map(g=>g.name).join(','),
         casting:(d.credits?.cast||[]).slice(0,10).map(a=>a.name).join(','),
-            castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
+            castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({id:a.id,name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
             realisateur:(d.credits?.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', '),
         nationalite:paysArr.join(', '),pays:paysArr,saga:label
       }));
@@ -2582,7 +2582,7 @@ async function ajouterTousFilmsRecherche(query){
           dateSortie:d.release_date||'',notesTmdb:d.vote_average||0,
           genres:(d.genres||[]).map(g=>g.name).join(','),
           casting:(d.credits?.cast||[]).slice(0,10).map(a=>a.name).join(','),
-            castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
+            castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({id:a.id,name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
             realisateur:(d.credits?.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', '),
           nationalite:paysArr.join(', '),pays:paysArr
         }));
@@ -2658,7 +2658,7 @@ async function ajouterTouteLaCollection(collectionId, nom){
           dateSortie:d.release_date||'',notesTmdb:d.vote_average||0,
           genres:(d.genres||[]).map(g=>g.name).join(','),
           casting:(d.credits?.cast||[]).slice(0,10).map(a=>a.name).join(','),
-            castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
+            castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({id:a.id,name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
             realisateur:(d.credits?.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', '),
           nationalite:paysArr.join(', '),pays:paysArr,
           saga:nom
