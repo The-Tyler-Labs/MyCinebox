@@ -380,7 +380,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 
 <!-- COLLECTION -->
 <div class="page" id="page-collection">
-  <div style="padding-top:8px">
+  <div id="coll-sticky" style="position:sticky;top:0;z-index:95;background:var(--bg);padding:8px 0 0">
     <div style="display:flex;gap:8px;margin-bottom:10px">
       <input type="search" placeholder="🔍 Rechercher..." id="search-local"
         style="flex:1;background:var(--surface);border:1px solid #333;border-radius:10px;padding:10px 14px;color:#fff;font-size:14px;outline:none"
@@ -406,6 +406,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <button class="cat-tab" id="ctab-acritique" onclick="setCatTab('acritique')" style="background:var(--surface);border:1px solid #333;color:#f0a0ff">🎬 Critiques</button>
     </div>
 
+  </div><!-- /sticky -->
+  <div style="padding:0">
     <!-- Panel filtres -->
     <div class="filtres-panel" id="filtres-panel">
       <div class="filtre-groupe">
@@ -424,7 +426,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <span class="filtre-label">Décennie</span>
         <div class="tags-scroll" id="tags-decennie"></div>
       </div>
-      <div class="filtre-groupe" id="fg-annee" style="display:none">
+      <div class="filtre-groupe" id="fg-annee">
         <span class="filtre-label">Année</span>
         <div class="tags-scroll" id="tags-annee"></div>
       </div>
@@ -595,6 +597,13 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <div id="settings-stats" style="font-size:14px;line-height:2"></div>
     </div>
     <div class="settings-section">
+      <h3>🎯 Sagas dans la collection</h3>
+      <div style="display:flex;gap:8px;margin-bottom:4px">
+        <button id="btn-saga-groupe" onclick="setSagaMode('groupe',this)" style="flex:1;padding:10px;border-radius:10px;border:2px solid var(--green-light);background:var(--surface2);color:var(--text);cursor:pointer;font-size:12px">📁 Fiche saga</button>
+        <button id="btn-saga-individuel" onclick="setSagaMode('individuel',this)" style="flex:1;padding:10px;border-radius:10px;border:2px solid #555;background:var(--surface2);color:var(--text2);cursor:pointer;font-size:12px">🎬 Films individuels</button>
+      </div>
+    </div>
+    <div class="settings-section">
       <h3>🌓 Thème</h3>
       <div style="display:flex;gap:10px;margin-bottom:4px">
         <button id="btn-theme-dark" onclick="setTheme('dark')" style="flex:1;padding:12px;border-radius:10px;border:2px solid var(--green-light);background:#1a1a1a;color:#fff;cursor:pointer;font-size:13px;font-weight:bold">🌙 Sombre</button>
@@ -614,11 +623,11 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <h3>🖼 Taille des affiches</h3>
       <div class="size-slider-wrap">
         <span>▦</span>
-        <input type="range" class="size-slider" id="cols-slider" min="1" max="10" step="1" value="2" oninput="appliquerCols(this.value)">
+        <input type="range" class="size-slider" id="cols-slider" min="1" max="20" step="1" value="2" oninput="appliquerCols(this.value)">
         <span>⊞</span>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-top:6px">
-        <span>1 (grandes)</span><span id="cols-label">2 colonnes</span><span>10 (petites)</span>
+        <span>1 (grandes)</span><span id="cols-label">2 colonnes</span><span>20 (petites)</span>
       </div>
       <div class="size-preview" id="size-preview" style="margin-top:12px"></div>
     </div>
@@ -690,6 +699,15 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <button class="btn" style="flex:1;background:var(--surface2);color:var(--text2)" onclick="fermerModal('modal-saga')">Annuler</button>
       <button class="btn btn-primary" style="flex:1" onclick="assignerSaga()">🏷 Assigner</button>
     </div>
+  </div>
+</div>
+
+<!-- MODAL CHOIX AFFICHE FILM -->
+<div class="modal-overlay" id="modal-affiche-film" onclick="if(event.target===this)fermerModal('modal-affiche-film')">
+  <div class="modal-box" style="padding:20px;max-height:80vh;overflow-y:auto">
+    <h3 style="font-size:17px;font-weight:bold;margin-bottom:14px">🖼 Choisir une affiche</h3>
+    <div id="affiche-film-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px"></div>
+    <button class="btn" style="width:100%;margin-top:14px;background:var(--surface2);color:var(--text2)" onclick="fermerModal('modal-affiche-film')">Fermer</button>
   </div>
 </div>
 
@@ -1366,7 +1384,7 @@ function renderCollection(){
     if(tagFiltres.qualite&&!(f.qualites||[]).includes(tagFiltres.qualite)) return false;
     if(tagFiltres.saga){const fSagas=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);if(!fSagas.includes(tagFiltres.saga)) return false;}
     if(acteurFiltre&&!normaliser(f.casting).includes(normaliser(acteurFiltre))) return false;
-    if(q&&!(f.titre||'').toLowerCase().includes(q)&&!(f.titreAlt||'').toLowerCase().includes(q)) return false;
+    if(q&&!normaliser(f.titre).includes(normaliser(q))&&!normaliser(f.titreAlt||'').includes(normaliser(q))) return false;
     return true;
   });
   // Regrouper les films avec saga : n'afficher qu'une fiche par saga
@@ -1411,7 +1429,9 @@ function renderCollection(){
 
   const grid=document.getElementById('coll-grid');
   const empty=document.getElementById('coll-empty');
-  document.getElementById('coll-count').textContent=liste.length+' élément(s)';
+  const nbColl=liste.filter(f=>f.statut!=='trouver'&&f.statut!=='critique').length;
+  const totalTxt=catTab==='atrouver'||catTab==='acritique'?liste.length+' élément(s)':nbColl+' élément(s)'+(liste.length!==nbColl?' (+'+( liste.length-nbColl)+' hors collection)':'');
+  document.getElementById('coll-count').textContent=totalTxt;
   if(liste.length===0){grid.innerHTML='';empty.style.display='block';}
   else{
     empty.style.display='none';
@@ -1470,7 +1490,7 @@ let _selectionIds=new Set();
 
 function itemCard(f){
   // Si le film fait partie d'une saga, afficher la fiche saga
-  const fSagas_=(f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]));if(fSagas_.length>0&&!_modeSelection&&catTab!=='saga'){
+  const fSagas_=(f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]));if(fSagas_.length>0&&!_modeSelection&&catTab!=='saga'&&(prefs.sagaMode||'groupe')==='groupe'){
     const saga_=fSagas_[0]; const filmsS=films.filter(x=>{const xs=x.sagas&&x.sagas.length?x.sagas:(x.saga?[x.saga]:[]);return xs.includes(saga_);});
     const afficheSaga=f.sagaAffiche||(filmsS.find(x=>x.sagaAffiche)||filmsS.find(x=>x.affichePath)||filmsS[0]||f).affichePath||'';
     const selClass=_selectionIds.has(f.id)?' selected':'';
@@ -2994,6 +3014,15 @@ function appliquerHomeCols(val){
   const sl=document.getElementById('home-cols-slider');if(sl) sl.value=n;
 }
 
+function setSagaMode(mode,btn){
+  prefs.sagaMode=mode;savePrefs();
+  document.getElementById('btn-saga-groupe').style.borderColor=mode==='groupe'?'var(--green-light)':'#555';
+  document.getElementById('btn-saga-groupe').style.color=mode==='groupe'?'var(--text)':'var(--text2)';
+  document.getElementById('btn-saga-individuel').style.borderColor=mode==='individuel'?'var(--green-light)':'#555';
+  document.getElementById('btn-saga-individuel').style.color=mode==='individuel'?'var(--text)':'var(--text2)';
+  renderCollection();
+}
+
 function setTheme(theme){
   prefs.theme=theme;savePrefs();
   document.body.classList.toggle('light-mode',theme==='light');
@@ -3228,7 +3257,9 @@ function choisirAfficheSaga(saga){
 }
 
 function setAfficheSaga(saga,affiche){
-  // Stocker l'affiche choisie sur tous les films de la saga
+  _sagaAffiches[saga]=affiche;
+  localStorage.setItem('sagaAffiches',JSON.stringify(_sagaAffiches));
+  // Aussi sur les films pour compat
   films.forEach(f=>{
     const fSagas=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);
     if(fSagas.includes(saga)) f.sagaAffiche=affiche;
@@ -3673,6 +3704,10 @@ function formatDuree(min){
   return h+'h'+(m>0?m.toString().padStart(2,'0'):'');
 }
 
+function normaliser(s){
+  return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
+
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 let snackT;
@@ -3714,9 +3749,11 @@ if(_savedJsonDate){const el=document.getElementById('json-status');if(el)el.text
 charger();
 
 let _googleClientInstance=null; // Connexion Google manuelle uniquement
+const _sagaAffiches=JSON.parse(localStorage.getItem('sagaAffiches')||'{}');
 document.documentElement.style.setProperty('--cols',prefs.cols||2);
 document.documentElement.style.setProperty('--home-cols',prefs.homeCols||4);
 if(prefs.theme==='light') document.body.classList.add('light-mode');
+if(prefs.sagaMode){setTimeout(()=>setSagaMode(prefs.sagaMode,null),100);}
 document.documentElement.style.fontSize=(prefs.fontSize||16)+'px';
 renderHome();
 </script>
