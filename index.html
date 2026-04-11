@@ -2023,7 +2023,7 @@ function afficherDetail(f){
           ?'ouvrirFilmographie('+a.id+',\''+esc(a.name)+'\')'
           :'rechercheTmdbActeur(\''+esc(a.name)+'\')';
         return '<div style="flex:0 0 70px;text-align:center;cursor:pointer" onclick="'+onclick+'">'
-          +(a.photo?'<img src="'+a.photo+'" style="width:60px;height:60px;border-radius:50%;object-fit:cover;display:block;margin:0 auto 4px;background:var(--surface2)">'
+          +(a.photo?'<img src="'+a.photo+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'" style="width:60px;height:60px;border-radius:50%;object-fit:cover;display:block;margin:0 auto 4px;background:var(--surface2)">'
             :'<div style="width:60px;height:60px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;margin:0 auto 4px;font-size:22px">👤</div>')
           +'<div style="font-size:10px;font-weight:bold;color:var(--text);line-height:1.2">'+esc(a.name)+'</div>'
           +(a.character?'<div style="font-size:9px;color:var(--text2)">'+esc(a.character)+'</div>':'')
@@ -2123,7 +2123,7 @@ function afficherDetail(f){
     +'<button class="btn btn-primary btn-sm" onclick="ajouterVersion('+f.id+')">+</button>'
     +'</div>'
     +'<div class="qualite-row" style="margin-bottom:16px">'
-    +["Director\'s Cut","Version longue","Version non censurée","Version cinéma","Version étendue","Version télé","Version internationale"].map(v=>'<button class="qualite-btn" onclick="ajouterVersionTexte('+f.id+',\''+v+'\')">'+v+'</button>').join('')
+    +["Director's Cut","Version longue","Version non censurée","Version cinéma","Version étendue","Version télé","Version internationale"].map((v,i)=>'<button class="qualite-btn version-quick" data-fid="'+f.id+'" data-v="'+i+'" style="cursor:pointer">'+v+'</button>').join('')
     +'</div>'
     +episodesHtml
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">⭐ Ma note</p>'
@@ -3299,12 +3299,29 @@ function choisirAfficheFilm(id){
         if(!posters.length){snack('Aucune affiche disponible');return;}
         const modal=document.getElementById('modal-affiche-film');
         if(!modal){snack('Erreur: modal manquante');return;}
+        window._afficheFilmId=id;
         document.getElementById('affiche-film-grid').innerHTML=posters.map(p=>{
           const url='https://image.tmdb.org/t/p/w342'+p.file_path;
-          return '<div style="cursor:pointer;border-radius:8px;overflow:hidden" onclick="setAfficheFilm('+id+',\''+url+'\')">'
-            +'<img src="'+url+'" style="width:100%;aspect-ratio:2/3;object-fit:cover">'
+          return '<div class="affiche-choice" data-url="'+url+'" style="cursor:pointer;border-radius:8px;overflow:hidden;border:3px solid transparent">'
+            +'<img src="'+url+'" style="width:100%;aspect-ratio:2/3;object-fit:cover;pointer-events:none;display:block">'
             +'</div>';
         }).join('');
+        document.querySelectorAll('#affiche-film-grid .affiche-choice').forEach(el=>{
+          el.addEventListener('click',function(){
+            const filmId=window._afficheFilmId;
+            const url=this.dataset.url;
+            const f=films.find(f=>f.id===filmId);
+            if(!f){snack('Film non trouvé');return;}
+            f.affichePath=url;
+            sauvegarder();
+            fermerModal('modal-affiche-film');
+            const bd=document.querySelector('#page-detail .detail-backdrop');
+            if(bd) bd.src=url;
+            const ps=document.querySelector('#page-detail .poster-wrap img');
+            if(ps) ps.src=url;
+            snack('✓ Affiche mise à jour');
+          });
+        });
         modal.classList.add('open');
       })
       .catch(()=>snack('Erreur chargement affiches'));
@@ -3763,7 +3780,7 @@ setTimeout(()=>{
   if(films.length===0&&localStorage.getItem('google_was_connected')){
     const notif=document.createElement('div');
     notif.style.cssText='position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#1a3a5c;color:#90d0ff;padding:12px 16px;border-radius:12px;z-index:9999;font-size:13px;text-align:center;max-width:90vw;box-shadow:0 4px 16px rgba(0,0,0,.5)';
-    notif.innerHTML='📱 Collection vide — connecte-toi à Google (Paramètres) pour charger depuis Drive ou importe un fichier JSON';
+    notif.innerHTML='📱 Collection vide — va dans Paramètres pour importer un fichier JSON ou te connecter à Google Drive';
     document.body.appendChild(notif);
     setTimeout(()=>notif.remove(),5000);
   }
@@ -3773,6 +3790,26 @@ setTimeout(()=>{
 const _savedJsonDate=localStorage.getItem('videotheque_json_date');
 if(_savedJsonDate){const el=document.getElementById('json-status');if(el)el.textContent='✓ Dernière sauvegarde : '+_savedJsonDate;}
 charger();
+
+// Délégation d'événements pour les boutons version rapide
+document.addEventListener('click', function(e){
+  const btn=e.target.closest('.version-quick');
+  if(!btn) return;
+  const fid=parseInt(btn.dataset.fid);
+  const vi=parseInt(btn.dataset.v);
+  const VERSIONS_RAPIDES=["Director's Cut","Version longue","Version non censurée","Version cinéma","Version étendue","Version télé","Version internationale"];
+  const v=VERSIONS_RAPIDES[vi];
+  if(!v) return;
+  const f=films.find(f=>f.id===fid);if(!f) return;
+  if(!f.versions) f.versions=[];
+  if(f.versions.includes(v)){snack('Version déjà ajoutée');return;}
+  f.versions.push(v);
+  sauvegarder();
+  const el=document.getElementById('version-tags-'+fid);
+  if(el) el.innerHTML=(f.versions||[]).map((vv,i)=>'<span class="version-tag">'+esc(vv)+'<span class="del" onclick="supprimerVersion('+fid+','+i+')"> ✕</span></span>').join('');
+  snack('✓ '+v);
+});
+
 
 let _googleClientInstance=null; // Connexion Google manuelle uniquement
 const _sagaAffiches=JSON.parse(localStorage.getItem('sagaAffiches')||'{}');
