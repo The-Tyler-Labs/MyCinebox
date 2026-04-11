@@ -1384,7 +1384,13 @@ function renderCollection(){
     if(tagFiltres.qualite&&!(f.qualites||[]).includes(tagFiltres.qualite)) return false;
     if(tagFiltres.saga){const fSagas=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);if(!fSagas.includes(tagFiltres.saga)) return false;}
     if(acteurFiltre&&!normaliser(f.casting).includes(normaliser(acteurFiltre))) return false;
-    if(q&&!normaliser(f.titre).includes(normaliser(q))&&!normaliser(f.titreAlt||'').includes(normaliser(q))) return false;
+    if(q){
+      const nq=normaliser(q);
+      const inTitre=normaliser(f.titre).includes(nq)||normaliser(f.titreAlt||'').includes(nq);
+      const inActeurs=(f.castingDetails||[]).some(a=>normaliser(a.name).includes(nq));
+      const inCasting=normaliser(f.casting||'').includes(nq);
+      if(!inTitre&&!inActeurs&&!inCasting) return false;
+    }
     return true;
   });
   // Regrouper les films avec saga : n'afficher qu'une fiche par saga
@@ -3307,6 +3313,12 @@ function choisirAfficheFilm(id){
   }
 }
 
+function setAfficheFilmFromEl(el){
+  const id=parseInt(el.dataset.id);
+  const url=el.dataset.url;
+  setAfficheFilm(id,url);
+}
+
 function setAfficheFilm(id,url){
   const f=films.find(f=>f.id===id);if(!f) return;
   f.affichePath=url;
@@ -3891,21 +3903,44 @@ async function chargerDriveAvecMerge(){
 async function mergeAutoDrive(){
   try{
     const fichier=await trouverFichierDrive();
-    if(!fichier){await sauvegarderDrive(true);snack('✓ Collection sauvegardée sur Drive');return;}
+    if(!fichier){
+      await sauvegarderDrive(true);
+      snack('✓ Collection sauvegardée sur Drive');
+      return;
+    }
     const r=await fetch('https://www.googleapis.com/drive/v3/files/'+fichier.id+'?alt=media',{headers:{Authorization:'Bearer '+_googleToken}});
     const driveFilms=await r.json();
-    if(!Array.isArray(driveFilms)){await chargerDrive(true);return;}
-    const localKeys=new Set(films.map(f=>f.tmdbId?'id:'+f.tmdbId:'titre:'+f.titre));
-    const driveKeys=new Set(driveFilms.map(f=>f.tmdbId?'id:'+f.tmdbId:'titre:'+f.titre));
-    const depuisDrive=driveFilms.filter(f=>!localKeys.has(f.tmdbId?'id:'+f.tmdbId:'titre:'+f.titre));
-    const versDrive=films.filter(f=>!driveKeys.has(f.tmdbId?'id:'+f.tmdbId:'titre:'+f.titre));
-    if(depuisDrive.length===0&&versDrive.length===0){snack('✓ Drive synchronisé ('+films.length+' titres)');return;}
-    depuisDrive.forEach(f=>films.push({...f,categorie:(f.categorie||'films').toLowerCase()}));
+    if(!Array.isArray(driveFilms)){snack('⚠️ Format Drive invalide');return;}
+
+    // Si collection locale vide : charger tout depuis Drive
+    if(films.length===0){
+      films=driveFilms.map(f=>({...f,categorie:(f.categorie||'films').toLowerCase()}));
+      sauvegarder();
+      renderHome();renderCollection();
+      snack('✓ Collection chargée depuis Drive ('+films.length+' titres)');
+      return;
+    }
+
+    // Sinon merger : Drive est la source de vérité pour les modifications
+    // Remplacer les films locaux par la version Drive si Drive est plus récent
+    const driveMap=new Map(driveFilms.map(f=>[f.tmdbId?'id:'+f.tmdbId:'titre:'+f.titre, f]));
+    const localMap=new Map(films.map(f=>[f.tmdbId?'id:'+f.tmdbId:'titre:'+f.titre, f]));
+
+    // Films dans Drive mais pas en local → ajouter
+    let ajoutesDrive=0;
+    driveFilms.forEach(df=>{
+      const key=df.tmdbId?'id:'+df.tmdbId:'titre:'+df.titre;
+      if(!localMap.has(key)){films.push({...df,categorie:(df.categorie||'films').toLowerCase()});ajoutesDrive++;}
+    });
+
+    // Films en local mais pas dans Drive → envoyer
+    const versDrive=films.filter(f=>!driveMap.has(f.tmdbId?'id:'+f.tmdbId:'titre:'+f.titre));
+
     sauvegarder();
-    await sauvegarderDrive(true);
+    if(ajoutesDrive>0||versDrive.length>0) await sauvegarderDrive(true);
     renderHome();renderCollection();
-    snack('✓ Sync : +'+depuisDrive.length+' depuis Drive, +'+versDrive.length+' envoyés');
-  }catch(e){snack('Connexion OK (sync échouée)');}
+    snack('✓ Sync Drive : +'+ajoutesDrive+' reçus, +'+versDrive.length+' envoyés');
+  }catch(e){console.error(e);snack('Connexion OK — erreur sync : '+e.message);}
 }
 
 async function chargerDrive(auto=false){
