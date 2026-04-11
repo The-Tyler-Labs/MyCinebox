@@ -2231,9 +2231,11 @@ function ajouterVersion(id){
   const f=films.find(f=>f.id===id);if(!f) return;
   if(!f.versions) f.versions=[];
   if(f.versions.includes(v)){snack('Version déjà ajoutée');return;}
-  f.versions.push(v);sauvegarder();
+  f.versions.push(v);
+  sauvegarder();
   input.value='';
-  rafraichirVersions(f);
+  const el=document.getElementById('version-tags-'+id);
+  if(el) el.innerHTML=(f.versions||[]).map((vv,i)=>'<span class="version-tag">'+esc(vv)+'<span class="del" onclick="supprimerVersion('+id+','+i+')"> ✕</span></span>').join('');
   snack('✓ Version ajoutée');
 }
 
@@ -2241,8 +2243,11 @@ function ajouterVersionTexte(id,v){
   const f=films.find(f=>f.id===id);if(!f) return;
   if(!f.versions) f.versions=[];
   if(f.versions.includes(v)){snack('Version déjà ajoutée');return;}
-  f.versions.push(v);sauvegarder();
-  rafraichirVersions(f);
+  f.versions.push(v);
+  sauvegarder();
+  // Rafraîchir juste les tags sans recharger toute la fiche
+  const el=document.getElementById('version-tags-'+id);
+  if(el) el.innerHTML=(f.versions||[]).map((vv,i)=>'<span class="version-tag">'+esc(vv)+'<span class="del" onclick="supprimerVersion('+id+','+i+')"> ✕</span></span>').join('');
   snack('✓ '+v);
 }
 
@@ -2889,7 +2894,9 @@ async function chargerFilmographie(acteurId,nom){
 
 async function ouvrirFilmographie(acteurId,nom){
   if(!acteurId||acteurId==='undefined'){snack('⚠️ Acteur non trouvé');return;}
-  fermerModal('modal-fiche');
+  // Fermer modal-fiche seulement si elle est ouverte
+  const mf=document.getElementById('modal-fiche');
+  if(mf&&mf.classList.contains('open')) fermerModal('modal-fiche');
   document.getElementById('modal-filmo-titre').textContent=nom;
   document.getElementById('modal-filmo-body').innerHTML='<div class="loader"><div class="spinner"></div></div>';
   document.getElementById('modal-filmo').classList.add('open');
@@ -3305,7 +3312,11 @@ function setAfficheFilm(id,url){
   f.affichePath=url;
   sauvegarder();
   fermerModal('modal-affiche-film');
-  afficherDetail(f);
+  // Mettre à jour l'image sans recharger toute la page
+  const backdrop=document.querySelector('#page-detail .detail-backdrop');
+  if(backdrop) backdrop.src=url;
+  const poster=document.querySelector('#page-detail .detail-poster img');
+  if(poster) poster.src=url;
   snack('✓ Affiche mise à jour');
 }
 
@@ -3740,7 +3751,7 @@ setTimeout(()=>{
   if(films.length===0&&localStorage.getItem('google_was_connected')){
     const notif=document.createElement('div');
     notif.style.cssText='position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#1a3a5c;color:#90d0ff;padding:12px 16px;border-radius:12px;z-index:9999;font-size:13px;text-align:center;max-width:90vw;box-shadow:0 4px 16px rgba(0,0,0,.5)';
-    notif.innerHTML='📱 Collection vide — connecte-toi à Google pour charger depuis Drive';
+    notif.innerHTML='📱 Collection vide — connecte-toi à Google (Paramètres) pour charger depuis Drive ou importe un fichier JSON';
     document.body.appendChild(notif);
     setTimeout(()=>notif.remove(),5000);
   }
