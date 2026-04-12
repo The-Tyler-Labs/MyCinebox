@@ -2,12 +2,12 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-  <link rel="manifest" href="/Videotheque/manifest.json">
+  <link rel="manifest" href="/MyCinebox/manifest.json">
   <meta name="theme-color" content="#1a5c4a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-  <link rel="apple-touch-icon" href="/Videotheque/icon-192.png">
+  <link rel="apple-touch-icon" href="/MyCinebox/icon-192.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="theme-color" content="#1a5c4a">
 <meta name="mobile-web-app-capable" content="yes">
@@ -981,16 +981,7 @@ function sauvegarder(){
   }
 }
 
-function autoExportJSON(){
-  try{
-    const json=JSON.stringify(films,null,2);
-    const a=document.createElement('a');
-    a.href='data:application/json,'+encodeURIComponent(json);
-    a.download='videotheque_auto_'+dateLocale()+'.json';
-    a.click();
-    snack('💾 Sauvegarde automatique téléchargée !');
-  }catch(e){}
-}
+function autoExportJSON(){} // Désactivé
 function savePrefs(){localStorage.setItem(PREFS_KEY,JSON.stringify(prefs));}
 function nextId(){return films.length>0?Math.max(...films.map(f=>f.id||0))+1:1;}
 
@@ -1029,7 +1020,7 @@ function goPage(p){
   currentPage=p;
   document.getElementById('fab-btn').style.display=(p==='home'||p==='collection')?'flex':'none';
   if(p==='home') renderHome();
-  if(p==='collection'){buildFiltresDynamiques();renderCollection();}
+  if(p==='collection'){tagFiltres.statut='tous';buildFiltresDynamiques();renderCollection();}
   if(p==='settings') renderSettings();
   if(p==='visionnages') renderVisionnagesGlobal();
   window.scrollTo(0,0);
@@ -2075,7 +2066,7 @@ function afficherDetail(f){
     +Object.entries(CATS).map(([k,v])=>`<button class="qualite-btn${f.categorie===k?' active':''}" onclick="changerCategorie(${f.id},'${k}')">${v.icon} ${v.label}</button>`).join('')
     +'</div>'
     +'<div class="statut-row">'
-    +STATUTS.filter(s=>s!=='').map(s=>{const si=statutInfo(s);const actif=(f.statut||'')=== s?' active':'';return '<button class="statut-opt '+si.cls+actif+'" onclick="setStatutDetail('+f.id+',\''+(f.statut===s?'':s)+'\')">'+si.label+'</button>';}).join('')
+    +STATUTS.filter(s=>s!=='').map(s=>{const si=statutInfo(s);const actif=(f.statut||'')=== s?' active':'';return '<button class="statut-opt '+si.cls+actif+'" data-statut="'+s+'" data-fid="'+f.id+'" onclick="setStatutDetailBtn(this)">'+si.label+'</button>';}).join('')
     +'</div>'
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Qualité</p>'
     +'<div class="qualite-row" id="qualite-row-'+f.id+'">'
@@ -2185,15 +2176,26 @@ function changerCategorie(id,cat){
   snack('✓ Catégorie : '+CATS[cat].label);
 }
 
+function setStatutDetailBtn(btn){
+  const id=parseInt(btn.dataset.fid);
+  const s=btn.dataset.statut;
+  const f=films.find(f=>f.id===id);if(!f) return;
+  // Si déjà actif, désélectionner
+  const nouveau=f.statut===s?'':s;
+  f.statut=nouveau;f.estVu=(nouveau==='vu');
+  sauvegarder();
+  // Mettre à jour visuellement tous les boutons du groupe
+  btn.closest('.qualite-row, div').querySelectorAll('.statut-opt').forEach(b=>{
+    b.classList.toggle('active', b.dataset.statut===nouveau);
+    // Mettre à jour les classes de couleur
+    const si=statutInfo(b.dataset.statut);
+    b.className='statut-opt '+si.cls+(b.dataset.statut===nouveau?' active':'');
+  });
+  snack(nouveau?statutInfo(nouveau).label+' ✓':'Statut retiré');
+}
 function setStatutDetail(id,statut){
   const f=films.find(f=>f.id===id);if(!f) return;
   f.statut=statut;f.estVu=(statut==='vu');sauvegarder();
-  // Mettre à jour les boutons
-  document.querySelectorAll('.statut-opt').forEach(b=>{
-    const s=b.onclick.toString().match(/'([^']+)'\)/)?.[1];
-    b.classList.toggle('active',s===statut);
-  });
-  snack(statutInfo(statut).label+' ✓');
 }
 function ajouterQualiteCustom(id){
   const f=films.find(f=>f.id===id);if(!f) return;
@@ -2398,8 +2400,6 @@ async function ajouterTmdbDepuisModal(tmdbId,type){
     dateSortie:date,notesTmdb:d.vote_average||0,
     genres:(d.genres||[]).map(g=>g.name).join(','),
     casting:(d.credits?.cast||[]).slice(0,10).map(a=>a.name).join(','),
-            castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({id:a.id,name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
-            realisateur:(d.credits?.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', '),
     castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({id:a.id,name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
     realisateur:(d.credits?.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', '),
     nationalite:nat, pays,
@@ -2407,8 +2407,10 @@ async function ajouterTmdbDepuisModal(tmdbId,type){
   });
   films.push(film);sauvegarder();
   const addBtn=document.getElementById('modal-fiche-add');
-  addBtn.textContent='✓ Ajouté';addBtn.style.background='#333';addBtn.disabled=true;
+  if(addBtn){addBtn.textContent='✓ Ajouté';addBtn.style.background='#333';addBtn.disabled=true;}
+  fermerModal('modal-fiche');
   snack('✓ "'+titre+'" ajouté !');
+  renderHome();
 }
 
 async function ajouterTmdb(tmdbId,type,btn){
@@ -2445,12 +2447,12 @@ async function ajouterTmdb(tmdbId,type,btn){
       nationalite:nat, pays,
       duree:d.runtime||((d.episode_run_time&&d.episode_run_time[0])||0)
     });
-    films.push(film);sauvegarder();
+    films.push(film);sauvegarder();renderHome();
     if(btn){
       btn.textContent='✓';
       btn.style.background='var(--green-light)';
       btn.style.color='#fff';
-      // Garder le bouton désactivé, ne rien faire au tap
+      btn.disabled=true;
       btn.onclick=function(e){e.stopPropagation();e.preventDefault();return false;};
     }
     snack('✓ "'+titre+'" ajouté !');
@@ -3306,23 +3308,27 @@ function choisirAfficheFilm(id){
             +'<img src="'+url+'" style="width:100%;aspect-ratio:2/3;object-fit:cover;pointer-events:none;display:block">'
             +'</div>';
         }).join('');
-        document.querySelectorAll('#affiche-film-grid .affiche-choice').forEach(el=>{
-          el.addEventListener('click',function(){
-            const filmId=window._afficheFilmId;
-            const url=this.dataset.url;
-            const f=films.find(f=>f.id===filmId);
-            if(!f){snack('Film non trouvé');return;}
-            f.affichePath=url;
-            sauvegarder();
-            fermerModal('modal-affiche-film');
-            const bd=document.querySelector('#page-detail .detail-backdrop');
-            if(bd) bd.src=url;
-            const ps=document.querySelector('#page-detail .poster-wrap img');
-            if(ps) ps.src=url;
-            snack('✓ Affiche mise à jour');
+        modal.classList.add('open');
+        // Attacher les listeners après rendu DOM
+        requestAnimationFrame(()=>{
+          document.querySelectorAll('#affiche-film-grid .affiche-choice').forEach(el=>{
+            el.onclick=function(e){
+              e.stopPropagation();
+              const filmId=window._afficheFilmId;
+              const url=this.dataset.url;
+              const f=films.find(f=>f.id===filmId);
+              if(!f){snack('Film non trouvé');return;}
+              f.affichePath=url;
+              sauvegarder();
+              fermerModal('modal-affiche-film');
+              // Mettre à jour les images visibles
+              document.querySelectorAll('.detail-backdrop, .poster-wrap img').forEach(img=>{
+                if(img.src&&img.src.startsWith('http')) img.src=url;
+              });
+              snack('✓ Affiche mise à jour');
+            };
           });
         });
-        modal.classList.add('open');
       })
       .catch(()=>snack('Erreur chargement affiches'));
   } else {
@@ -4022,7 +4028,7 @@ async function chargerDrive(auto=false){
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('/Videotheque/sw.js')
+    navigator.serviceWorker.register('/MyCinebox/sw.js')
       .then(()=>console.log('Service Worker enregistré'))
       .catch(e=>console.log('SW erreur:', e));
   });
