@@ -1280,7 +1280,9 @@ function buildFiltresDynamiques(){
   const decennies=[...new Set(src.map(f=>{const y=parseInt((f.dateSortie||'').slice(0,4));return isNaN(y)?null:Math.floor(y/10)*10;}).filter(Boolean))].sort((a,b)=>b-a);
   document.getElementById('tags-decennie').innerHTML='<button class="tag active-decade active" onclick="setTagFiltre(\'decennie\',\'\',this)">Toutes</button>'+decennies.map(d=>'<button class="tag" onclick="setTagFiltre(\'decennie\',\''+d+'\',this)">'+d+'s</button>').join('');
   const genres=[...new Set(src.flatMap(f=>(f.genres||'').split(',').map(g=>g.trim()).filter(Boolean)))].sort();
-  document.getElementById('tags-genres').innerHTML='<button class="tag active" onclick="setTagFiltre(\'genre\',\'\',this)">Tous</button>'+genres.map(g=>'<button class="tag" onclick="setTagFiltre(\'genre\',\''+esc(g)+'\',this)">'+esc(g)+'</button>').join('');
+  const sousGenres=[...new Set(src.flatMap(f=>(f.sousGenres||'').split(',').map(g=>g.trim()).filter(Boolean)))].filter(g=>!genres.includes(g)).sort();
+  const tousGenres=[...genres,...sousGenres];
+  document.getElementById('tags-genres').innerHTML='<button class="tag active" onclick="setTagFiltre(\'genre\',\'\',this)">Tous</button>'+tousGenres.map(g=>'<button class="tag" onclick="setTagFiltre(\'genre\',\''+esc(g)+'\',this)">'+esc(g)+'</button>').join('');
   // Nationalité — chaque pays séparé
   const tousLesPays=[...new Set(src.flatMap(f=>(f.pays||[]).map(p=>p.trim()).filter(Boolean)))].sort();
   document.getElementById('tags-nationalite').innerHTML=tousLesPays.length===0
@@ -2014,7 +2016,8 @@ function afficherDetail(f){
           ?'ouvrirFilmographie('+a.id+',\''+esc(a.name)+'\')'
           :'rechercheTmdbActeur(\''+esc(a.name)+'\')';
         return '<div style="flex:0 0 70px;text-align:center;cursor:pointer" onclick="'+onclick+'">'
-          +(a.photo?'<img src="'+a.photo+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'" style="width:60px;height:60px;border-radius:50%;object-fit:cover;display:block;margin:0 auto 4px;background:var(--surface2)">'
+          +(a.photo
+            ?'<img src="'+a.photo+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'" style="width:60px;height:60px;border-radius:50%;object-fit:cover;display:block;margin:0 auto 4px;background:var(--surface2)"><div style="width:60px;height:60px;border-radius:50%;background:var(--surface2);display:none;align-items:center;justify-content:center;margin:0 auto 4px;font-size:22px">👤</div>'
             :'<div style="width:60px;height:60px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;margin:0 auto 4px;font-size:22px">👤</div>')
           +'<div style="font-size:10px;font-weight:bold;color:var(--text);line-height:1.2">'+esc(a.name)+'</div>'
           +(a.character?'<div style="font-size:9px;color:var(--text2)">'+esc(a.character)+'</div>':'')
@@ -2114,7 +2117,10 @@ function afficherDetail(f){
     +'<button class="btn btn-primary btn-sm" onclick="ajouterVersion('+f.id+')">+</button>'
     +'</div>'
     +'<div class="qualite-row" style="margin-bottom:16px">'
-    +["Director's Cut","Version longue","Version non censurée","Version cinéma","Version étendue","Version télé","Version internationale"].map((v,i)=>'<button class="qualite-btn version-quick" data-fid="'+f.id+'" data-v="'+i+'" style="cursor:pointer">'+v+'</button>').join('')
+    +["Director's Cut","Version longue","Version non censurée","Version cinéma","Version étendue","Version télé","Version internationale"].map((v,i)=>{
+      const fid=f.id;
+      return '<button class="qualite-btn" onclick="ajouterVersionRapide('+fid+','+i+')">'+v+'</button>';
+    }).join('')
     +'</div>'
     +episodesHtml
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">⭐ Ma note</p>'
@@ -2185,7 +2191,7 @@ function setStatutDetailBtn(btn){
   f.statut=nouveau;f.estVu=(nouveau==='vu');
   sauvegarder();
   // Mettre à jour visuellement tous les boutons du groupe
-  btn.closest('.qualite-row, div').querySelectorAll('.statut-opt').forEach(b=>{
+  btn.closest('.statut-row').querySelectorAll('.statut-opt').forEach(b=>{
     b.classList.toggle('active', b.dataset.statut===nouveau);
     // Mettre à jour les classes de couleur
     const si=statutInfo(b.dataset.statut);
@@ -2247,6 +2253,19 @@ function ajouterVersion(id){
   snack('✓ Version ajoutée');
 }
 
+
+function ajouterVersionRapide(fid,vi){
+  const VRAP=["Director's Cut","Version longue","Version non censurée","Version cinéma","Version étendue","Version télé","Version internationale"];
+  const v=VRAP[vi];if(!v) return;
+  const f=films.find(f=>f.id===fid);if(!f) return;
+  if(!f.versions) f.versions=[];
+  if(f.versions.includes(v)){snack('Déjà ajouté');return;}
+  f.versions.push(v);
+  sauvegarder();
+  const el=document.getElementById('version-tags-'+fid);
+  if(el) el.innerHTML=(f.versions).map((vv,i)=>'<span class="version-tag">'+esc(vv)+'<span class="del" onclick="supprimerVersion('+fid+','+i+')"> ✕</span></span>').join('');
+  snack('✓ '+v);
+}
 function ajouterVersionTexte(id,v){
   const f=films.find(f=>f.id===id);if(!f) return;
   if(!f.versions) f.versions=[];
@@ -3302,33 +3321,30 @@ function choisirAfficheFilm(id){
         const modal=document.getElementById('modal-affiche-film');
         if(!modal){snack('Erreur: modal manquante');return;}
         window._afficheFilmId=id;
-        document.getElementById('affiche-film-grid').innerHTML=posters.map(p=>{
+        const grid=document.getElementById('affiche-film-grid');
+        grid.innerHTML='';
+        posters.forEach(p=>{
           const url='https://image.tmdb.org/t/p/w342'+p.file_path;
-          return '<div class="affiche-choice" data-url="'+url+'" style="cursor:pointer;border-radius:8px;overflow:hidden;border:3px solid transparent">'
-            +'<img src="'+url+'" style="width:100%;aspect-ratio:2/3;object-fit:cover;pointer-events:none;display:block">'
-            +'</div>';
-        }).join('');
-        modal.classList.add('open');
-        // Attacher les listeners après rendu DOM
-        requestAnimationFrame(()=>{
-          document.querySelectorAll('#affiche-film-grid .affiche-choice').forEach(el=>{
-            el.onclick=function(e){
-              e.stopPropagation();
-              const filmId=window._afficheFilmId;
-              const url=this.dataset.url;
-              const f=films.find(f=>f.id===filmId);
-              if(!f){snack('Film non trouvé');return;}
-              f.affichePath=url;
-              sauvegarder();
-              fermerModal('modal-affiche-film');
-              // Mettre à jour les images visibles
-              document.querySelectorAll('.detail-backdrop, .poster-wrap img').forEach(img=>{
-                if(img.src&&img.src.startsWith('http')) img.src=url;
-              });
-              snack('✓ Affiche mise à jour');
-            };
+          const div=document.createElement('div');
+          div.style.cssText='cursor:pointer;border-radius:8px;overflow:hidden;border:3px solid transparent';
+          const img=document.createElement('img');
+          img.src=url;
+          img.style.cssText='width:100%;aspect-ratio:2/3;object-fit:cover;display:block';
+          div.appendChild(img);
+          div.addEventListener('click',function(e){
+            e.stopPropagation();
+            const f=films.find(f=>f.id===window._afficheFilmId);
+            if(!f){snack('Film non trouvé');return;}
+            f.affichePath=url;
+            sauvegarder();
+            document.getElementById('modal-affiche-film').classList.remove('open');
+            document.querySelectorAll('.detail-backdrop').forEach(i=>{i.src=url;});
+            document.querySelectorAll('#page-detail .poster-wrap img').forEach(i=>{i.src=url;});
+            snack('✓ Affiche mise à jour');
           });
+          grid.appendChild(div);
         });
+        modal.classList.add('open');
       })
       .catch(()=>snack('Erreur chargement affiches'));
   } else {
