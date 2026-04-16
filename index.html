@@ -704,7 +704,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 
 <!-- MODAL CHOIX AFFICHE FILM -->
 <div class="modal-overlay" id="modal-affiche-film" onclick="if(event.target===this)fermerModal('modal-affiche-film')">
-  <div class="modal-box" style="padding:20px;max-height:80vh;overflow-y:auto" onclick="event.stopPropagation()">
+  <div class="modal-box" style="padding:20px;max-height:80vh;overflow-y:auto">
     <h3 style="font-size:17px;font-weight:bold;margin-bottom:14px">🖼 Choisir une affiche</h3>
     <div id="affiche-film-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px"></div>
     <button class="btn" style="width:100%;margin-top:14px;background:var(--surface2);color:var(--text2)" onclick="fermerModal('modal-affiche-film')">Fermer</button>
@@ -981,13 +981,7 @@ function sauvegarder(){
   }
 }
 
-function autoExportJSON(){
-  // Backup automatique dans localStorage
-  try{
-    const exportData={films,sagas:typeof sagas!=='undefined'?sagas:[],prefs,exportDate:new Date().toISOString()};
-    localStorage.setItem('mycinebox_backup',JSON.stringify(exportData));
-  }catch(e){console.warn('autoExportJSON:',e);}
-}
+function autoExportJSON(){} // Désactivé
 function savePrefs(){localStorage.setItem(PREFS_KEY,JSON.stringify(prefs));}
 function nextId(){return films.length>0?Math.max(...films.map(f=>f.id||0))+1:1;}
 
@@ -1285,8 +1279,8 @@ function buildFiltresDynamiques(){
   document.getElementById('tags-annee').innerHTML='<button class="tag active" onclick="setTagFiltre(\'annee\',\'\',this)">Toutes</button>'+annees.map(y=>'<button class="tag" onclick="setTagFiltre(\'annee\',\''+y+'\',this)">'+y+'</button>').join('');
   const decennies=[...new Set(src.map(f=>{const y=parseInt((f.dateSortie||'').slice(0,4));return isNaN(y)?null:Math.floor(y/10)*10;}).filter(Boolean))].sort((a,b)=>b-a);
   document.getElementById('tags-decennie').innerHTML='<button class="tag active-decade active" onclick="setTagFiltre(\'decennie\',\'\',this)">Toutes</button>'+decennies.map(d=>'<button class="tag" onclick="setTagFiltre(\'decennie\',\''+d+'\',this)">'+d+'s</button>').join('');
-  const genres=[...new Set(src.flatMap(f=>Array.isArray(f.genres)?f.genres:(f.genres||'').split(',').map(g=>g.trim()).filter(Boolean)))].sort();
-  const sousGenres=[...new Set(src.flatMap(f=>Array.isArray(f.sousGenres)?f.sousGenres:(f.sousGenres||'').split(',').map(g=>g.trim()).filter(Boolean)))].filter(g=>!genres.includes(g)).sort();
+  const genres=[...new Set(src.flatMap(f=>(f.genres||'').split(',').map(g=>g.trim()).filter(Boolean)))].sort();
+  const sousGenres=[...new Set(src.flatMap(f=>(f.sousGenres||'').split(',').map(g=>g.trim()).filter(Boolean)))].filter(g=>!genres.includes(g)).sort();
   const tousGenres=[...genres,...sousGenres];
   document.getElementById('tags-genres').innerHTML='<button class="tag active" onclick="setTagFiltre(\'genre\',\'\',this)">Tous</button>'+tousGenres.map(g=>'<button class="tag" onclick="setTagFiltre(\'genre\',\''+esc(g)+'\',this)">'+esc(g)+'</button>').join('');
   // Nationalité — chaque pays séparé
@@ -1588,7 +1582,9 @@ function ouvrirModalSaga(){
   document.getElementById('modal-saga').classList.add('open');
 }
 
-
+function getToutesLesSagas(){
+  return [...new Set(films.map(f=>f.saga||'').filter(Boolean))].sort();
+}
 
 function showSagaAssignSuggestions(){
   const input=document.getElementById('saga-assign-input');
@@ -1612,7 +1608,26 @@ function choisirSagaAssign(saga){
   hideSagaAssignSuggestions();
 }
 
-
+function assignerSaga(){
+  const saga=(document.getElementById('saga-assign-input').value||'').trim();
+  if(!saga){snack('⚠️ Entre un nom de saga');return;}
+  const ids=[..._selectionIds];
+  sauvegarderSnapshot('Saga "'+saga+'" assignée à '+ids.length+' film(s)');
+  ids.forEach(id=>{
+    const f=films.find(f=>f.id===id);
+    if(f){if(!f.sagas)f.sagas=[];if(!f.sagas.includes(saga))f.sagas.push(saga);f.saga=f.sagas[0];}
+  });
+  sauvegarder();
+  fermerModal('modal-saga');
+  // Reset sélection
+  _selectionIds.clear();_modeSelection=false;
+  const bar=document.getElementById('sel-bar');
+  if(bar){bar.classList.remove('active');bar.style.display='none';}
+  const btn=document.getElementById('btn-selectionner');
+  if(btn){btn.style.background='var(--surface2)';btn.style.color='var(--text2)';}
+  renderCollection();
+  snack('✓ Saga "'+saga+'" assignée à '+ids.length+' film(s)');
+}
 
 // ── SAGAS ──
 function getToutesLesSagas(){
@@ -2225,7 +2240,6 @@ function toggleQualite(id,qualite,btn){
 
 function ajouterVersion(id){
   const input=document.getElementById('version-input-'+id);
-  if(!input) return;
   const v=(input.value||'').trim();
   if(!v) return;
   const f=films.find(f=>f.id===id);if(!f) return;
@@ -2235,14 +2249,7 @@ function ajouterVersion(id){
   sauvegarder();
   input.value='';
   const el=document.getElementById('version-tags-'+id);
-  if(el){
-    el.innerHTML=(f.versions||[]).map((vv,i)=>'<span class="version-tag">'+esc(vv)+'<span class="del" onclick="supprimerVersion('+id+','+i+')"> ✕</span></span>').join('');
-  } else {
-    const dp=document.getElementById('page-detail');
-    if(dp&&dp.classList.contains('active')){
-      try{ouvrirDetail(id);}catch(e){try{afficherDetailFilm(id);}catch(e2){}}
-    }
-  }
+  if(el) el.innerHTML=(f.versions||[]).map((vv,i)=>'<span class="version-tag">'+esc(vv)+'<span class="del" onclick="supprimerVersion('+id+','+i+')"> ✕</span></span>').join('');
   snack('✓ Version ajoutée');
 }
 
@@ -2256,17 +2263,8 @@ function ajouterVersionRapide(fid,vi){
   f.versions.push(v);
   sauvegarder();
   const el=document.getElementById('version-tags-'+fid);
-  if(el){
-    el.innerHTML=(f.versions).map((vv,i)=>'<span class="version-tag">'+esc(vv)+'<span class="del" onclick="supprimerVersion('+fid+','+i+')"> ✕</span></span>').join('');
-  } else {
-    const dp=document.getElementById('page-detail');
-    if(dp&&dp.classList.contains('active')){
-      try{ouvrirDetail(fid);}catch(e){try{afficherDetailFilm(fid);}catch(e2){}}
-    }
-  }
-  // Fermer tous les dropdowns versions rapides
-  document.querySelectorAll('.vrap-dropdown').forEach(d=>d.style.display='none');
-  snack('✓ '+v+' ajoutée');
+  if(el) el.innerHTML=(f.versions).map((vv,i)=>'<span class="version-tag">'+esc(vv)+'<span class="del" onclick="supprimerVersion('+fid+','+i+')"> ✕</span></span>').join('');
+  snack('✓ '+v);
 }
 function ajouterVersionTexte(id,v){
   const f=films.find(f=>f.id===id);if(!f) return;
@@ -2282,18 +2280,8 @@ function ajouterVersionTexte(id,v){
 
 function supprimerVersion(id,idx){
   const f=films.find(f=>f.id===id);if(!f) return;
-  f.versions.splice(idx,1);
-  sauvegarder();
-  const el=document.getElementById('version-tags-'+id);
-  if(el){
-    el.innerHTML=(f.versions||[]).map((vv,i)=>'<span class="version-tag">'+esc(vv)+'<span class="del" onclick="supprimerVersion('+id+','+i+')"> ✕</span></span>').join('');
-  } else {
-    const dp=document.getElementById('page-detail');
-    if(dp&&dp.classList.contains('active')){
-      try{ouvrirDetail(id);}catch(e){try{afficherDetailFilm(id);}catch(e2){}}
-    }
-  }
-  snack('Version supprimée');
+  f.versions.splice(idx,1);sauvegarder();
+  rafraichirVersions(f);
 }
 
 function rafraichirVersions(f){
@@ -2444,7 +2432,7 @@ async function ajouterTmdbDepuisModal(tmdbId,type){
   renderHome();
 }
 
-async async function ajouterTmdb(tmdbId,type,btn){
+async function ajouterTmdb(tmdbId,type,btn){
   if(btn){
     btn.textContent='⏳';
     btn.disabled=true;
@@ -2478,7 +2466,7 @@ async async function ajouterTmdb(tmdbId,type,btn){
       nationalite:nat, pays,
       duree:d.runtime||((d.episode_run_time&&d.episode_run_time[0])||0)
     });
-    films.push(film);sauvegarder();renderHome();if(document.getElementById('page-collection')&&document.getElementById('page-collection').classList.contains('active')){try{renderCollection();}catch(e){}}
+    films.push(film);sauvegarder();renderHome();
     if(btn){
       btn.textContent='✓';
       btn.style.background='var(--green-light)';
@@ -2931,13 +2919,13 @@ async function chargerFilmographie(acteurId,nom){
   }catch(e){snack('Erreur de chargement');}
 }
 
-async async function ouvrirFilmographie(acteurId,nom){
+async function ouvrirFilmographie(acteurId,nom){
   if(!acteurId||acteurId==='undefined'){snack('⚠️ Acteur non trouvé');return;}
   const mf=document.getElementById('modal-fiche');
   if(mf&&mf.classList.contains('open')) fermerModal('modal-fiche');
   document.getElementById('modal-filmo-titre').textContent=nom;
   document.getElementById('modal-filmo-body').innerHTML='<div class="loader"><div class="spinner"></div></div>';
-  document.getElementById('modal-filmo').classList.add('open');setTimeout(()=>switchFilmoTab('films'),50);
+  document.getElementById('modal-filmo').classList.add('open');
   pushModalState('modal-filmo');
   try{
     const [rF,rS]=await Promise.all([
