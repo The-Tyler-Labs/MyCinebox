@@ -2921,7 +2921,6 @@ async function chargerFilmographie(acteurId,nom){
 
 async function ouvrirFilmographie(acteurId,nom){
   if(!acteurId||acteurId==='undefined'){snack('⚠️ Acteur non trouvé');return;}
-  // Fermer modal-fiche seulement si elle est ouverte
   const mf=document.getElementById('modal-fiche');
   if(mf&&mf.classList.contains('open')) fermerModal('modal-fiche');
   document.getElementById('modal-filmo-titre').textContent=nom;
@@ -2929,36 +2928,66 @@ async function ouvrirFilmographie(acteurId,nom){
   document.getElementById('modal-filmo').classList.add('open');
   pushModalState('modal-filmo');
   try{
-    const r=await fetch(TMDB_API+'/person/'+acteurId+'/movie_credits?api_key='+prefs.apiKey+'&language=fr-FR');
-    const data=await r.json();
-    const vus=new Set();
-    const credits=(data.cast||[]).filter(f=>{
-      if(!f.id||!f.title||!f.poster_path||!f.release_date) return false;
-      if(!f.character||f.character.toLowerCase().includes('uncredited')) return false;
-      if(f.genre_ids&&f.genre_ids.includes(99)) return false;
-      if(typeof f.order==='number'&&f.order>20) return false;
-      if(vus.has(f.id)) return false;
-      vus.add(f.id);return true;
-    }).sort((a,b)=>(b.release_date||'').localeCompare(a.release_date||''));
-    if(credits.length===0){document.getElementById('modal-filmo-body').innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">Aucun film trouvé</p>';return;}
-    document.getElementById('modal-filmo-body').innerHTML=
-      '<p style="font-size:12px;color:var(--text2);margin-bottom:12px">'+credits.length+' films</p>'
-      +'<div class="filmo-grid">'+credits.map(f=>{
+    const [rF,rS]=await Promise.all([
+      fetch(TMDB_API+'/person/'+acteurId+'/movie_credits?api_key='+prefs.apiKey+'&language=fr-FR'),
+      fetch(TMDB_API+'/person/'+acteurId+'/tv_credits?api_key='+prefs.apiKey+'&language=fr-FR')
+    ]);
+    const [dF,dS]=await Promise.all([rF.json(),rS.json()]);
+    function filtrer(cast,isTV){
+      const vus=new Set();
+      return (cast||[]).filter(f=>{
+        const titre=isTV?f.name:f.title;
+        const date=isTV?f.first_air_date:f.release_date;
+        if(!f.id||!titre||!f.poster_path||!date) return false;
+        if(f.character&&f.character.toLowerCase().includes('uncredited')) return false;
+        if(typeof f.order==='number'&&f.order>30) return false;
+        if(vus.has(f.id)) return false;
+        vus.add(f.id);return true;
+      }).sort((a,b)=>(b.release_date||b.first_air_date||'').localeCompare(a.release_date||a.first_air_date||''));
+    }
+    function grille(credits,isTV){
+      if(!credits.length) return '<p style="color:var(--text2);text-align:center;padding:20px">Aucun résultat</p>';
+      const type=isTV?'tv':'movie';
+      return '<div class="filmo-grid">'+credits.map(f=>{
+        const titre=esc(isTV?f.name:f.title);
+        const date=(isTV?f.first_air_date:f.release_date||'').slice(0,4);
         const deja=films.some(x=>x.tmdbId===f.id);
-        return '<div class="filmo-card '+(deja?'deja':'')+'" onclick="ouvrirFicheFilmDepuisFilmo('+f.id+')">'
+        const genres=(f.genre_ids||[]).slice(0,2).map(id=>TMDB_GENRES[id]).filter(Boolean).join(', ');
+        return '<div class="filmo-card '+(deja?'deja':'')+'" onclick="ouvrirFicheFilmDepuisFilmo('+f.id+',\''+type+'\')">'
           +'<img src="'+TMDB_IMG+f.poster_path+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="">'
-          +'<button class="add-filmo" onclick="event.stopPropagation();event.preventDefault();ajouterTmdb('+f.id+',\'movie\',this)" '+(deja?'disabled':'')+'>'+(deja?'✓':'+')+'</button>'
-          +'<div class="filmo-info"><div class="filmo-title">'+esc(f.title)+'</div>'
-          +'<div class="filmo-meta">'+(f.release_date||'').slice(0,4)+'</div>'
+          +'<button class="add-filmo" onclick="event.stopPropagation();ajouterTmdb('+f.id+',\''+type+'\',this)" '+(deja?'disabled':'')+'>'+(deja?'✓':'+')+'</button>'
+          +'<div class="filmo-info"><div class="filmo-title">'+titre+'</div>'
+          +'<div class="filmo-meta">'+date+(f.vote_average>0?' · ⭐'+f.vote_average.toFixed(1):'')+'</div>'
+          +(genres?'<div class="filmo-meta" style="font-size:9px;color:var(--text2)">'+esc(genres)+'</div>':'')
           +'<div class="filmo-meta" style="color:var(--green-light);font-size:10px">'+esc(f.character||'')+'</div>'
           +'</div></div>';
       }).join('')+'</div>';
+    }
+    const cF=filtrer(dF.cast,false), cS=filtrer(dS.cast,true);
+    document.getElementById('modal-filmo-body').innerHTML=
+      '<div style="display:flex;gap:8px;margin-bottom:12px">'
+      +'<button id="ftab-f" onclick="switchFilmoTab(\'films\')" style="flex:1;padding:8px;border-radius:8px;border:none;background:var(--green);color:#fff;font-size:12px;font-weight:bold;cursor:pointer">🎬 Films ('+cF.length+')</button>'
+      +'<button id="ftab-s" onclick="switchFilmoTab(\'series\')" style="flex:1;padding:8px;border-radius:8px;border:none;background:var(--surface2);color:var(--text2);font-size:12px;font-weight:bold;cursor:pointer">📺 Séries ('+cS.length+')</button>'
+      +'</div>'
+      +'<div id="fc-films">'+grille(cF,false)+'</div>'
+      +'<div id="fc-series" style="display:none">'+grille(cS,true)+'</div>';
   }catch(e){document.getElementById('modal-filmo-body').innerHTML='<p style="color:var(--red);text-align:center;padding:20px">Erreur</p>';}
 }
 
-async function ouvrirFicheFilmDepuisFilmo(tmdbId){
+function switchFilmoTab(tab){
+  document.getElementById('fc-films').style.display=tab==='films'?'block':'none';
+  document.getElementById('fc-series').style.display=tab==='series'?'block':'none';
+  const bg1=tab==='films'?'var(--green)':'var(--surface2)', c1=tab==='films'?'#fff':'var(--text2)';
+  const bg2=tab==='series'?'var(--green)':'var(--surface2)', c2=tab==='series'?'#fff':'var(--text2)';
+  document.getElementById('ftab-f').style.cssText='flex:1;padding:8px;border-radius:8px;border:none;background:'+bg1+';color:'+c1+';font-size:12px;font-weight:bold;cursor:pointer';
+  document.getElementById('ftab-s').style.cssText='flex:1;padding:8px;border-radius:8px;border:none;background:'+bg2+';color:'+c2+';font-size:12px;font-weight:bold;cursor:pointer';
+}
+
+
+async function ouvrirFicheFilmDepuisFilmo(tmdbId,type){
+  type=type||'movie';
   fermerModal('modal-filmo');
-  await ouvrirFicheFilm(tmdbId,'movie');
+  await ouvrirFicheFilm(tmdbId,type);
   document.querySelector('#modal-fiche .modal-close').onclick=()=>{fermerModal('modal-fiche');document.getElementById('modal-filmo').classList.add('open');
   pushModalState('modal-filmo');};
 }
