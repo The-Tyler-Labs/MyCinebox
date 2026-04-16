@@ -704,7 +704,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 
 <!-- MODAL CHOIX AFFICHE FILM -->
 <div class="modal-overlay" id="modal-affiche-film" onclick="if(event.target===this)fermerModal('modal-affiche-film')">
-  <div class="modal-box" style="padding:20px;max-height:80vh;overflow-y:auto">
+  <div class="modal-box" style="padding:20px;max-height:80vh;overflow-y:auto" onclick="event.stopPropagation()">
     <h3 style="font-size:17px;font-weight:bold;margin-bottom:14px">🖼 Choisir une affiche</h3>
     <div id="affiche-film-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px"></div>
     <button class="btn" style="width:100%;margin-top:14px;background:var(--surface2);color:var(--text2)" onclick="fermerModal('modal-affiche-film')">Fermer</button>
@@ -981,7 +981,13 @@ function sauvegarder(){
   }
 }
 
-function autoExportJSON(){} // Désactivé
+function autoExportJSON(){
+  // Backup automatique dans localStorage
+  try{
+    const exportData={films,sagas:typeof sagas!=='undefined'?sagas:[],prefs,exportDate:new Date().toISOString()};
+    localStorage.setItem('mycinebox_backup',JSON.stringify(exportData));
+  }catch(e){console.warn('autoExportJSON:',e);}
+}
 function savePrefs(){localStorage.setItem(PREFS_KEY,JSON.stringify(prefs));}
 function nextId(){return films.length>0?Math.max(...films.map(f=>f.id||0))+1:1;}
 
@@ -2251,6 +2257,9 @@ function ajouterVersion(id){
   const el=document.getElementById('version-tags-'+id);
   if(el) el.innerHTML=(f.versions||[]).map((vv,i)=>'<span class="version-tag">'+esc(vv)+'<span class="del" onclick="supprimerVersion('+id+','+i+')"> ✕</span></span>').join('');
   snack('✓ Version ajoutée');
+
+  // Re-render la fiche pour afficher la nouvelle version
+  const el3=document.getElementById('version-tags-'+fid);if(!el3){const dp=document.getElementById('page-detail');if(dp&&dp.classList.contains('active')){try{ouvrirDetail(fid);}catch(e){try{afficherDetailFilm(fid);}catch(e2){}}}}
 }
 
 
@@ -2263,8 +2272,16 @@ function ajouterVersionRapide(fid,vi){
   f.versions.push(v);
   sauvegarder();
   const el=document.getElementById('version-tags-'+fid);
-  if(el) el.innerHTML=(f.versions).map((vv,i)=>'<span class="version-tag">'+esc(vv)+'<span class="del" onclick="supprimerVersion('+fid+','+i+')"> ✕</span></span>').join('');
-  snack('✓ '+v);
+  if(el){
+    el.innerHTML=(f.versions).map((vv,i)=>'<span class="version-tag">'+esc(vv)+'<span class="del" onclick="supprimerVersion('+fid+','+i+')"> ✕</span></span>').join('');
+  } else {
+    // Re-render la fiche complète pour afficher les versions
+    const dp=document.getElementById('page-detail');
+    if(dp&&dp.classList.contains('active')){
+      try{ouvrirDetail(fid);}catch(e){try{afficherDetailFilm(fid);}catch(e2){}}
+    }
+  }
+  snack('✓ '+v+' ajoutée');
 }
 function ajouterVersionTexte(id,v){
   const f=films.find(f=>f.id===id);if(!f) return;
@@ -2281,6 +2298,8 @@ function ajouterVersionTexte(id,v){
 function supprimerVersion(id,idx){
   const f=films.find(f=>f.id===id);if(!f) return;
   f.versions.splice(idx,1);sauvegarder();
+  const el2=document.getElementById('version-tags-'+fid);if(!el2){const dp=document.getElementById('page-detail');if(dp&&dp.classList.contains('active')){try{ouvrirDetail(fid);}catch(e){try{afficherDetailFilm(fid);}catch(e2){}}}}
+
   rafraichirVersions(f);
 }
 
@@ -2432,7 +2451,7 @@ async function ajouterTmdbDepuisModal(tmdbId,type){
   renderHome();
 }
 
-async function ajouterTmdb(tmdbId,type,btn){
+async async function ajouterTmdb(tmdbId,type,btn){
   if(btn){
     btn.textContent='⏳';
     btn.disabled=true;
@@ -2466,7 +2485,7 @@ async function ajouterTmdb(tmdbId,type,btn){
       nationalite:nat, pays,
       duree:d.runtime||((d.episode_run_time&&d.episode_run_time[0])||0)
     });
-    films.push(film);sauvegarder();renderHome();
+    films.push(film);sauvegarder();renderHome();if(document.getElementById('page-collection')&&document.getElementById('page-collection').classList.contains('active')){try{renderCollection();}catch(e){}}
     if(btn){
       btn.textContent='✓';
       btn.style.background='var(--green-light)';
@@ -2919,7 +2938,7 @@ async function chargerFilmographie(acteurId,nom){
   }catch(e){snack('Erreur de chargement');}
 }
 
-async function ouvrirFilmographie(acteurId,nom){
+async async function ouvrirFilmographie(acteurId,nom){
   if(!acteurId||acteurId==='undefined'){snack('⚠️ Acteur non trouvé');return;}
   const mf=document.getElementById('modal-fiche');
   if(mf&&mf.classList.contains('open')) fermerModal('modal-fiche');
