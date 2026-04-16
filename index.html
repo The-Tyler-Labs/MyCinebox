@@ -2478,7 +2478,7 @@ async async function ajouterTmdb(tmdbId,type,btn){
       nationalite:nat, pays,
       duree:d.runtime||((d.episode_run_time&&d.episode_run_time[0])||0)
     });
-    films.push(film);sauvegarder();renderHome();if(document.getElementById('page-collection')&&document.getElementById('page-collection').classList.contains('active')){try{renderCollection();}catch(e){}}if(document.getElementById('page-collection')&&document.getElementById('page-collection').classList.contains('active')){try{renderCollection();}catch(e){}}
+    films.push(film);sauvegarder();renderHome();if(document.getElementById('page-collection')&&document.getElementById('page-collection').classList.contains('active')){try{renderCollection();}catch(e){}}
     if(btn){
       btn.textContent='✓';
       btn.style.background='var(--green-light)';
