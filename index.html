@@ -1896,7 +1896,7 @@ function ouvrirDetail(id){
   afficherDetail(f);
 
   // Si tmdbId connu et durée manquante (ou série sans épisodes), recharger depuis TMDB
-  if(f.tmdbId && (f.duree===0||!f.duree||f.categorie==='series'||!f.castingDetails||!f.realisateur)){
+  if(f.tmdbId && (f.duree===0||!f.duree||f.categorie==='series'||!f.castingDetails||!f.realisateur||!f.trailerKey||(f.castingDetails&&f.castingDetails[0]&&!f.castingDetails[0].photo&&!f.castingDetails[0].id))){
     const endpoint=f.categorie==='series'?'/tv/':'/movie/';
     fetch(TMDB_API+endpoint+f.tmdbId+'?api_key='+prefs.apiKey+'&language=fr-FR&append_to_response=season/1,season/2,season/3,season/4,season/5,videos,credits')
       .then(r=>r.json())
@@ -2336,8 +2336,24 @@ async function searchTmdb(type){
     const data=await r.json();
     document.getElementById(loaderId).style.display='none';
     if(!data.results||data.results.length===0){
-      document.getElementById(resultsId).innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">Aucun résultat</p>';
-      return;
+      // Essai avec les 6 premiers caractères de chaque mot (tolérance fautes)
+      const mots=q.split(' ').filter(m=>m.length>3).map(m=>m.slice(0,6));
+      if(mots.length>0){
+        const q2=mots.join(' ');
+        const r2=await fetch(TMDB_API+'/search/'+type+'?api_key='+prefs.apiKey+'&query='+encodeURIComponent(q2)+'&language=fr-FR');
+        const d2=await r2.json();
+        if(d2.results&&d2.results.length>0){
+          data.results=d2.results;
+        } else {
+          document.getElementById(loaderId).style.display='none';
+          document.getElementById(resultsId).innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">Aucun résultat pour "'+esc(q)+'"</p>';
+          return;
+        }
+      } else {
+        document.getElementById(loaderId).style.display='none';
+        document.getElementById(resultsId).innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">Aucun résultat</p>';
+        return;
+      }
     }
     let results_=data.results.slice(0,50);
     if(_searchSort==='date') results_.sort((a,b)=>(b.release_date||b.first_air_date||'').localeCompare(a.release_date||a.first_air_date||''));
