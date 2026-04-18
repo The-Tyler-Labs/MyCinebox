@@ -1892,33 +1892,35 @@ function ouvrirDetail(id){
   const f=films.find(f=>f.id===id);if(!f) return;
   if(currentPage!=='detail') prevPage=currentPage;
 
-  // Afficher la page immédiatement avec les données locales
+  // Afficher immédiatement
   afficherDetail(f);
 
-  // Si tmdbId connu et durée manquante (ou série sans épisodes), recharger depuis TMDB
-  if(f.tmdbId && (f.duree===0||!f.duree||f.categorie==='series'||!f.castingDetails||!f.realisateur||!f.trailerKey||(f.castingDetails&&f.castingDetails[0]&&!f.castingDetails[0].photo&&!f.castingDetails[0].id))){
+  // Toujours recharger depuis TMDB pour avoir photos, trailer à jour
+  if(f.tmdbId){
     const endpoint=f.categorie==='series'?'/tv/':'/movie/';
     fetch(TMDB_API+endpoint+f.tmdbId+'?api_key='+prefs.apiKey+'&language=fr-FR&append_to_response=season/1,season/2,season/3,season/4,season/5,videos,credits')
       .then(r=>r.json())
       .then(d=>{
+        // Vérifier qu'on est encore sur cette fiche
+        if(currentPage!=='detail') return;
         const duree=d.runtime||((d.episode_run_time&&d.episode_run_time[0])||0);
-        if(duree>0){ f.duree=duree; }
+        if(duree>0) f.duree=duree;
+        // Trailer FR en priorité
         const videos=d.videos&&d.videos.results||[];
         const trailer=videos.find(v=>v.type==='Trailer'&&v.site==='YouTube'&&v.iso_639_1==='fr')
+          ||videos.find(v=>v.type==='Trailer'&&v.site==='YouTube'&&v.official)
           ||videos.find(v=>v.type==='Trailer'&&v.site==='YouTube')
           ||videos.find(v=>v.site==='YouTube');
         if(trailer) f.trailerKey=trailer.key;
-        // Réalisateur
         if(d.credits&&d.credits.crew){
           f.realisateur=(d.credits.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', ');
         }
-        // Casting avec photos
         if(d.credits&&d.credits.cast){
-          f.castingDetails=(d.credits.cast||[]).slice(0,10).map(a=>({
+          f.castingDetails=(d.credits.cast||[]).slice(0,15).map(a=>({
             id:a.id,name:a.name,character:a.character,
             photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null
           }));
-          f.casting=(d.credits.cast||[]).slice(0,10).map(a=>a.name).join(',');
+          f.casting=(d.credits.cast||[]).slice(0,15).map(a=>a.name).join(',');
         }
         if(f.categorie==='series'){
           f.nbSaisons=d.number_of_seasons||0;
@@ -1930,7 +1932,7 @@ function ouvrirDetail(id){
           }
         }
         sauvegarder();
-        afficherDetail(f);
+        afficherDetail(f); // Mettre à jour avec les nouvelles données
       })
       .catch(()=>{});
   }
@@ -2963,7 +2965,7 @@ function switchCFilmoTab(t){
 }
 
 async function ouvrirFilmographie(acteurId,nom){
-  if(!acteurId||acteurId==='undefined'){snack('⚠️ Acteur non trouvé');return;}
+  if(!acteurId||acteurId==='undefined'||isNaN(parseInt(acteurId))){snack('⚠️ Acteur introuvable');return;}
   const mf=document.getElementById('modal-fiche');
   if(mf&&mf.classList.contains('open')) fermerModal('modal-fiche');
   document.getElementById('modal-filmo-titre').textContent=nom;
@@ -3908,7 +3910,28 @@ document.addEventListener('click', function(e){
 });
 
 
-let _googleClientInstance=null; // Connexion Google manuelle uniquement
+let _googleClientInstance=null;
+// Reconnexion Google automatique si déjà connecté
+window.addEventListener('load',()=>{
+  const wasConnected=localStorage.getItem('google_was_connected');
+  if(!wasConnected) return;
+  setTimeout(()=>{
+    if(typeof google==='undefined') return;
+    try{
+      _googleClientInstance=google.accounts.oauth2.initTokenClient({
+        client_id:GOOGLE_CLIENT_ID,
+        scope:'https://www.googleapis.com/auth/drive.file',
+        prompt:'',
+        callback:(resp)=>{
+          if(resp.error||!resp.access_token) return;
+          _googleToken=resp.access_token;
+          chargerProfilGoogle();
+        }
+      });
+      _googleClientInstance.requestAccessToken({prompt:''});
+    }catch(e){}
+  },2000);
+});
 const _sagaAffiches=JSON.parse(localStorage.getItem('sagaAffiches')||'{}');
 document.documentElement.style.setProperty('--cols',prefs.cols||2);
 document.documentElement.style.setProperty('--home-cols',prefs.homeCols||4);
@@ -3933,6 +3956,7 @@ function googleSignIn(){
     _googleClientInstance.requestAccessToken({prompt:'select_account'});
     return;
   }
+  // Créer une nouvelle instance
   const client=google.accounts.oauth2.initTokenClient({
     client_id:GOOGLE_CLIENT_ID,scope:DRIVE_SCOPE,
     callback:(resp)=>{
