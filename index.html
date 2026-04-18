@@ -1915,7 +1915,7 @@ function ouvrirDetail(id){
         // Casting avec photos
         if(d.credits&&d.credits.cast){
           f.castingDetails=(d.credits.cast||[]).slice(0,10).map(a=>({
-            name:a.name,character:a.character,
+            id:a.id,name:a.name,character:a.character,
             photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null
           }));
           f.casting=(d.credits.cast||[]).slice(0,10).map(a=>a.name).join(',');
@@ -2202,7 +2202,7 @@ function setStatutDetailBtn(btn){
   f.statut=nouveau;f.estVu=(nouveau==='vu');
   sauvegarder();
   // Mettre à jour visuellement tous les boutons du groupe
-  btn.closest('.statut-row').querySelectorAll('.statut-opt').forEach(b=>{
+  (btn.closest('.statut-row')||btn.parentElement).querySelectorAll('.statut-opt').forEach(b=>{
     b.classList.toggle('active', b.dataset.statut===nouveau);
     // Mettre à jour les classes de couleur
     const si=statutInfo(b.dataset.statut);
@@ -2432,6 +2432,7 @@ async function ajouterTmdbDepuisModal(tmdbId,type){
     casting:(d.credits?.cast||[]).slice(0,10).map(a=>a.name).join(','),
     castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({id:a.id,name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
     realisateur:(d.credits?.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', '),
+    trailerKey:(()=>{const vids=d.videos&&d.videos.results||[];const t=vids.find(v=>v.type==='Trailer'&&v.site==='YouTube'&&v.iso_639_1==='fr')||vids.find(v=>v.type==='Trailer'&&v.site==='YouTube')||vids.find(v=>v.site==='YouTube');return t?t.key:null;})(),
     nationalite:nat, pays,
     duree:d.runtime||((d.episode_run_time&&d.episode_run_time[0])||0)
   });
@@ -2457,7 +2458,7 @@ async function ajouterTmdb(tmdbId,type,btn){
       d=ficheFilmCourante;
     } else {
       const endpoint=type==='tv'?'/tv/':'/movie/';
-      const r=await fetch(TMDB_API+endpoint+tmdbId+'?api_key='+prefs.apiKey+'&language=fr-FR&append_to_response=credits');
+      const r=await fetch(TMDB_API+endpoint+tmdbId+'?api_key='+prefs.apiKey+'&language=fr-FR&append_to_response=credits,videos');
       d=await r.json();
     }
     const titre=d.title||d.name||'';
@@ -2472,8 +2473,9 @@ async function ajouterTmdb(tmdbId,type,btn){
       dateSortie:date,notesTmdb:d.vote_average||0,
       genres:(d.genres||[]).map(g=>g.name).join(','),
       casting:(d.credits?.cast||[]).slice(0,10).map(a=>a.name).join(','),
-            castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({id:a.id,name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
-            realisateur:(d.credits?.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', '),
+      castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({id:a.id,name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
+      realisateur:(d.credits?.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', '),
+      trailerKey:(()=>{const vids=d.videos&&d.videos.results||[];const t=vids.find(v=>v.type==='Trailer'&&v.site==='YouTube'&&v.iso_639_1==='fr')||vids.find(v=>v.type==='Trailer'&&v.site==='YouTube')||vids.find(v=>v.site==='YouTube');return t?t.key:null;})(),
       nationalite:nat, pays,
       duree:d.runtime||((d.episode_run_time&&d.episode_run_time[0])||0)
     });
@@ -3394,6 +3396,9 @@ function choisirAfficheFilm(id){
             document.getElementById('modal-affiche-film').classList.remove('open');
             document.querySelectorAll('.detail-backdrop').forEach(i=>{i.src=url;});
             document.querySelectorAll('#page-detail .poster-wrap img').forEach(i=>{i.src=url;});
+            // Aussi mettre à jour l'affichage complet de la fiche
+            const filmAff=films.find(ff=>ff.id===window._afficheFilmId);
+            if(filmAff) afficherDetail(filmAff);
             snack('✓ Affiche mise à jour');
           });
           grid.appendChild(div);
