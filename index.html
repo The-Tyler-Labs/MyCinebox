@@ -198,6 +198,20 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .modal-header{position:sticky;top:0;background:var(--surface);padding:14px 16px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #2a2a2a;z-index:1}
 .modal-header h3{flex:1;font-size:15px}
 .modal-close{background:none;border:none;color:var(--text2);font-size:24px;cursor:pointer;padding:0 4px;line-height:1}
+<!-- PAGE NOTES -->
+<div id="page-notes" class="page">
+  <h2 style="margin-bottom:16px">📝 Notes</h2>
+  <div style="background:var(--surface);border-radius:12px;padding:16px">
+    <textarea id="notes-content" placeholder="Tapez vos notes ici..." 
+      style="width:100%;min-height:400px;background:var(--surface2);color:var(--text);border:1px solid #333;border-radius:8px;padding:12px;font-size:14px;font-family:inherit;resize:vertical"></textarea>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <button onclick="copyNotes()" class="btn" style="flex:1;min-width:100px;background:var(--green);color:#fff">📋 Copier</button>
+      <button onclick="pasteNotes()" class="btn" style="flex:1;min-width:100px;background:var(--surface2);border:1px solid #333">📄 Coller</button>
+      <button onclick="clearNotes()" class="btn" style="flex:1;min-width:100px;background:#c0392b;color:#fff">🗑️ Effacer</button>
+    </div>
+    <div id="notes-status" style="font-size:11px;color:var(--text2);text-align:center;margin-top:8px"></div>
+  </div>
+</div>
 .modal-body{padding:16px}
 .cast-grid{display:grid;grid-template-columns:repeat(var(--search-cols,4),1fr);gap:6px}
 .cast-card{background:var(--surface2);border-radius:10px;overflow:hidden;cursor:pointer;text-align:center;padding-bottom:8px}
@@ -663,6 +677,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <button id="btn-drive-load" class="btn" style="width:100%;margin-bottom:8px;display:none;background:var(--surface2);color:var(--text2);border:1px solid #333" onclick="chargerDrive()">☁️ Charger depuis Drive</button>
       <button id="btn-drive-merge" class="btn" style="width:100%;margin-bottom:8px;display:none;background:#1a3a5c;color:#90d0ff;border:1px solid #333" onclick="chargerDriveAvecMerge()">🔀 Merger local + Drive</button>
       <div id="drive-status" style="font-size:11px;color:var(--text2);text-align:center"></div>
+      <div id="drive-last-save" style="font-size:10px;color:#666;text-align:right;margin-top:4px;font-style:italic"></div>
       <div id="drive-total" style="font-size:11px;color:var(--text2);text-align:center"></div>
     </div>
     <div class="settings-section">
@@ -882,6 +897,9 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   </button>
   <button class="nav-btn" id="nav-settings" onclick="goPage('settings')">
     <svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>Paramètres
+  <button class="nav-btn" id="nav-notes" onclick="goPage('notes')">
+    <svg viewBox="0 0 24 24"><path d="M14,17H7V15H14M17,13H7V11H17M17,9H7V7H17M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3Z"/></svg>Notes
+  </button>
   </button>
   <button class="nav-btn" id="nav-drive" onclick="sauvegarderDrive(false)" title="Sauvegarder sur Drive">
     <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>Drive
@@ -1035,6 +1053,7 @@ function goPage(p){
   if(p==='collection'){tagFiltres.statut='tous';buildFiltresDynamiques();renderCollection();}
   if(p==='settings') renderSettings();
   if(p==='visionnages') renderVisionnagesGlobal();
+  if(p==='notes') loadNotes();
   window.scrollTo(0,0);
 }
 
@@ -2030,7 +2049,7 @@ function afficherDetail(f){
       +f.castingDetails.slice(0,10).map(a=>{
         const actId=parseInt(a.id);
         const onclick=(!isNaN(actId)&&actId>0)
-          ?'ouvrirFilmographie('+actId+',\''+esc(a.name)+'\')'
+          ?'searchActorMovies('+actId+',\''+esc(a.name)+'\')'
           :'goPage(\'search\');setSearchTab(\'acteur\');document.getElementById(\'acteur-query\').value=\''+esc(a.name)+'\';searchActeur()';
         return '<div style="flex:0 0 70px;text-align:center;cursor:pointer" onclick="'+onclick+'">'
           +(a.photo
@@ -3186,6 +3205,7 @@ window.addEventListener('popstate', (e)=>{
   setTimeout(()=>{
     const ds=document.getElementById('drive-status');
     if(ds&&driveDate&&!ds.textContent) ds.textContent='✓ Dernière sauvegarde Drive : '+driveDate;
+    updateDriveLastSaveTime();
     const js=document.getElementById('json-status');
     if(js&&jsonDate) js.textContent='✓ Dernière sauvegarde JSON : '+jsonDate;
   },50);
@@ -4029,6 +4049,8 @@ async function sauvegarderDrive(silencieux=false){
     const statusEl=document.getElementById('drive-status');
     if(statusEl) statusEl.textContent='✓ Drive : '+now;
     localStorage.setItem('drive_save_date', now);
+    localStorage.setItem('drive_last_save_time', Date.now());
+    updateDriveLastSaveTime();
     const totEl=document.getElementById('drive-total');
     if(totEl) totEl.textContent='📊 '+films.length+' titre(s)';
     if(!silencieux) snack('✓ Sauvegardé sur Google Drive !');
@@ -4180,6 +4202,190 @@ window.ouvrirFicheFilm = ouvrirFicheFilm;
 window.setCatTab = setCatTab;
 window.searchTmdb = searchTmdb;
 window.searchActeur = searchActeur;
+// === NOTES FUNCTIONS ===
+const NOTES_KEY = 'videotheque_notes';
+
+function loadNotes() {
+  const notes = localStorage.getItem(NOTES_KEY) || '';
+  const textarea = document.getElementById('notes-content');
+  if (textarea) textarea.value = notes;
+}
+
+function saveNotes() {
+  const textarea = document.getElementById('notes-content');
+  if (textarea) {
+    localStorage.setItem(NOTES_KEY, textarea.value);
+    showNotesStatus('✓ Sauvegardé');
+  }
+}
+
+function copyNotes() {
+  const textarea = document.getElementById('notes-content');
+  if (textarea) {
+    textarea.select();
+    document.execCommand('copy');
+    showNotesStatus('✓ Copié dans le presse-papiers');
+  }
+}
+
+async function pasteNotes() {
+  try {
+    const text = await navigator.clipboard.readText();
+    const textarea = document.getElementById('notes-content');
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const before = textarea.value.substring(0, start);
+      const after = textarea.value.substring(end);
+      textarea.value = before + text + after;
+      textarea.selectionStart = textarea.selectionEnd = start + text.length;
+      saveNotes();
+      showNotesStatus('✓ Collé');
+    }
+  } catch (err) {
+    showNotesStatus('❌ Erreur de collage');
+  }
+}
+
+function clearNotes() {
+  if (confirm('Effacer toutes les notes ?')) {
+    const textarea = document.getElementById('notes-content');
+    if (textarea) {
+      textarea.value = '';
+      saveNotes();
+      showNotesStatus('✓ Notes effacées');
+    }
+  }
+}
+
+function showNotesStatus(msg) {
+  const status = document.getElementById('notes-status');
+  if (status) {
+    status.textContent = msg;
+    setTimeout(() => status.textContent = '', 2000);
+  }
+}
+
+// Auto-save notes on change
+document.addEventListener('DOMContentLoaded', () => {
+  const textarea = document.getElementById('notes-content');
+  if (textarea) {
+    loadNotes();
+    let saveTimer;
+    textarea.addEventListener('input', () => {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveNotes, 1000);
+    });
+  }
+});
+
+// === UPDATE DRIVE LAST SAVE TIME ===
+function updateDriveLastSaveTime() {
+  const timestamp = localStorage.getItem('drive_last_save_time');
+  const div = document.getElementById('drive-last-save');
+  if (div) {
+    if (timestamp) {
+      const date = new Date(parseInt(timestamp));
+      const formattedDate = date.toLocaleString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit', 
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      div.textContent = 'Dernière sauvegarde: ' + formattedDate;
+    } else {
+      div.textContent = '';
+    }
+  }
+}
+
+// === FIX ACTOR CLICK BUG ===
+// Modifier la fonction existante openFilmDetail pour gérer le clic acteur
+const originalOpenFilmDetail = window.openFilmDetail;
+window.openFilmDetail = function(film) {
+  const result = originalOpenFilmDetail(film);
+  
+  // Après affichage, ajouter listeners sur les acteurs
+  setTimeout(() => {
+    const actorLinks = document.querySelectorAll('[data-actor-id]');
+    actorLinks.forEach(link => {
+      link.style.cursor = 'pointer';
+      link.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const actorId = link.getAttribute('data-actor-id');
+        const actorName = link.textContent;
+        if (actorId) {
+          searchActorMovies(actorId, actorName);
+        }
+      });
+    });
+  }, 100);
+  
+  return result;
+};
+
+async function searchActorMovies(personId, personName) {
+  goPage('search');
+  showToast(`🔍 Recherche des films de ${personName}...`);
+  
+  try {
+    const response = await fetch(
+      `https://api.themoviedb.org/3/person/${personId}/movie_credits?api_key=1847535cfa0ee0cdcd25f1954cd9614f&language=fr-FR`
+    );
+    const data = await response.json();
+    
+    if (data.cast && data.cast.length > 0) {
+      // Afficher les résultats dans la recherche
+      displaySearchResults(data.cast.filter(m => m.poster_path));
+      document.getElementById('search-input').value = personName;
+      showToast(`✓ ${data.cast.length} films trouvés pour ${personName}`);
+    } else {
+      showToast(`Aucun film trouvé pour ${personName}`);
+    }
+  } catch (error) {
+    showToast('❌ Erreur de recherche');
+    console.error(error);
+  }
+}
+
+// === FIX STATUS TOGGLE (DESELECT IF ALREADY SELECTED) ===
+function toggleStatus(film, newStatus) {
+  // Si le film a déjà ce statut, le retirer (passer à "none")
+  if (film.statut === newStatus) {
+    film.statut = 'none';
+  } else {
+    film.statut = newStatus;
+  }
+  sauvegarderLocal();
+  openFilmDetail(film);
+  showToast('✓ Statut mis à jour');
+}
+
 </script>
 </body>
 </html>
+
+// === DISPLAY SEARCH RESULTS FUNCTION (pour afficher les résultats d'acteur) ===
+function displaySearchResults(results) {
+  const resultsId = 'search-results';
+  let results_ = results.slice(0,50);
+  if (_searchSort === 'date') results_.sort((a,b)=>(b.release_date||'').localeCompare(a.release_date||''));
+  
+  document.getElementById(resultsId).innerHTML = results_.map(f=>{
+    const titre = f.title || '';
+    const date = (f.release_date||'').slice(0,4);
+    const img = f.poster_path ? TMDB_IMG+f.poster_path : '';
+    const deja = films.some(x=>x.tmdbId===f.id);
+    const genres_ = (f.genre_ids||[]).slice(0,3).map(id=>TMDB_GENRES[id]).filter(Boolean).join(', ');
+    return '<div class="result-item" onclick="ouvrirFicheFilm('+f.id+',\'movie\')">'
+      +'<img src="'+img+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="">'
+      +'<div class="result-info"><h4>'+esc(titre)+'</h4>'
+      +'<div class="rmeta">'+date+(f.vote_average>0?' • ⭐ '+f.vote_average.toFixed(1):'')+(genres_?' • '+esc(genres_):'')+'</div>'
+      +'<div class="roverview">'+esc(f.overview||'')+'</div></div>'
+      +'<button class="btn '+(deja?'':'btn-primary')+' add-btn" style="flex-shrink:0;padding:6px 12px;font-size:13px;'+(deja?'background:#333;color:var(--text2)':'')+'" onclick="event.stopPropagation();event.preventDefault();ajouterTmdb('+f.id+',\'movie\',this)" '+(deja?'disabled':'')+'>'
+      +(deja?'✓':'+')+'</button></div>';
+  }).join('');
+}
+
