@@ -100,19 +100,6 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .carousel-card{flex:0 0 100px;background:var(--surface);border-radius:10px;overflow:hidden;cursor:pointer}
 
 <!-- PAGE NOTES -->
-<div id="page-notes" class="page">
-  <h2 style="margin-bottom:16px">📝 Notes</h2>
-  <div style="background:var(--surface);border-radius:12px;padding:16px">
-    <textarea id="notes-content" placeholder="Tapez vos notes ici..." 
-      style="width:100%;min-height:400px;background:var(--surface2);color:var(--text);border:1px solid #333;border-radius:8px;padding:12px;font-size:14px;font-family:inherit;resize:vertical"></textarea>
-    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-      <button onclick="copyNotes()" class="btn" style="flex:1;min-width:100px;background:var(--green);color:#fff">📋 Copier</button>
-      <button onclick="pasteNotes()" class="btn" style="flex:1;min-width:100px;background:var(--surface2);border:1px solid #333">📄 Coller</button>
-      <button onclick="clearNotes()" class="btn" style="flex:1;min-width:100px;background:#c0392b;color:#fff">🗑️ Effacer</button>
-    </div>
-    <div id="notes-status" style="font-size:11px;color:var(--text2);text-align:center;margin-top:8px"></div>
-  </div>
-</div>
 .carousel-card img{width:100px;height:150px;object-fit:cover;display:block;background:var(--green-dark)}
 .carousel-card .cc-title{font-size:11px;padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .carousel-card .cc-cat{font-size:9px;padding:0 6px 6px;opacity:.6}
@@ -729,6 +716,21 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   </div>
 </div>
 
+
+<!-- PAGE NOTES -->
+<div class="page" id="page-notes">
+  <h2 style="margin-bottom:16px">📝 Notes</h2>
+  <div style="background:var(--surface);border-radius:12px;padding:16px">
+    <textarea id="notes-content" placeholder="Tapez vos notes ici..." 
+      style="width:100%;min-height:400px;background:var(--surface2);color:var(--text);border:1px solid #333;border-radius:8px;padding:12px;font-size:14px;font-family:inherit;resize:vertical"></textarea>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <button onclick="copyNotes()" class="btn" style="flex:1;min-width:100px;background:var(--green);color:#fff">📋 Copier</button>
+      <button onclick="pasteNotes()" class="btn" style="flex:1;min-width:100px;background:var(--surface2);border:1px solid #333">📄 Coller</button>
+      <button onclick="clearNotes()" class="btn" style="flex:1;min-width:100px;background:#c0392b;color:#fff">🗑️ Effacer</button>
+    </div>
+    <div id="notes-status" style="font-size:11px;color:var(--text2);text-align:center;margin-top:8px"></div>
+  </div>
+</div>
 <!-- MODAL CHOIX AFFICHE SAGA -->
 <div class="modal-overlay" id="modal-affiche-saga" onclick="if(event.target===this)fermerModal('modal-affiche-saga')">
   <div class="modal-box" style="padding:20px;max-height:80vh;overflow-y:auto">
@@ -904,6 +906,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   </button>
   <button class="nav-btn" id="nav-drive" onclick="sauvegarderDrive(false)" title="Sauvegarder sur Drive">
     <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>Drive
+    <div id="nav-drive-date" style="font-size:8px;color:#666;margin-top:-2px;line-height:1"></div>
   </button>
 </nav>
 <button class="fab" id="fab-btn" onclick="goPage('search')">+</button>
@@ -4275,6 +4278,8 @@ function showNotesStatus(msg) {
 // ═══════════════════════════════════════════════
 function updateDriveLastSaveTime() {
   const timestamp = localStorage.getItem('drive_last_save_time');
+  
+  // Mise à jour dans les paramètres
   const div = document.getElementById('drive-last-save');
   if (div) {
     if (timestamp) {
@@ -4290,6 +4295,25 @@ function updateDriveLastSaveTime() {
       div.textContent = 'Dernière sauvegarde: ' + formattedDate;
     } else {
       div.textContent = '';
+    }
+  }
+  
+  // Mise à jour dans le bouton de navigation
+  const navDiv = document.getElementById('nav-drive-date');
+  if (navDiv) {
+    if (timestamp) {
+      const date = new Date(parseInt(timestamp));
+      const shortDate = date.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit'
+      });
+      const shortTime = date.toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      navDiv.textContent = shortDate + ' ' + shortTime;
+    } else {
+      navDiv.textContent = '';
     }
   }
 }
@@ -4352,6 +4376,8 @@ document.addEventListener('DOMContentLoaded', () => {
       saveTimer = setTimeout(saveNotes, 1000);
     });
   }
+  // Afficher la date de dernière sauvegarde Drive au chargement
+  updateDriveLastSaveTime();
 });
 
 </script>
