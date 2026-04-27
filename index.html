@@ -293,6 +293,23 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .genre-tag-edit:hover .genre-del{opacity:1}
 .genre-tag-edit:focus-within .genre-del{opacity:1}
 </style>
+
+/* Notes Cards */
+.note-card {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid #333;
+  cursor: move;
+  transition: all 0.2s;
+}
+.note-card:hover {
+  border-color: var(--green);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.note-card.dragging {
+  opacity: 0.5;
+}
 </head>
 <body>
 <div class="snack" id="snack"></div>
@@ -719,17 +736,11 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 
 <!-- PAGE NOTES -->
 <div class="page" id="page-notes">
-  <h2 style="margin-bottom:16px">📝 Notes</h2>
-  <div style="background:var(--surface);border-radius:12px;padding:16px">
-    <textarea id="notes-content" placeholder="Tapez vos notes ici..." 
-      style="width:100%;min-height:400px;background:var(--surface2);color:var(--text);border:1px solid #333;border-radius:8px;padding:12px;font-size:14px;font-family:inherit;resize:vertical"></textarea>
-    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-      <button onclick="copyNotes()" class="btn" style="flex:1;min-width:100px;background:var(--green);color:#fff">📋 Copier</button>
-      <button onclick="pasteNotes()" class="btn" style="flex:1;min-width:100px;background:var(--surface2);border:1px solid #333">📄 Coller</button>
-      <button onclick="clearNotes()" class="btn" style="flex:1;min-width:100px;background:#c0392b;color:#fff">🗑️ Effacer</button>
-    </div>
-    <div id="notes-status" style="font-size:11px;color:var(--text2);text-align:center;margin-top:8px"></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h2 style="margin:0">📝 Notes</h2>
+    <button onclick="ajouterNote()" class="btn" style="background:var(--green);color:#fff;padding:8px 16px">+ Nouvelle note</button>
   </div>
+  <div id="notes-container" style="display:flex;flex-direction:column;gap:12px"></div>
 </div>
 <!-- MODAL CHOIX AFFICHE SAGA -->
 <div class="modal-overlay" id="modal-affiche-saga" onclick="if(event.target===this)fermerModal('modal-affiche-saga')">
@@ -4208,69 +4219,180 @@ window.searchTmdb = searchTmdb;
 window.searchActeur = searchActeur;
 
 // ═══════════════════════════════════════════════
-// NOTES FUNCTIONS
+// NOTES FUNCTIONS - GOOGLE KEEP STYLE
 // ═══════════════════════════════════════════════
-const NOTES_KEY = 'videotheque_notes';
+const NOTES_KEY = 'videotheque_notes_v2';
+let notesData = [];
 
 function loadNotes() {
-  const notes = localStorage.getItem(NOTES_KEY) || '';
-  const textarea = document.getElementById('notes-content');
-  if (textarea) textarea.value = notes;
+  try {
+    const saved = localStorage.getItem(NOTES_KEY);
+    notesData = saved ? JSON.parse(saved) : [];
+  } catch(e) {
+    notesData = [];
+  }
+  renderNotes();
 }
 
 function saveNotes() {
-  const textarea = document.getElementById('notes-content');
-  if (textarea) {
-    localStorage.setItem(NOTES_KEY, textarea.value);
-    showNotesStatus('✓ Sauvegardé');
+  localStorage.setItem(NOTES_KEY, JSON.stringify(notesData));
+}
+
+function renderNotes() {
+  const container = document.getElementById('notes-container');
+  if (!container) return;
+  
+  if (notesData.length === 0) {
+    container.innerHTML = '<p style="text-align:center;color:var(--text2);padding:40px">Aucune note. Cliquez sur "+ Nouvelle note" pour commencer.</p>';
+    return;
+  }
+  
+  container.innerHTML = notesData.map((note, index) => `
+    <div class="note-card" data-index="${index}" draggable="true" 
+         ondragstart="dragStart(event)" ondragover="dragOver(event)" ondrop="drop(event)" ondragend="dragEnd(event)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="display:flex;gap:8px">
+          <button onclick="toggleNoteType(${index})" class="btn" style="padding:4px 8px;font-size:11px;background:var(--surface2)">
+            ${note.type === 'checklist' ? '☑️ Liste' : '📝 Texte'}
+          </button>
+          <button onclick="monterNote(${index})" class="btn" style="padding:4px 8px;font-size:11px;background:var(--surface2)" ${index === 0 ? 'disabled' : ''}>↑</button>
+          <button onclick="descendreNote(${index})" class="btn" style="padding:4px 8px;font-size:11px;background:var(--surface2)" ${index === notesData.length - 1 ? 'disabled' : ''}>↓</button>
+        </div>
+        <button onclick="supprimerNote(${index})" class="btn" style="padding:4px 8px;font-size:11px;background:#c0392b;color:#fff">🗑️</button>
+      </div>
+      ${note.type === 'checklist' ? renderChecklist(note, index) : renderTextNote(note, index)}
+    </div>
+  `).join('');
+}
+
+function renderTextNote(note, index) {
+  return `<textarea onchange="updateNoteText(${index}, this.value)" 
+    style="width:100%;min-height:100px;background:var(--surface2);color:var(--text);border:1px solid #333;border-radius:8px;padding:12px;font-size:14px;font-family:inherit;resize:vertical"
+    placeholder="Tapez votre note ici...">${esc(note.content || '')}</textarea>`;
+}
+
+function renderChecklist(note, index) {
+  const items = note.items || [];
+  return `
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${items.map((item, itemIndex) => `
+        <div style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--surface2);border-radius:6px">
+          <input type="checkbox" ${item.checked ? 'checked' : ''} 
+                 onchange="toggleChecklistItem(${index}, ${itemIndex})" 
+                 style="width:18px;height:18px;cursor:pointer">
+          <input type="text" value="${esc(item.text)}" 
+                 onchange="updateChecklistItemText(${index}, ${itemIndex}, this.value)"
+                 style="flex:1;background:transparent;border:none;color:var(--text);font-size:14px;${item.checked ? 'text-decoration:line-through;opacity:0.5' : ''}"
+                 placeholder="Nouvelle tâche...">
+          <button onclick="supprimerChecklistItem(${index}, ${itemIndex})" 
+                  style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px">×</button>
+        </div>
+      `).join('')}
+      <button onclick="ajouterChecklistItem(${index})" class="btn" style="width:100%;padding:6px;font-size:12px;background:var(--surface2)">+ Ajouter une tâche</button>
+    </div>
+  `;
+}
+
+function ajouterNote() {
+  notesData.push({
+    type: 'text',
+    content: '',
+    created: Date.now()
+  });
+  saveNotes();
+  renderNotes();
+}
+
+function toggleNoteType(index) {
+  const note = notesData[index];
+  if (note.type === 'text') {
+    note.type = 'checklist';
+    note.items = note.content ? [{text: note.content, checked: false}] : [];
+    delete note.content;
+  } else {
+    note.type = 'text';
+    note.content = note.items.map(i => (i.checked ? '✓ ' : '○ ') + i.text).join('\n');
+    delete note.items;
+  }
+  saveNotes();
+  renderNotes();
+}
+
+function updateNoteText(index, value) {
+  notesData[index].content = value;
+  saveNotes();
+}
+
+function toggleChecklistItem(index, itemIndex) {
+  notesData[index].items[itemIndex].checked = !notesData[index].items[itemIndex].checked;
+  saveNotes();
+  renderNotes();
+}
+
+function updateChecklistItemText(index, itemIndex, value) {
+  notesData[index].items[itemIndex].text = value;
+  saveNotes();
+}
+
+function ajouterChecklistItem(index) {
+  if (!notesData[index].items) notesData[index].items = [];
+  notesData[index].items.push({text: '', checked: false});
+  saveNotes();
+  renderNotes();
+}
+
+function supprimerChecklistItem(index, itemIndex) {
+  notesData[index].items.splice(itemIndex, 1);
+  saveNotes();
+  renderNotes();
+}
+
+function supprimerNote(index) {
+  if (confirm('Supprimer cette note ?')) {
+    notesData.splice(index, 1);
+    saveNotes();
+    renderNotes();
   }
 }
 
-function copyNotes() {
-  const textarea = document.getElementById('notes-content');
-  if (textarea) {
-    textarea.select();
-    document.execCommand('copy');
-    showNotesStatus('✓ Copié dans le presse-papiers');
+function monterNote(index) {
+  if (index > 0) {
+    [notesData[index - 1], notesData[index]] = [notesData[index], notesData[index - 1]];
+    saveNotes();
+    renderNotes();
   }
 }
 
-async function pasteNotes() {
-  try {
-    const text = await navigator.clipboard.readText();
-    const textarea = document.getElementById('notes-content');
-    if (textarea) {
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const before = textarea.value.substring(0, start);
-      const after = textarea.value.substring(end);
-      textarea.value = before + text + after;
-      textarea.selectionStart = textarea.selectionEnd = start + text.length;
-      saveNotes();
-      showNotesStatus('✓ Collé');
-    }
-  } catch (err) {
-    showNotesStatus('❌ Erreur de collage');
+function descendreNote(index) {
+  if (index < notesData.length - 1) {
+    [notesData[index], notesData[index + 1]] = [notesData[index + 1], notesData[index]];
+    saveNotes();
+    renderNotes();
   }
 }
 
-function clearNotes() {
-  if (confirm('Effacer toutes les notes ?')) {
-    const textarea = document.getElementById('notes-content');
-    if (textarea) {
-      textarea.value = '';
-      saveNotes();
-      showNotesStatus('✓ Notes effacées');
-    }
+// Drag and drop
+let draggedIndex = null;
+function dragStart(e) {
+  draggedIndex = parseInt(e.target.dataset.index);
+  e.target.style.opacity = '0.5';
+}
+function dragOver(e) {
+  e.preventDefault();
+}
+function drop(e) {
+  e.preventDefault();
+  const dropIndex = parseInt(e.currentTarget.dataset.index);
+  if (draggedIndex !== null && draggedIndex !== dropIndex) {
+    const item = notesData.splice(draggedIndex, 1)[0];
+    notesData.splice(dropIndex, 0, item);
+    saveNotes();
+    renderNotes();
   }
 }
-
-function showNotesStatus(msg) {
-  const status = document.getElementById('notes-status');
-  if (status) {
-    status.textContent = msg;
-    setTimeout(() => status.textContent = '', 2000);
-  }
+function dragEnd(e) {
+  e.target.style.opacity = '1';
+  draggedIndex = null;
 }
 
 // ═══════════════════════════════════════════════
@@ -4367,17 +4489,14 @@ function displaySearchResults(results) {
 
 // Auto-save notes on change
 document.addEventListener('DOMContentLoaded', () => {
-  const textarea = document.getElementById('notes-content');
-  if (textarea) {
-    loadNotes();
-    let saveTimer;
-    textarea.addEventListener('input', () => {
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(saveNotes, 1000);
-    });
-  }
   // Afficher la date de dernière sauvegarde Drive au chargement
-  updateDriveLastSaveTime();
+  setTimeout(() => {
+    updateDriveLastSaveTime();
+    // Si pas de date, on en met une par défaut pour test
+    if (!localStorage.getItem('drive_last_save_time')) {
+      console.log('Pas de sauvegarde Drive détectée');
+    }
+  }, 100);
 });
 
 </script>
