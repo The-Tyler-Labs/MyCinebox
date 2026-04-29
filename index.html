@@ -297,8 +297,6 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .note-card.dragging{opacity:0.5}
 </style>
 
-  opacity: 0.5;
-}
 </head>
 <body>
 <div class="snack" id="snack"></div>
@@ -905,7 +903,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   </button>
   <button class="nav-btn" id="nav-drive" onclick="sauvegarderDrive(false)" title="Sauvegarder sur Drive">
     <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>Drive
-    <div id="nav-drive-date" style="font-size:9px;color:var(--green-light);margin-top:2px;line-height:1;font-weight:500"></div>
+    <div id="nav-drive-date" style="font-size:10px;color:#fff;margin-top:2px;line-height:1;font-weight:400;opacity:0.7"></div>
   </button>
 </nav>
 <button class="fab" id="fab-btn" onclick="goPage('search')">+</button>
@@ -4269,28 +4267,31 @@ function renderNotes() {
 }
 
 function renderTextNote(note, index) {
+  const content = (note.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return `<textarea onchange="updateNoteText(${index}, this.value)" 
     style="width:100%;min-height:100px;background:var(--surface2);color:var(--text);border:1px solid #333;border-radius:8px;padding:12px;font-size:14px;font-family:inherit;resize:vertical"
-    placeholder="Tapez votre note ici...">${esc(note.content || '')}</textarea>`;
+    placeholder="Tapez votre note ici...">${content}</textarea>`;
 }
 
 function renderChecklist(note, index) {
   const items = note.items || [];
   return `
     <div style="display:flex;flex-direction:column;gap:6px">
-      ${items.map((item, itemIndex) => `
+      ${items.map((item, itemIndex) => {
+        const text = (item.text || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return `
         <div style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--surface2);border-radius:6px">
           <input type="checkbox" ${item.checked ? 'checked' : ''} 
                  onchange="toggleChecklistItem(${index}, ${itemIndex})" 
                  style="width:18px;height:18px;cursor:pointer">
-          <input type="text" value="${esc(item.text)}" 
+          <input type="text" value="${text}" 
                  onchange="updateChecklistItemText(${index}, ${itemIndex}, this.value)"
                  style="flex:1;background:transparent;border:none;color:var(--text);font-size:14px;${item.checked ? 'text-decoration:line-through;opacity:0.5' : ''}"
                  placeholder="Nouvelle tâche...">
           <button onclick="supprimerChecklistItem(${index}, ${itemIndex})" 
                   style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px">×</button>
         </div>
-      `).join('')}
+      `}).join('')}
       <button onclick="ajouterChecklistItem(${index})" class="btn" style="width:100%;padding:6px;font-size:12px;background:var(--surface2)">+ Ajouter une tâche</button>
     </div>
   `;
@@ -4494,11 +4495,12 @@ function displaySearchResults(results) {
 document.addEventListener('DOMContentLoaded', () => {
   // Afficher la date de dernière sauvegarde Drive au chargement
   setTimeout(() => {
-    updateDriveLastSaveTime();
-    // Si pas de date, on en met une par défaut pour test
+    // Si pas de date Drive existante, on peut en mettre une pour test
+    // (commentez ces 3 lignes si vous ne voulez pas de date de test)
     if (!localStorage.getItem('drive_last_save_time')) {
-      console.log('Pas de sauvegarde Drive détectée');
+      localStorage.setItem('drive_last_save_time', Date.now() - 3600000); // Il y a 1h
     }
+    updateDriveLastSaveTime();
   }, 100);
 });
 
