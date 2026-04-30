@@ -890,7 +890,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     <svg viewBox="0 0 24 24"><path d="M18 3v2h-2V3H8v2H6V3H4v18h2v-2h2v2h8v-2h2v2h2V3h-2zM8 17H6v-2h2v2zm0-4H6v-2h2v2zm0-4H6V7h2v2zm10 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V7h2v2z"/></svg>Collection
   </button>
   <button class="nav-btn" id="nav-search" onclick="goPage('search')">
-    <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Recherche
+    <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Recherche/Ajout
   </button>
   <button class="nav-btn" id="nav-visionnages" onclick="goPage('visionnages')">
     <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>Visionnages
@@ -4226,10 +4226,13 @@ const NOTES_KEY = 'videotheque_notes_v2';
 let notesData = [];
 
 function loadNotes() {
+  console.log('loadNotes() appelée');
   try {
     const saved = localStorage.getItem(NOTES_KEY);
     notesData = saved ? JSON.parse(saved) : [];
+    console.log('Notes chargées:', notesData.length, 'note(s)');
   } catch(e) {
+    console.error('Erreur chargement notes:', e);
     notesData = [];
   }
   renderNotes();
@@ -4240,14 +4243,21 @@ function saveNotes() {
 }
 
 function renderNotes() {
+  console.log('renderNotes() appelée, notesData:', notesData);
   const container = document.getElementById('notes-container');
-  if (!container) return;
-  
-  if (notesData.length === 0) {
-    container.innerHTML = '<p style="text-align:center;color:var(--text2);padding:40px">Aucune note. Cliquez sur "+ Nouvelle note" pour commencer.</p>';
+  console.log('Container trouvé:', container);
+  if (!container) {
+    console.error('Container notes-container non trouvé !');
     return;
   }
   
+  if (notesData.length === 0) {
+    container.innerHTML = '<p style="text-align:center;color:var(--text2);padding:40px">Aucune note. Cliquez sur "+ Nouvelle note" pour commencer.</p>';
+    console.log('Aucune note, message affiché');
+    return;
+  }
+  
+  console.log('Rendu de', notesData.length, 'note(s)');
   container.innerHTML = notesData.map((note, index) => `
     <div class="note-card" data-index="${index}" draggable="true" 
          ondragstart="dragStart(event)" ondragover="dragOver(event)" ondrop="drop(event)" ondragend="dragEnd(event)">
@@ -4493,16 +4503,56 @@ function displaySearchResults(results) {
 
 // Auto-save notes on change
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('DOM chargé - initialisation');
   // Afficher la date de dernière sauvegarde Drive au chargement
   setTimeout(() => {
+    console.log('Initialisation date Drive...');
     // Si pas de date Drive existante, on peut en mettre une pour test
-    // (commentez ces 3 lignes si vous ne voulez pas de date de test)
     if (!localStorage.getItem('drive_last_save_time')) {
+      console.log('Pas de date Drive, création d une date de test');
       localStorage.setItem('drive_last_save_time', Date.now() - 3600000); // Il y a 1h
     }
-    updateDriveLastSaveTime();
-  }, 100);
+    if (typeof updateDriveLastSaveTime === 'function') {
+      updateDriveLastSaveTime();
+      console.log('updateDriveLastSaveTime appelée');
+    } else {
+      console.error('updateDriveLastSaveTime n existe pas !');
+    }
+  }, 500);
 });
+
+// Exports globaux pour les fonctions Notes
+window.loadNotes = loadNotes;
+window.renderNotes = renderNotes;
+window.updateDriveLastSaveTime = updateDriveLastSaveTime;
+window.toggleNoteType = toggleNoteType;
+window.monterNote = monterNote;
+window.descendreNote = descendreNote;
+window.supprimerNote = supprimerNote;
+window.updateNoteText = updateNoteText;
+window.toggleChecklistItem = toggleChecklistItem;
+window.updateChecklistItemText = updateChecklistItemText;
+window.ajouterChecklistItem = ajouterChecklistItem;
+window.supprimerChecklistItem = supprimerChecklistItem;
+window.dragStart = dragStart;
+window.dragOver = dragOver;
+window.drop = drop;
+window.dragEnd = dragEnd;
+
+
+// Fonction pour rafraîchir la fiche film courante
+function rafraichirFicheCourante() {
+  if (ficheFilmCourante && ficheFilmCourante.id) {
+    const tmdbId = ficheFilmCourante.id;
+    const type = ficheFilmCourante._type || 'movie';
+    // Petit délai pour que les modifications soient bien enregistrées
+    setTimeout(() => {
+      ouvrirFicheFilm(tmdbId, type);
+    }, 100);
+  }
+}
+window.rafraichirFicheCourante = rafraichirFicheCourante;
+
 
 </script>
 </body>
