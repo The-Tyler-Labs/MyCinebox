@@ -4168,13 +4168,16 @@ async function chargerDrive(auto=false){
 </script>
 
 <script>
+// Service Worker désactivé pour éviter les problèmes de cache
+/*
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.// SW désactivé
+    navigator.serviceWorker.register('/sw.js')
       .then(()=>console.log('Service Worker enregistré'))
       .catch(e=>console.log('SW erreur:', e));
   });
 }
+*/
 
 // ══ EXPORTS GLOBAUX (garantit l'accessibilité depuis HTML) ══
 window.setStatutDetailBtn = setStatutDetailBtn;
