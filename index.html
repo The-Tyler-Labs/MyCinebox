@@ -859,7 +859,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <div class="modal-overlay" id="modal-filmo">
   <div class="modal-box">
     <div class="modal-header">
-      <button class="modal-close" onclick="fermerModal('modal-filmo');document.getElementById('modal-fiche').classList.add('open')">←</button>
+      <button class="modal-close" onclick="closeFilmographie()">←</button>
       <h3 id="modal-filmo-titre">Filmographie</h3>
     </div>
     <div style="display:flex;align-items:center;gap:8px;padding:8px 16px 4px"><span style="font-size:11px;color:var(--text2)">Taille :</span><input type="range" min="2" max="8" step="1" value="4" style="flex:1;accent-color:var(--green)" oninput="setSearchCols(this.value)"></div><div class="modal-body" id="modal-filmo-body"></div>
@@ -906,7 +906,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     <div id="nav-drive-date" style="font-size:10px;color:#fff;margin-top:2px;line-height:1;font-weight:400;opacity:0.7"></div>
   </button>
 </nav>
-<button class="fab" id="fab-btn" onclick="goPage('search')">+</button>
+<button class="fab" id="fab-btn" onclick="toggleFabAjout()">+</button>
 
 <script>
 // MyCinebox : le service worker est enregistré plus bas.
@@ -967,6 +967,7 @@ let catTab='tous';
 let tagFiltres={statut:'tous',decennie:new Set(),annee:'',genre:'',nationalite:'',qualite:'',saga:'',catFilter:''};
 let manuelType='films';
 let ficheFilmCourante=null;
+let contexteRetourFilmographie=null;
 
 function charger(){
   try{
@@ -1031,6 +1032,23 @@ function nouveauFilm(data){
 }
 
 // ── NAVIGATION ──
+function updateFab(){
+  const fab=document.getElementById('fab-btn');
+  if(!fab) return;
+  const visible=(currentPage==='home'||currentPage==='collection'||currentPage==='search');
+  fab.style.display=visible?'flex':'none';
+  fab.textContent=currentPage==='search'?'✓':'+';
+  fab.title=currentPage==='search'?'Terminer / revenir':'Ajouter';
+}
+
+function toggleFabAjout(){
+  if(currentPage==='search'){
+    goPage(prevPage&&prevPage!=='search'?prevPage:'home');
+  }else{
+    goPage('search');
+  }
+}
+
 function goPage(p){
   if(currentPage!=='detail') prevPage=currentPage;
   // Reset sélection
@@ -1046,7 +1064,7 @@ function goPage(p){
   const navEl=document.getElementById('nav-'+p);
   if(navEl) navEl.classList.add('active');
   currentPage=p;
-  document.getElementById('fab-btn').style.display=(p==='home'||p==='collection')?'flex':'none';
+  updateFab();
   if(p==='home') renderHome();
   if(p==='collection'){tagFiltres.statut='tous';buildFiltresDynamiques();renderCollection();}
   if(p==='settings') renderSettings();
@@ -2406,6 +2424,8 @@ async function ouvrirFicheFilm(tmdbId,type){
   document.getElementById('modal-fiche-titre').textContent='Chargement...';
   document.getElementById('modal-fiche-body').innerHTML='<div class="loader"><div class="spinner"></div></div>';
   document.getElementById('modal-fiche').classList.add('open');
+  const ficheBack=document.getElementById('modal-fiche-back');
+  if(ficheBack) ficheBack.onclick=()=>fermerModal('modal-fiche');
   document.getElementById('modal-fiche-add').onclick=()=>ajouterTmdbDepuisModal(tmdbId,type);
   try{
     const endpoint=type==='tv'?'/tv/':'/movie/';
@@ -2985,6 +3005,16 @@ function switchCFilmoTab(t){
   document.getElementById('cftab-s').style.cssText='flex:1;padding:8px;border-radius:8px;border:none;background:'+(t==='s'?'var(--green)':'var(--surface2)')+';color:'+(t==='s'?'#fff':'var(--text2)')+';font-size:12px;font-weight:bold;cursor:pointer';
 }
 
+function closeFilmographie(){
+  fermerModal('modal-filmo');
+  const mf=document.getElementById('modal-fiche');
+  if(contexteRetourFilmographie&&contexteRetourFilmographie.fromModalFiche&&mf){
+    mf.classList.add('open');
+    if(typeof pushModalState==='function') pushModalState('modal-fiche');
+  }
+  contexteRetourFilmographie=null;
+}
+
 function ouvrirFilmographieSafe(event, el){
   if(event){event.stopPropagation();event.preventDefault();}
   const acteurId=parseInt(el&&el.dataset?el.dataset.actorId:0,10);
@@ -3013,15 +3043,11 @@ async function ouvrirFilmographie(acteurId,nom){
 
   const mf=document.getElementById('modal-fiche');
   const venaitDeFiche=!!(mf&&mf.classList.contains('open'));
+  contexteRetourFilmographie={
+    fromModalFiche: venaitDeFiche,
+    fromDetailPage: currentPage==='detail'
+  };
   if(venaitDeFiche) fermerModal('modal-fiche');
-
-  const backBtn=document.querySelector('#modal-filmo .modal-close');
-  if(backBtn){
-    backBtn.onclick=()=>{
-      fermerModal('modal-filmo');
-      if(venaitDeFiche&&mf) mf.classList.add('open');
-    };
-  }
 
   document.getElementById('modal-filmo-titre').textContent=nom;
   document.getElementById('modal-filmo-body').innerHTML='<div class="loader"><div class="spinner"></div></div><p style="font-size:12px;color:var(--text2);text-align:center">Chargement de la filmographie...</p>';
@@ -3110,10 +3136,19 @@ function switchFilmoTab(tab){
 
 async function ouvrirFicheFilmDepuisFilmo(tmdbId,type){
   type=type||'movie';
-  fermerModal('modal-filmo');
+  const filmo=document.getElementById('modal-filmo');
+  if(filmo) filmo.classList.remove('open');
   await ouvrirFicheFilm(tmdbId,type);
-  document.querySelector('#modal-fiche .modal-close').onclick=()=>{fermerModal('modal-fiche');document.getElementById('modal-filmo').classList.add('open');
-  pushModalState('modal-filmo');};
+  const back=document.getElementById('modal-fiche-back');
+  if(back){
+    back.onclick=()=>{
+      fermerModal('modal-fiche');
+      if(filmo){
+        filmo.classList.add('open');
+        if(typeof pushModalState==='function') pushModalState('modal-filmo');
+      }
+    };
+  }
 }
 
 function suggestionAleatoire(){
