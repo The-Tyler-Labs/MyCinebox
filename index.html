@@ -295,6 +295,32 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .note-card{background:var(--surface);border-radius:12px;padding:16px;border:1px solid #333;cursor:move;transition:all 0.2s}
 .note-card:hover{border-color:var(--green);box-shadow:0 4px 12px rgba(0,0,0,0.3)}
 .note-card.dragging{opacity:0.5}
+
+/* === v1.7 Bandeau films suggérés === */
+:root{--suggested-scroll-duration:38s}
+.suggested-banner{width:100%;overflow:hidden;background:var(--surface);color:var(--text);border:1px solid #333;border-radius:12px;margin:0 0 14px;padding:10px 0;position:relative;box-sizing:border-box}
+.suggested-banner-header{display:flex;align-items:center;gap:8px;padding:0 14px 8px;font-size:14px;font-weight:700}
+.suggested-banner-header span:last-child{color:var(--text2);font-weight:500;font-size:12px}
+.suggested-banner:before,.suggested-banner:after{content:"";position:absolute;top:0;width:70px;height:100%;z-index:3;pointer-events:none}
+.suggested-banner:before{left:0;background:linear-gradient(to right,var(--surface),transparent)}
+.suggested-banner:after{right:0;background:linear-gradient(to left,var(--surface),transparent)}
+.suggested-track-wrap{overflow:hidden;width:100%}
+.suggested-track{display:flex;align-items:stretch;gap:12px;width:max-content;white-space:nowrap;padding-left:100%;animation:scrollSuggestedMovies var(--suggested-scroll-duration) linear infinite}
+.suggested-banner:hover .suggested-track{animation-play-state:paused}
+.suggested-card{display:inline-flex;align-items:center;gap:10px;min-width:200px;max-width:240px;padding:8px 11px 8px 8px;border-radius:12px;background:var(--surface2);border:1px solid #333;box-sizing:border-box;cursor:pointer;user-select:none}
+.suggested-card:hover{border-color:var(--green-light)}
+.suggested-poster,.suggested-poster-placeholder{width:42px;height:62px;flex:0 0 auto;border-radius:8px;object-fit:cover;background:#222;box-shadow:0 4px 10px rgba(0,0,0,.25)}
+.suggested-poster-placeholder{display:flex;align-items:center;justify-content:center;font-size:20px}
+.suggested-info{min-width:0;display:flex;flex-direction:column;gap:5px}
+.suggested-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:700;color:var(--text)}
+.suggested-meta{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--text2)}
+@keyframes scrollSuggestedMovies{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.suggested-setting-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.suggested-setting-row input[type=range]{min-width:190px;flex:1}
+.suggested-setting-value{min-width:46px;font-weight:bold;color:var(--green-light);text-align:right}
+.suggested-setting-help{margin-top:8px;font-size:12px;color:var(--text2)}
+@media(max-width:600px){.suggested-card{min-width:178px;max-width:205px}.suggested-poster,.suggested-poster-placeholder{width:38px;height:56px}.suggested-title{font-size:12px}.suggested-meta{font-size:10px}}
+
 </style>
 
 </head>
@@ -307,6 +333,11 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
+
+  <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
+    <div class="suggested-banner-header"><span>🎲 Films suggérés</span><span>depuis ta collection</span></div>
+    <div class="suggested-track-wrap"><div class="suggested-track" id="suggestedMoviesTrack"></div></div>
+  </div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
     <h1 style="font-size:22px;color:var(--green-light)">🎬 Vidéothèque</h1>
   </div>
@@ -386,6 +417,11 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 
 <!-- COLLECTION -->
 <div class="page" id="page-collection">
+
+  <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
+    <div class="suggested-banner-header"><span>🎲 Films suggérés</span><span>depuis ta collection</span></div>
+    <div class="suggested-track-wrap"><div class="suggested-track" id="suggestedMoviesTrack"></div></div>
+  </div>
   <div id="coll-sticky" style="position:sticky;top:0;z-index:95;background:var(--bg);padding:8px 0 0">
     <div style="display:flex;gap:8px;margin-bottom:10px">
       <input type="search" placeholder="🔍 Rechercher..." id="search-local"
@@ -655,6 +691,16 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Pour la recherche en ligne.</p>
       <div class="input-group"><input type="password" id="api-key-input" placeholder="Votre clé API TMDB"></div>
       <button class="btn btn-primary" style="width:100%" onclick="saveApiKey()">Sauvegarder</button></div>
+    </div>
+
+    <div class="settings-section">
+      <h3>🎲 Bandeau des films suggérés</h3>
+      <div class="suggested-setting-row">
+        <label for="suggestedSpeedRange" style="font-size:13px;font-weight:600">Vitesse du défilement</label>
+        <input id="suggestedSpeedRange" type="range" min="15" max="90" step="1" value="38" oninput="appliquerSuggestedBannerSpeed(this.value)">
+        <span class="suggested-setting-value" id="suggestedSpeedValue">38s</span>
+      </div>
+      <div class="suggested-setting-help">Plus la valeur est basse, plus le bandeau défile vite. Ce réglage est sauvegardé localement et dans Drive.</div>
     </div>
     <div class="settings-section">
       <h3>☁️ Google Drive</h3>
@@ -960,7 +1006,7 @@ const TMDB_API='https://api.themoviedb.org/3';
 // Traduction pays anglais → français
 const CATS={films:{icon:'🎬',label:'Film'},series:{icon:'📺',label:'Série'},spectacles:{icon:'🎭',label:'Spectacle'},documentaires:{icon:'🎥',label:'Documentaire'},theatre:{icon:'🎪',label:'Théâtre'},animation:{icon:'🎨',label:'Animation'},humour:{icon:'😂',label:'Humour/Sketchs'}};
 
-let films=[],prefs={apiKey:'1847535cfa0ee0cdcd25f1954cd9614f',cols:2};
+let films=[],prefs={apiKey:'1847535cfa0ee0cdcd25f1954cd9614f',cols:2,suggestedBannerSpeed:38};
 let triActuel='date',prevPage='collection',currentPage='home';
 let _listeFiltreCourante=[];
 let catTab='tous';
@@ -968,6 +1014,47 @@ let tagFiltres={statut:'tous',decennie:new Set(),annee:'',genre:'',nationalite:'
 let manuelType='films';
 let ficheFilmCourante=null;
 let contexteRetourFilmographie=null;
+let _preserveCollectionFiltersOnce=false;
+let _restoreScrollAfterRender=null;
+const _scrollPositions={home:0,collection:0,search:0,settings:0,visionnages:0,notes:0};
+
+
+// ── BANDEAU FILMS SUGGÉRÉS + RÉGLAGE ──
+function normalizeSuggestedMovie(f){
+  return {title:f.titre||f.title||f.name||'Film sans titre',year:(f.dateSortie||f.year||'').toString().slice(0,4),poster:f.affichePath||f.poster||f.posterUrl||f.image||'',format:(f.qualites&&f.qualites[0])||f.qualite||f.format||'',seen:(f.statut==='vu'||f.estVu===true),id:f.id};
+}
+function pickSuggestedMovies(count=14){
+  const source=[...films].filter(f=>f&&f.titre&&f.affichePath);
+  const base=source.length?source:[...films].filter(f=>f&&f.titre);
+  return base.sort(()=>Math.random()-.5).slice(0,Math.min(count,base.length)).map(normalizeSuggestedMovie);
+}
+function renderSuggestedMoviesBanner(){
+  document.querySelectorAll('.suggested-track').forEach(track=>{
+    if(!films.length){
+      track.innerHTML='<div class="suggested-card"><div class="suggested-poster-placeholder">🎬</div><div class="suggested-info"><div class="suggested-title">Ajoute des films à ta collection</div><div class="suggested-meta">Les suggestions apparaîtront ici</div></div></div>';
+      return;
+    }
+    const suggested=pickSuggestedMovies(14);
+    const loop=[...suggested,...suggested,...suggested];
+    track.innerHTML=loop.map(m=>{
+      const poster=m.poster?'<img class="suggested-poster" src="'+m.poster+'" onerror="this.outerHTML=\'<div class=&quot;suggested-poster-placeholder&quot;>🎬</div>\'" alt="">':'<div class="suggested-poster-placeholder">🎬</div>';
+      const meta=[m.year,m.format,m.seen?'Vu':''].filter(Boolean).join(' • ')||'Dans ta collection';
+      return '<div class="suggested-card" onclick="ouvrirDetail('+m.id+')" title="'+esc(m.title)+'">'+poster+'<div class="suggested-info"><div class="suggested-title">'+esc(m.title)+'</div><div class="suggested-meta">'+esc(meta)+'</div></div></div>';
+    }).join('');
+  });
+}
+function appliquerSuggestedBannerSpeed(val){
+  const n=Math.max(15,Math.min(90,parseInt(val)||38));
+  prefs.suggestedBannerSpeed=n;
+  document.documentElement.style.setProperty('--suggested-scroll-duration',n+'s');
+  const label=document.getElementById('suggestedSpeedValue');if(label)label.textContent=n+'s';
+  const range=document.getElementById('suggestedSpeedRange');if(range&&parseInt(range.value)!==n)range.value=n;
+  savePrefs();
+  return n;
+}
+function buildDriveBackup(){return {version:2,films:films,prefs:prefs,savedAt:new Date().toISOString()};}
+function parseDriveBackup(data){return Array.isArray(data)?{films:data,prefs:{}}:{films:Array.isArray(data.films)?data.films:[],prefs:data.prefs||data.settings||{}};}
+function appliquerPrefsDepuisBackup(p){if(!p)return;prefs={...prefs,...p};savePrefs();appliquerSuggestedBannerSpeed(prefs.suggestedBannerSpeed||38);}
 
 function charger(){
   try{
@@ -995,6 +1082,8 @@ function charger(){
     return{...f,categorie,statut,qualite:f.qualite||'',qualites,versions:f.versions||[],pays};
   });
   try{prefs={...prefs,...JSON.parse(localStorage.getItem(PREFS_KEY)||'{}') };}catch(e){}
+  if(!prefs.suggestedBannerSpeed) prefs.suggestedBannerSpeed=38;
+  appliquerSuggestedBannerSpeed(prefs.suggestedBannerSpeed);
 }
 let _saveCount=0;
 function sauvegarder(){
@@ -1050,7 +1139,10 @@ function toggleFabAjout(){
 }
 
 function goPage(p){
-  if(currentPage!=='detail') prevPage=currentPage;
+  if(currentPage!=='detail'){
+    _scrollPositions[currentPage]=window.scrollY||0;
+    prevPage=currentPage;
+  }
   // Reset sélection
   if(_modeSelection){
     _modeSelection=false;_selectionIds.clear();
@@ -1066,30 +1158,53 @@ function goPage(p){
   currentPage=p;
   updateFab();
   if(p==='home') renderHome();
-  if(p==='collection'){tagFiltres.statut='tous';buildFiltresDynamiques();renderCollection();}
+  if(p==='collection'){
+    if(!_preserveCollectionFiltersOnce){
+      catTab='tous';
+      tagFiltres.statut='tous';
+    }
+    _preserveCollectionFiltersOnce=false;
+    buildFiltresDynamiques();
+    renderCollection();
+  }
   if(p==='settings') renderSettings();
   if(p==='visionnages') renderVisionnagesGlobal();
   if(p==='notes') loadNotes();
-  window.scrollTo(0,0);
+  if(p==='home'||p==='collection') renderSuggestedMoviesBanner();
+  if(_restoreScrollAfterRender!==null){
+    const y=_restoreScrollAfterRender;
+    _restoreScrollAfterRender=null;
+    setTimeout(()=>window.scrollTo(0,y),60);
+  }else{
+    window.scrollTo(0,0);
+  }
 }
 
 function goCollectionCatStatut(statut){
-  tagFiltres.statut=statut;
+  _preserveCollectionFiltersOnce=true;
+  tagFiltres={statut:'tous',decennie:new Set(),annee:'',genre:'',nationalite:'',qualite:'',saga:'',catFilter:''};
+  if(statut==='trouver') catTab='atrouver';
+  else if(statut==='critique') catTab='acritique';
+  else if(statut==='avoir'||statut==='plustard') catTab=statut;
+  else {catTab='tous';tagFiltres.statut=statut;}
   goPage('collection');
   document.querySelectorAll('.cat-tab').forEach(b=>b.classList.remove('active'));
-  document.getElementById('ctab-tous').classList.add('active');
-  // Activer le bon tag statut dans le panel filtres
+  const active=document.getElementById('ctab-'+catTab)||document.getElementById('ctab-tous');
+  if(active) active.classList.add('active');
   buildFiltresDynamiques();
   renderCollection();
 }
 
 function goCollectionCat(cat){
+  _preserveCollectionFiltersOnce=true;
   catTab=cat;
+  tagFiltres={statut:'tous',decennie:new Set(),annee:'',genre:'',nationalite:'',qualite:'',saga:'',catFilter:''};
   goPage('collection');
-  // Activer le bon tab
   document.querySelectorAll('.cat-tab').forEach(b=>b.classList.remove('active'));
   const el=document.getElementById('ctab-'+cat);
   if(el) el.classList.add('active');
+  buildFiltresDynamiques();
+  renderCollection();
 }
 
 // ── HOME ──
@@ -1928,7 +2043,10 @@ function toggleVu(id){cycleStatut(id);} // alias legacy
 // ── DETAIL ──
 function ouvrirDetail(id){
   const f=films.find(f=>f.id===id);if(!f) return;
-  if(currentPage!=='detail') prevPage=currentPage;
+  if(currentPage!=='detail'){
+    prevPage=currentPage;
+    _scrollPositions[prevPage]=window.scrollY||0;
+  }
 
   // Afficher immédiatement
   afficherDetail(f);
@@ -1974,6 +2092,13 @@ function ouvrirDetail(id){
       })
       .catch(()=>{});
   }
+}
+
+function retourDepuisDetail(){
+  const p=prevPage||'collection';
+  _restoreScrollAfterRender=_scrollPositions[p]||0;
+  if(p==='collection') _preserveCollectionFiltersOnce=true;
+  goPage(p);
 }
 
 function afficherDetail(f){
@@ -2039,7 +2164,7 @@ function afficherDetail(f){
   document.getElementById('detail-content').innerHTML=
     '<div style="position:relative">'
     +'<img class="detail-backdrop" src="'+(f.backdropPath||f.affichePath||'')+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="" onclick="voirPhoto(this.src)" style="cursor:pointer" title="Cliquer pour agrandir">'
-    +'<button onclick="goPage(prevPage)" style="position:absolute;top:12px;left:12px;background:rgba(0,0,0,.6);border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-size:20px;border:none;color:#fff;cursor:pointer">←</button>'
+    +'<button onclick="retourDepuisDetail()" style="position:absolute;top:12px;left:12px;background:rgba(0,0,0,.6);border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-size:20px;border:none;color:#fff;cursor:pointer">←</button>'
     +'<span style="position:absolute;top:12px;right:12px;background:rgba(0,0,0,.6);padding:4px 10px;border-radius:12px;font-size:13px">'+cat.icon+' '+cat.label+'</span>'
     +'</div>'
     +'<div class="detail-body">'
@@ -3318,7 +3443,9 @@ window.addEventListener('popstate', (e)=>{
   document.getElementById('cols-slider').value=prefs.cols||2;
   appliquerCols(prefs.cols||2);
   appliquerPolice(prefs.fontSize||16);
+  appliquerSuggestedBannerSpeed(prefs.suggestedBannerSpeed||38);
 }
+
 
 function saveApiKey(){
   const k=document.getElementById('api-key-input').value.trim();
@@ -4124,7 +4251,7 @@ async function sauvegarderDrive(silencieux=false){
   const btn=document.getElementById('btn-drive-save');
   if(!silencieux&&btn){btn.textContent='⏳...';btn.disabled=true;}
   try{
-    const json=JSON.stringify(films,null,2);
+    const json=JSON.stringify(buildDriveBackup(),null,2);
     const fichier=await trouverFichierDrive();
     if(fichier){
       await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fichier.id+'?uploadType=media',
@@ -4185,7 +4312,10 @@ async function mergeAutoDrive(){
       return;
     }
     const r=await fetch('https://www.googleapis.com/drive/v3/files/'+fichier.id+'?alt=media',{headers:{Authorization:'Bearer '+_googleToken}});
-    const driveFilms=await r.json();
+    const driveRaw=await r.json();
+    const payload=parseDriveBackup(driveRaw);
+    const driveFilms=payload.films;
+    appliquerPrefsDepuisBackup(payload.prefs);
     if(!Array.isArray(driveFilms)){snack('⚠️ Format Drive invalide');return;}
 
     // Si collection locale vide : charger tout depuis Drive
@@ -4232,7 +4362,10 @@ async function chargerDrive(auto=false){
     }
     const r=await fetch('https://www.googleapis.com/drive/v3/files/'+fichier.id+'?alt=media',
       {headers:{Authorization:'Bearer '+_googleToken}});
-    const data=await r.json();
+    const raw=await r.json();
+    const payload=parseDriveBackup(raw);
+    const data=payload.films;
+    appliquerPrefsDepuisBackup(payload.prefs);
     if(!Array.isArray(data)){if(!auto) snack('⚠️ Format invalide');return;}
     // En mode auto : charger seulement si Drive est plus récent ou collection locale vide
     if(auto&&films.length>0){
@@ -4251,7 +4384,7 @@ async function chargerDrive(auto=false){
     // Sauvegarder localement sans re-déclencher Drive
     localStorage.setItem(DB_KEY,JSON.stringify(films));
     localStorage.setItem(DB_KEY+'_backup',JSON.stringify(films));
-    renderHome();renderCollection();
+    renderHome();renderCollection();renderSuggestedMoviesBanner();
     snack('✓ '+films.length+' films chargés depuis Drive !');
   }catch(e){if(!auto) snack('⚠️ Erreur chargement Drive');}
   if(!auto&&btn){btn.textContent='☁️ Charger depuis Drive';btn.disabled=false;}
