@@ -3295,12 +3295,20 @@ function ajouterManuel(){
 
 
 // ── BANDEAU SUGGESTIONS ──
+let _suggestedBannerIds=[];
+let _suggestedBannerSignature='';
+let _suggestedBannerHtml='';
+let _suggestedBannerStart=Date.now();
+
 function setSuggestedBannerSpeed(val,save=true){
+  const oldSpeed=prefs.suggestedBannerSpeed||38;
   const n=Math.max(15,Math.min(90,parseInt(val)||38));
   prefs.suggestedBannerSpeed=n;
   document.documentElement.style.setProperty('--suggested-scroll-duration',n+'s');
   const sl=document.getElementById('banner-speed-slider');if(sl) sl.value=n;
   const lab=document.getElementById('banner-speed-label');if(lab) lab.textContent=n+'s';
+  if(oldSpeed!==n){_suggestedBannerStart=Date.now();}
+  document.querySelectorAll('.suggested-track').forEach(applySuggestedBannerPhase);
   if(save){savePrefs();schedulePrefsDriveSave();}
 }
 function suggestionMeta(f){
@@ -3312,22 +3320,63 @@ function suggestionMeta(f){
   if(f.statut==='plustard') parts.push('Plus tard');
   return parts.join(' • ');
 }
+function suggestedBannerSignature(base){
+  // Signature volontairement limitée : ouvrir une fiche peut enrichir des détails TMDB,
+  // mais ça ne doit pas relancer le tirage du bandeau au retour.
+  return base.map(f=>[f.id,f.titre,f.categorie,f.statut,f.affichePath||'',f.dateSortie||''].join('§')).join('|');
+}
+function getSuggestedBannerPicked(base){
+  const sig=suggestedBannerSignature(base);
+  if(sig!==_suggestedBannerSignature||!_suggestedBannerIds.length){
+    _suggestedBannerSignature=sig;
+    _suggestedBannerIds=[...base].sort(()=>Math.random()-0.5).slice(0,Math.min(14,base.length)).map(f=>f.id);
+    _suggestedBannerHtml='';
+    _suggestedBannerStart=Date.now();
+  }
+  const byId=new Map(base.map(f=>[f.id,f]));
+  let picked=_suggestedBannerIds.map(id=>byId.get(id)).filter(Boolean);
+  if(!picked.length&&base.length){
+    picked=[...base].slice(0,Math.min(14,base.length));
+    _suggestedBannerIds=picked.map(f=>f.id);
+    _suggestedBannerHtml='';
+    _suggestedBannerStart=Date.now();
+  }
+  return picked;
+}
+function applySuggestedBannerPhase(track){
+  const speed=Math.max(15,Math.min(90,parseInt(prefs.suggestedBannerSpeed)||38));
+  const elapsed=((Date.now()-_suggestedBannerStart)/1000)%speed;
+  track.style.animationDelay='-'+elapsed.toFixed(2)+'s';
+}
 function renderSuggestedBanners(){
   const tracks=document.querySelectorAll('.suggested-track');
   if(!tracks.length) return;
   setSuggestedBannerSpeed(prefs.suggestedBannerSpeed||38,false);
   const base=films.filter(f=>f&&f.titre&&f.statut!=='trouver');
-  tracks.forEach(track=>{
-    if(!base.length){
-      track.innerHTML='<div class="suggested-card"><div class="suggested-poster-placeholder">🎬</div><div class="suggested-info"><div class="suggested-title">Ajoute des films à ta collection</div><div class="suggested-meta">Les suggestions apparaîtront ici</div></div></div>';
-      return;
+  let html='';
+  if(!base.length){
+    html='<div class="suggested-card"><div class="suggested-poster-placeholder">🎬</div><div class="suggested-info"><div class="suggested-title">Ajoute des films à ta collection</div><div class="suggested-meta">Les suggestions apparaîtront ici</div></div></div>';
+    if(_suggestedBannerSignature!=='__empty__'){
+      _suggestedBannerSignature='__empty__';
+      _suggestedBannerIds=[];
+      _suggestedBannerHtml='';
+      _suggestedBannerStart=Date.now();
     }
-    const picked=[...base].sort(()=>Math.random()-0.5).slice(0,Math.min(14,base.length));
+  }else{
+    const picked=getSuggestedBannerPicked(base);
     const loop=[...picked,...picked,...picked];
-    track.innerHTML=loop.map(f=>{
-      const poster=f.affichePath?'<img class="suggested-poster" src="'+esc(f.affichePath)+'" onerror="this.outerHTML=\'<div class=&quot;suggested-poster-placeholder&quot;>🎬</div>\'" alt="">':'<div class="suggested-poster-placeholder">🎬</div>';
-      return '<div class="suggested-card" onclick="ouvrirDetail('+f.id+')" title="'+esc(f.titre)+'">'+poster+'<div class="suggested-info"><div class="suggested-title">'+esc(f.titre)+'</div><div class="suggested-meta">'+esc(suggestionMeta(f)||'Dans ta collection')+'</div></div></div>';
-    }).join('');
+    if(!_suggestedBannerHtml){
+      _suggestedBannerHtml=loop.map(f=>{
+        const poster=f.affichePath?'<img class="suggested-poster" src="'+esc(f.affichePath)+'" onerror="this.outerHTML='<div class=&quot;suggested-poster-placeholder&quot;>🎬</div>'" alt="">':'<div class="suggested-poster-placeholder">🎬</div>';
+        return '<div class="suggested-card" onclick="ouvrirDetail('+f.id+')" title="'+esc(f.titre)+'">'+poster+'<div class="suggested-info"><div class="suggested-title">'+esc(f.titre)+'</div><div class="suggested-meta">'+esc(suggestionMeta(f)||'Dans ta collection')+'</div></div></div>';
+      }).join('');
+    }
+    html=_suggestedBannerHtml;
+  }
+  tracks.forEach(track=>{
+    // Ne pas réécrire le HTML si rien n'a changé : sinon le bandeau repart avec un nouveau tirage au retour d'une fiche.
+    if(track.innerHTML!==html){track.innerHTML=html;}
+    applySuggestedBannerPhase(track);
   });
 }
 let _prefsDriveTimer=null;
