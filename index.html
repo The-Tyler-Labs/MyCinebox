@@ -297,7 +297,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .note-card.dragging{opacity:0.5}
 
 
-/* ===== MyCinebox v1.7 — Bandeau de suggestions ===== */
+/* ===== MyCinebox v1.7.2 — Bandeau de suggestions ===== */
 :root{
   --suggested-scroll-duration:38s;
 }
@@ -3367,7 +3367,7 @@ function renderSuggestedBanners(){
     const loop=[...picked,...picked,...picked];
     if(!_suggestedBannerHtml){
       _suggestedBannerHtml=loop.map(f=>{
-        const poster=f.affichePath?'<img class="suggested-poster" src="'+esc(f.affichePath)+'" onerror="this.outerHTML='<div class=&quot;suggested-poster-placeholder&quot;>🎬</div>'" alt="">':'<div class="suggested-poster-placeholder">🎬</div>';
+        const poster=f.affichePath?'<img class="suggested-poster" src="'+esc(f.affichePath)+'" onerror="this.style.display=&quot;none&quot;" alt="">':'<div class="suggested-poster-placeholder">🎬</div>';
         return '<div class="suggested-card" onclick="ouvrirDetail('+f.id+')" title="'+esc(f.titre)+'">'+poster+'<div class="suggested-info"><div class="suggested-title">'+esc(f.titre)+'</div><div class="suggested-meta">'+esc(suggestionMeta(f)||'Dans ta collection')+'</div></div></div>';
       }).join('');
     }
