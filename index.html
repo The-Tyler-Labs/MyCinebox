@@ -297,7 +297,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .note-card.dragging{opacity:0.5}
 
 
-/* ===== MyCinebox v1.7.2 — Bandeau de suggestions ===== */
+/* ===== MyCinebox v1.7.4 — Bandeau de suggestions ===== */
 :root{
   --suggested-scroll-duration:38s;
 }
@@ -339,7 +339,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
-    <div class="suggested-banner-header"><span>🎲 Suggestions</span><span>depuis ta collection</span></div>
+    <div class="suggested-banner-header"><span>🎲 Suggestions</span><span>À voir / plus tard en priorité</span></div>
     <div class="suggested-track-wrap"><div class="suggested-track"></div></div>
   </div>
   <div class="stats-row">
@@ -420,12 +420,12 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <div class="page" id="page-collection">
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
-    <div class="suggested-banner-header"><span>🎲 Suggestions</span><span>depuis ta collection</span></div>
+    <div class="suggested-banner-header"><span>🎲 Suggestions</span><span>À voir / plus tard en priorité</span></div>
     <div class="suggested-track-wrap"><div class="suggested-track"></div></div>
   </div>
   <div id="coll-sticky" style="position:sticky;top:0;z-index:95;background:var(--bg);padding:8px 0 0">
     <div style="display:flex;gap:8px;margin-bottom:10px">
-      <input type="search" placeholder="🔍 Rechercher..." id="search-local"
+      <input type="search" placeholder="🔍 Rechercher dans toute la médiathèque..." id="search-local"
         style="flex:1;background:var(--surface);border:1px solid #333;border-radius:10px;padding:10px 14px;color:#fff;font-size:14px;outline:none"
         oninput="renderCollection()">
       <button id="btn-filtres" onclick="toggleFiltres()"
@@ -1432,9 +1432,13 @@ function resetFiltres(){
 function renderCollection(){
   const q=(document.getElementById('search-local').value||'').toLowerCase();
   const acteurFiltre=(document.getElementById('filtre-acteur').value||'').toLowerCase().trim();
+  // Dès qu'un titre est saisi, la recherche doit parcourir toute la médiathèque :
+  // films, séries et tous les statuts, y compris À trouver et Critiques.
+  // Les filtres volontairement choisis dans ⚙️ restent toutefois appliqués.
+  const rechercheGlobale=q.trim().length>0;
 
   // Mode saga avec filtre actif — afficher les films de la saga
-  if(catTab==='saga'&&tagFiltres.saga){
+  if(!rechercheGlobale&&catTab==='saga'&&tagFiltres.saga){
     const filmsS=films.filter(f=>{const fs=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);return fs.includes(tagFiltres.saga);});
     const grid=document.getElementById('coll-grid');
     const empty=document.getElementById('coll-empty');
@@ -1453,7 +1457,7 @@ function renderCollection(){
   }
 
   // Mode saga : une fiche par saga
-  if(catTab==='saga'&&!tagFiltres.saga){
+  if(!rechercheGlobale&&catTab==='saga'&&!tagFiltres.saga){
     const sagas=[...new Set(films.map(f=>f.saga||'').filter(Boolean))].sort();
     const grid=document.getElementById('coll-grid');
     const empty=document.getElementById('coll-empty');
@@ -1476,24 +1480,31 @@ function renderCollection(){
   }
 
   let liste=films.filter(f=>{
-    if(catTab==='atrouver') return f.statut==='trouver'&&(tagFiltres.catFilter===''||f.categorie===tagFiltres.catFilter);
-    if(catTab==='acritique') return f.statut==='critique'&&(tagFiltres.catFilter===''||f.categorie===tagFiltres.catFilter);
-    if(catTab==='avoir') return f.statut==='avoir';
-    if(catTab==='plustard') return f.statut==='plustard';
-    // Animation : afficher tout ce qui a catégorie animation OU genre Animation
-    if(catTab==='animation'){
-      const estAnimation=f.categorie==='animation'||(f.genres||'').toLowerCase().split(',').map(g=>g.trim()).includes('animation');
-      if(!estAnimation) return false;
-    } else if(catTab!=='tous'&&f.categorie!==catTab) return false;
-    // Exclure "à trouver" et "critique" de la collection normale
-    if(tagFiltres.statut==='tous'&&(f.statut==='trouver'||f.statut==='critique')) return false;
+    // Hors recherche textuelle, les onglets de catégories gardent leur comportement actuel.
+    // Pendant une recherche, on ne limite pas au tab affiché : un titre doit pouvoir être
+    // retrouvé même s'il est rangé dans « À trouver », « Critiques », une série, etc.
+    if(!rechercheGlobale){
+      if(catTab==='atrouver') return f.statut==='trouver'&&(tagFiltres.catFilter===''||f.categorie===tagFiltres.catFilter);
+      if(catTab==='acritique') return f.statut==='critique'&&(tagFiltres.catFilter===''||f.categorie===tagFiltres.catFilter);
+      if(catTab==='avoir') return f.statut==='avoir';
+      if(catTab==='plustard') return f.statut==='plustard';
+      // Animation : afficher tout ce qui a catégorie animation OU genre Animation
+      if(catTab==='animation'){
+        const estAnimation=f.categorie==='animation'||(f.genres||'').toLowerCase().split(',').map(g=>g.trim()).includes('animation');
+        if(!estAnimation) return false;
+      } else if(catTab!=='tous'&&f.categorie!==catTab) return false;
+      // Dans l'affichage normal, À trouver et Critiques sont dans leurs onglets dédiés.
+      if(tagFiltres.statut==='tous'&&(f.statut==='trouver'||f.statut==='critique')) return false;
+    }
+    // Un filtre de statut choisi volontairement dans ⚙️ continue de s'appliquer,
+    // même en recherche globale.
     if(tagFiltres.statut!=='tous'&&f.statut!==tagFiltres.statut) return false;
     if(tagFiltres.decennie&&tagFiltres.decennie.size>0){const y=parseInt((f.dateSortie||'').slice(0,4));if(isNaN(y)||!tagFiltres.decennie.has(String(Math.floor(y/10)*10))) return false;}
     if(tagFiltres.annee&&(f.dateSortie||'').slice(0,4)!==tagFiltres.annee) return false;
     if(tagFiltres.genre&&!(f.genres||'').toLowerCase().includes(tagFiltres.genre.toLowerCase())) return false;
     if(tagFiltres.nationalite&&!(f.pays||[]).includes(tagFiltres.nationalite)) return false;
     if(tagFiltres.qualite&&!(f.qualites||[]).includes(tagFiltres.qualite)) return false;
-    if(tagFiltres.saga){const fSagas=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);if(!fSagas.includes(tagFiltres.saga)) return false;}
+    if(!rechercheGlobale&&tagFiltres.saga){const fSagas=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);if(!fSagas.includes(tagFiltres.saga)) return false;}
     if(acteurFiltre&&!normaliser(f.casting).includes(normaliser(acteurFiltre))) return false;
     if(q){
       const nq=normaliser(q);
@@ -1504,22 +1515,24 @@ function renderCollection(){
     }
     return true;
   });
-  // Regrouper les films avec saga : n'afficher qu'une fiche par saga
-  // La fiche représente tous les films de la saga (pas seulement ceux filtrés)
-  const sagasVues=new Set();
-  liste=liste.filter(f=>{
-    const fSagas2=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);
-    if(!fSagas2.length) return true;
-    const firstSaga=fSagas2[0];
-    if(sagasVues.has(firstSaga)) return false;
-    sagasVues.add(firstSaga);
-    return true;
-  });
+  // Hors recherche, regrouper les films avec saga pour garder l'affichage habituel.
+  // En recherche globale, afficher le titre précis qui correspond à la demande.
+  if(!rechercheGlobale){
+    const sagasVues=new Set();
+    liste=liste.filter(f=>{
+      const fSagas2=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);
+      if(!fSagas2.length) return true;
+      const firstSaga=fSagas2[0];
+      if(sagasVues.has(firstSaga)) return false;
+      sagasVues.add(firstSaga);
+      return true;
+    });
+  }
   liste=trierItems(liste);
   _listeFiltreCourante=liste;
 
   // Mini-tabs catégorie pour atrouver/acritique
-  if(catTab==='atrouver'||catTab==='acritique'){
+  if(!rechercheGlobale&&(catTab==='atrouver'||catTab==='acritique')){
     const cats=['','films','series','spectacles','documentaires','theatre','animation','humour'];
     const catLabels={'':'Tout','films':'🎬','series':'📺','spectacles':'🎭','documentaires':'🎥','theatre':'🎪','animation':'🎨','humour':'😂'};
     const catTabsEl=document.getElementById('cat-filter-tabs');
@@ -1527,13 +1540,16 @@ function renderCollection(){
       '<button class="sort-btn'+(tagFiltres.catFilter===c?' active':'')+'" onclick="tagFiltres.catFilter=\''+c+'\';renderCollection()">'+catLabels[c]+'</button>'
     ).join('');
   } else {
-    tagFiltres.catFilter='';
+    // Ne pas effacer un sous-filtre existant juste parce que l'on tape une recherche.
+    // Il sera de nouveau disponible quand la recherche sera vidée.
+    if(!rechercheGlobale) tagFiltres.catFilter='';
     const catTabsEl=document.getElementById('cat-filter-tabs');
     if(catTabsEl) catTabsEl.innerHTML='';
   }
 
   const actifs=[];
-  const statutLabels={trouver:'🔍 À trouver',avoir:'📋 À voir',cours:'▶️ En cours',vu:'👁 Vus'};
+  const statutLabels={trouver:'🔍 À trouver',avoir:'📋 À voir',plustard:'⏰ Plus tard',cours:'▶️ En cours',vu:'👁 Vus',critique:'🎬 Critiques'};
+  if(rechercheGlobale) actifs.push('🔎 Recherche dans toute la médiathèque');
   if(tagFiltres.statut!=='tous') actifs.push(statutLabels[tagFiltres.statut]||tagFiltres.statut);
   if(tagFiltres.decennie&&tagFiltres.decennie.size>0) actifs.push('Décennie: '+[...tagFiltres.decennie].join(', '));
   if(tagFiltres.annee) actifs.push('Année: '+tagFiltres.annee);
@@ -1547,7 +1563,9 @@ function renderCollection(){
   const grid=document.getElementById('coll-grid');
   const empty=document.getElementById('coll-empty');
   const nbColl=liste.filter(f=>f.statut!=='trouver'&&f.statut!=='critique').length;
-  const totalTxt=catTab==='atrouver'||catTab==='acritique'?liste.length+' élément(s)':nbColl+' élément(s)'+(liste.length!==nbColl?' (+'+( liste.length-nbColl)+' hors collection)':'');
+  const totalTxt=rechercheGlobale
+    ?liste.length+' résultat(s) dans toute la médiathèque'
+    :(catTab==='atrouver'||catTab==='acritique'?liste.length+' élément(s)':nbColl+' élément(s)'+(liste.length!==nbColl?' (+'+( liste.length-nbColl)+' hors collection)':''));
   document.getElementById('coll-count').textContent=totalTxt;
   if(liste.length===0){grid.innerHTML='';empty.style.display='block';}
   else{
@@ -2053,12 +2071,34 @@ function afficherDetail(f){
 
   // Bloc épisodes pour séries
   let episodesHtml='';
+  let episodeQuickHtml='';
   if(f.categorie==='series' && f.saisons && f.saisons.length>0){
-    episodesHtml='<button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\';this.textContent=this.textContent.includes(\'+\')?this.textContent.replace(\'+\',\'-\'):this.textContent.replace(\'-\',\'+\')" style="width:100%;text-align:left;background:var(--surface2);border:1px solid #333;border-radius:10px;padding:10px 14px;color:var(--text);font-size:13px;font-weight:bold;cursor:pointer;margin-bottom:8px">📺 Saisons & Épisodes +</button>';
-    episodesHtml+='<div style="display:none">';
+    const premiereSaison=f.saisons[0];
+    const quickSaisons=(f.saisons||[]).map(s=>'<option value="'+s.num+'">'+esc(s.nom)+'</option>').join('');
+    const quickEpisodes=(premiereSaison.episodes||[]).map(e=>'<option value="'+e.num+'">Épisode '+e.num+(e.titre?' — '+esc(e.titre):'')+'</option>').join('');
+
+    episodeQuickHtml='<div id="quick-episode-panel-'+f.id+'" style="background:var(--surface2);border:1px solid #355c4a;border-radius:12px;padding:12px;margin:14px 0 16px">'
+      +'<p style="font-size:12px;color:var(--green-light);margin:0 0 10px;font-weight:bold;text-transform:uppercase;letter-spacing:.4px">📺 Marquer un épisode visionné</p>'
+      +'<p style="font-size:11px;color:var(--text2);margin:0 0 10px">Choisis exactement la saison et l’épisode regardés.</p>'
+      +'<div style="display:flex;gap:6px;margin-bottom:7px">'
+      +'<select id="quick-episode-season-'+f.id+'" onchange="actualiserSelectEpisodeSerie('+f.id+')" style="flex:1;min-width:0;background:#1a1a1a;border:1px solid #333;border-radius:7px;padding:7px;color:var(--text);font-size:12px">'+quickSaisons+'</select>'
+      +'<select id="quick-episode-number-'+f.id+'" style="flex:1;min-width:0;background:#1a1a1a;border:1px solid #333;border-radius:7px;padding:7px;color:var(--text);font-size:12px">'+quickEpisodes+'</select>'
+      +'</div>'
+      +'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px">'
+      +SUPPORTS.map(s=>'<button class="qualite-btn" style="font-size:10px;padding:3px 7px" onclick="selectSupport(\'quickep-'+f.id+'\',\''+s+'\',this)">'+s+'</button>').join('')
+      +'</div>'
+      +'<div style="display:flex;gap:6px;align-items:center">'
+      +'<input type="date" id="quick-episode-date-'+f.id+'" value="'+dateLocale()+'" style="flex:1;background:#1a1a1a;border:1px solid #333;border-radius:7px;padding:7px 8px;color:#fff;font-size:12px;outline:none">'
+      +'<button onclick="ajouterVisionnageEpisodeSelectionne('+f.id+')" style="background:var(--green);border:none;color:#fff;border-radius:7px;padding:8px 10px;font-size:12px;font-weight:bold;cursor:pointer;white-space:nowrap">+ Ajouter</button>'
+      +'</div>'
+      +'<div id="quick-episode-feedback-'+f.id+'" style="display:none;font-size:11px;color:var(--green-light);margin-top:8px"></div>'
+      +'</div>';
+
+    episodesHtml='<button id="episodes-toggle-'+f.id+'" onclick="toggleEpisodesBloc('+f.id+')" style="width:100%;text-align:left;background:var(--surface2);border:1px solid #333;border-radius:10px;padding:10px 14px;color:var(--text);font-size:13px;font-weight:bold;cursor:pointer;margin-bottom:8px">📺 Saisons & Épisodes +</button>';
+    episodesHtml+='<div id="episodes-bloc-'+f.id+'" style="display:none">';
     f.saisons.forEach(s=>{
       episodesHtml+='<div style="margin-bottom:8px">'
-        +'<button onclick="const ep=this.parentElement.querySelector(\'.ep-list\');ep.style.display=ep.style.display===\'none\'?\'flex\':\'none\'" style="width:100%;text-align:left;background:var(--surface);border:1px solid #333;border-radius:8px;padding:8px 12px;color:var(--green-light);font-size:13px;font-weight:bold;cursor:pointer;margin-bottom:4px">'+esc(s.nom)+' ('+s.episodes.length+' épisodes)'
+        +'<button id="season-toggle-'+f.id+'-s'+s.num+'" onclick="toggleEpisodeSeason('+f.id+','+s.num+')" style="width:100%;text-align:left;background:var(--surface);border:1px solid #333;border-radius:8px;padding:8px 12px;color:var(--green-light);font-size:13px;font-weight:bold;cursor:pointer;margin-bottom:4px">'+esc(s.nom)+' ('+s.episodes.length+' épisodes)'
         +(f.saisonQualites&&f.saisonQualites['s'+s.num]?' · '+esc(f.saisonQualites['s'+s.num]):'')
         +'</button>'
         +'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">'
@@ -2067,26 +2107,25 @@ function afficherDetail(f){
           return '<button class="qualite-btn'+(actif?' active':'')+'" style="font-size:10px;padding:3px 7px" onclick="setSaisonQualite('+f.id+','+s.num+',\''+q+'\',this)">'+q+'</button>';
         }).join('')
         +'</div>'
-        +'<div class="ep-list" style="display:none;flex-direction:column;gap:4px">'
+        +'<div class="ep-list" id="ep-list-'+f.id+'-s'+s.num+'" style="display:none;flex-direction:column;gap:4px">'
         +s.episodes.map(e=>{
           const epKey=f.id+'_s'+s.num+'_e'+e.num;
           const epVis=(f.episodesVus&&f.episodesVus[epKey])||[];
           const nbVis=epVis.length;
-          // Liste dates de visionnage
           const visHtml=nbVis>0
             ?epVis.map((v,i)=>{const d=typeof v==='object'?v.date:v;const sup=typeof v==='object'?v.support:'';return '<span style="font-size:10px;color:var(--green-light);background:rgba(26,92,74,.2);padding:2px 6px;border-radius:10px;margin-right:4px;margin-bottom:2px;display:inline-block;cursor:pointer" onclick="supprimerVisionnageEpisode('+f.id+','+s.num+','+e.num+','+i+')">👁 '+new Date(d).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'})+(sup?' '+sup:'')+' ✕</span>';}).join('')
             :'';
-          return '<div style="background:var(--surface2);border-radius:8px;padding:8px 10px">'
-            // Titre + durée
+          const statutEpisode=nbVis>0
+            ?'<div id="episode-status-'+epKey+'" style="font-size:10px;color:var(--green-light);margin-top:3px">✓ Vu '+nbVis+' fois</div>'
+            :'<div id="episode-status-'+epKey+'" style="font-size:10px;color:var(--text2);margin-top:3px">Pas encore visionné</div>';
+          return '<div id="episode-card-'+epKey+'" style="background:var(--surface2);border-radius:8px;padding:8px 10px">'
             +'<div style="display:flex;justify-content:space-between;align-items:center">'
             +'<span style="font-size:12px;font-weight:bold">'+e.num+'. '+esc(e.titre)+'</span>'
             +(e.duree>0?'<span style="font-size:11px;color:var(--text2)">⏱ '+formatDuree(e.duree)+'</span>':'')
             +'</div>'
-            // Résumé : 1 ligne, clic pour voir plus
+            +statutEpisode
             +(e.resume?'<p style="font-size:11px;color:var(--text2);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" onclick="this.style.whiteSpace=this.style.whiteSpace==\'normal\'?\'nowrap\':\'normal\';this.style.overflow=this.style.overflow==\'visible\'?\'hidden\':\'visible\'">'+esc(e.resume)+' <span style="color:var(--green-light)">· voir plus</span></p>':'')
-            // Dates de visionnage existantes
-            +(visHtml?'<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">'+visHtml+'</div>':'')
-            // Support + date + bouton Vu
+            +(visHtml?'<div id="episode-vis-'+epKey+'" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">'+visHtml+'</div>':'<div id="episode-vis-'+epKey+'" style="display:none"></div>')
             +'<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">'
             +SUPPORTS.map(s=>'<button class="qualite-btn" style="font-size:10px;padding:3px 7px" onclick="selectSupport(\'ep-'+epKey+'\',\''+s+'\',this)">'+s+'</button>').join('')
             +'</div>'
@@ -2101,7 +2140,7 @@ function afficherDetail(f){
     if(f.nbSaisons>5){
       episodesHtml+='<p style="font-size:12px;color:var(--text2);text-align:center;padding:8px">+ '+(f.nbSaisons-5)+' saison(s) non affichée(s)</p>';
     }
-    episodesHtml+='</div>'; // Fermer le bloc saisons
+    episodesHtml+='</div>';
   } else if(f.categorie==='series' && f.tmdbId){
     episodesHtml='<p style="font-size:12px;color:var(--text2);padding:8px 0">📺 Chargement des épisodes...</p>';
   }
@@ -2244,6 +2283,7 @@ function afficherDetail(f){
     }).join('')
     +'</div>'
     +episodesHtml
+    +episodeQuickHtml
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">⭐ Ma note</p>'
     +'<div class="stars-row" id="stars-row-'+f.id+'">'
     +[1,2,3,4,5,6,7,8,9,10].map(i=>'<span class="star '+(i<=f.maNote?'on':'')+'" onclick="noterFilm('+f.id+','+i+')">★</span>').join('')
@@ -3320,23 +3360,68 @@ function suggestionMeta(f){
   if(f.statut==='plustard') parts.push('Plus tard');
   return parts.join(' • ');
 }
+function normalizeBannerStatus(st){
+  return String(st||'')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'')
+    .trim();
+}
+function isBannerFindOnly(f){
+  const s=normalizeBannerStatus(f&&f.statut);
+  // Les films “À trouver” ne sont pas utiles ici : ils ne sont pas encore dans ta collection réelle.
+  return s==='trouver'||s==='a trouver'||s.includes('trouv');
+}
+function suggestedBannerRank(f){
+  const s=normalizeBannerStatus(f&&f.statut);
+  // Priorité demandée : À voir, puis Plus tard, puis le reste.
+  if(s==='avoir'||s==='a voir') return 0;
+  if(s==='plustard'||s.includes('plus')) return 1;
+  if(s==='critique') return 2;
+  if(s==='cours') return 3;
+  if(s==='vu') return 4;
+  return 5;
+}
+function shuffleSuggestedGroup(arr){
+  const out=[...arr];
+  for(let i=out.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [out[i],out[j]]=[out[j],out[i]];
+  }
+  return out;
+}
+function getSuggestedBannerBase(){
+  return films
+    .filter(f=>f&&f.titre&&!isBannerFindOnly(f))
+    .sort((a,b)=>{
+      const r=suggestedBannerRank(a)-suggestedBannerRank(b);
+      if(r!==0) return r;
+      return (b.dateAjout||0)-(a.dateAjout||0) || String(a.titre||'').localeCompare(String(b.titre||''));
+    });
+}
 function suggestedBannerSignature(base){
-  // Signature volontairement limitée : ouvrir une fiche peut enrichir des détails TMDB,
-  // mais ça ne doit pas relancer le tirage du bandeau au retour.
-  return base.map(f=>[f.id,f.titre,f.categorie,f.statut,f.affichePath||'',f.dateSortie||''].join('§')).join('|');
+  // Signature stable : ouvrir une fiche peut enrichir TMDB, mais ça ne doit pas relancer le bandeau.
+  // On relance seulement si la liste disponible ou les statuts changent.
+  return base.map(f=>[f.id,f.statut||''].join('§')).join('|');
+}
+function pickSuggestedBannerMovies(base){
+  const groups=[[],[],[],[],[],[]];
+  base.forEach(f=>groups[Math.min(5,Math.max(0,suggestedBannerRank(f)))].push(f));
+  // On garde beaucoup plus que 14 titres pour éviter de revoir toujours la même petite poignée de films.
+  return groups.flatMap(g=>shuffleSuggestedGroup(g)).slice(0,Math.min(80,base.length));
 }
 function getSuggestedBannerPicked(base){
   const sig=suggestedBannerSignature(base);
   if(sig!==_suggestedBannerSignature||!_suggestedBannerIds.length){
     _suggestedBannerSignature=sig;
-    _suggestedBannerIds=[...base].sort(()=>Math.random()-0.5).slice(0,Math.min(14,base.length)).map(f=>f.id);
+    _suggestedBannerIds=pickSuggestedBannerMovies(base).map(f=>f.id);
     _suggestedBannerHtml='';
     _suggestedBannerStart=Date.now();
   }
   const byId=new Map(base.map(f=>[f.id,f]));
   let picked=_suggestedBannerIds.map(id=>byId.get(id)).filter(Boolean);
   if(!picked.length&&base.length){
-    picked=[...base].slice(0,Math.min(14,base.length));
+    picked=pickSuggestedBannerMovies(base);
     _suggestedBannerIds=picked.map(f=>f.id);
     _suggestedBannerHtml='';
     _suggestedBannerStart=Date.now();
@@ -3352,10 +3437,10 @@ function renderSuggestedBanners(){
   const tracks=document.querySelectorAll('.suggested-track');
   if(!tracks.length) return;
   setSuggestedBannerSpeed(prefs.suggestedBannerSpeed||38,false);
-  const base=films.filter(f=>f&&f.titre&&f.statut!=='trouver');
+  const base=getSuggestedBannerBase();
   let html='';
   if(!base.length){
-    html='<div class="suggested-card"><div class="suggested-poster-placeholder">🎬</div><div class="suggested-info"><div class="suggested-title">Ajoute des films à ta collection</div><div class="suggested-meta">Les suggestions apparaîtront ici</div></div></div>';
+    html='<div class="suggested-card"><div class="suggested-poster-placeholder">🎬</div><div class="suggested-info"><div class="suggested-title">Ajoute des films à ta collection</div><div class="suggested-meta">Hors films à trouver</div></div></div>';
     if(_suggestedBannerSignature!=='__empty__'){
       _suggestedBannerSignature='__empty__';
       _suggestedBannerIds=[];
@@ -4017,19 +4102,96 @@ function choisirEmplacement(id,val){
   sauvegarderEmplacement(id);
 }
 
-function ajouterVisionnageEpisode(filmId,saisonNum,epNum){
+function toggleEpisodesBloc(filmId){
+  const bloc=document.getElementById('episodes-bloc-'+filmId);
+  const bouton=document.getElementById('episodes-toggle-'+filmId);
+  if(!bloc||!bouton) return;
+  const ouvert=bloc.style.display!=='none';
+  bloc.style.display=ouvert?'none':'block';
+  bouton.textContent='📺 Saisons & Épisodes '+(ouvert?'+':'−');
+}
+
+function toggleEpisodeSeason(filmId,saisonNum){
+  const liste=document.getElementById('ep-list-'+filmId+'-s'+saisonNum);
+  if(!liste) return;
+  liste.style.display=liste.style.display==='none'?'flex':'none';
+}
+
+function actualiserSelectEpisodeSerie(filmId,episodeSelectionne){
+  const f=films.find(f=>f.id===filmId);if(!f||!f.saisons) return;
+  const saisonSelect=document.getElementById('quick-episode-season-'+filmId);
+  const episodeSelect=document.getElementById('quick-episode-number-'+filmId);
+  if(!saisonSelect||!episodeSelect) return;
+  const saisonNum=parseInt(saisonSelect.value,10);
+  const saison=f.saisons.find(s=>Number(s.num)===saisonNum);
+  if(!saison) return;
+  const precedent=episodeSelectionne!==undefined?String(episodeSelectionne):episodeSelect.value;
+  episodeSelect.innerHTML=(saison.episodes||[]).map(e=>'<option value="'+e.num+'">Épisode '+e.num+(e.titre?' — '+esc(e.titre):'')+'</option>').join('');
+  if(precedent && [...episodeSelect.options].some(o=>o.value===String(precedent))){
+    episodeSelect.value=String(precedent);
+  }
+}
+
+function titreEpisodeSerie(f,saisonNum,epNum){
+  const saison=(f.saisons||[]).find(s=>Number(s.num)===Number(saisonNum));
+  const episode=saison&&(saison.episodes||[]).find(e=>Number(e.num)===Number(epNum));
+  return 'S'+saisonNum+'E'+epNum+(episode&&episode.titre?' — '+episode.titre:'');
+}
+
+function ajouterVisionnageEpisodeSelectionne(filmId){
   const f=films.find(f=>f.id===filmId);if(!f) return;
-  if(!f.episodesVus) f.episodesVus={};
+  const saisonSelect=document.getElementById('quick-episode-season-'+filmId);
+  const episodeSelect=document.getElementById('quick-episode-number-'+filmId);
+  const dateInput=document.getElementById('quick-episode-date-'+filmId);
+  const saisonNum=parseInt(saisonSelect&&saisonSelect.value,10);
+  const epNum=parseInt(episodeSelect&&episodeSelect.value,10);
+  const date=dateInput?dateInput.value:dateLocale();
+  if(!saisonNum||!epNum){snack('⚠️ Choisissez une saison et un épisode');return;}
+  if(!date){snack('⚠️ Choisissez une date');return;}
+  const support=_supportSelectionne['quickep-'+filmId]||'';
+  enregistrerVisionnageEpisode(filmId,saisonNum,epNum,date,support);
+}
+
+function ajouterVisionnageEpisode(filmId,saisonNum,epNum){
   const key=filmId+'_s'+saisonNum+'_e'+epNum;
-  if(!f.episodesVus[key]) f.episodesVus[key]=[];
   const dateInput=document.getElementById('epdate-'+key);
   const date=dateInput?dateInput.value:dateLocale();
   if(!date){snack('⚠️ Choisissez une date');return;}
   const support=_supportSelectionne['ep-'+key]||'';
+  enregistrerVisionnageEpisode(filmId,saisonNum,epNum,date,support);
+}
+
+function enregistrerVisionnageEpisode(filmId,saisonNum,epNum,date,support){
+  const f=films.find(f=>f.id===filmId);if(!f) return;
+  if(!f.episodesVus) f.episodesVus={};
+  const key=filmId+'_s'+saisonNum+'_e'+epNum;
+  if(!f.episodesVus[key]) f.episodesVus[key]=[];
   f.episodesVus[key].push({date,support});
+  delete _supportSelectionne['ep-'+key];
+  delete _supportSelectionne['quickep-'+filmId];
   sauvegarder();
+  rafraichirDetailApresVisionnageEpisode(f,saisonNum,epNum);
+  snack('✓ '+titreEpisodeSerie(f,saisonNum,epNum)+' ajouté le '+new Date(date).toLocaleDateString('fr-FR')+(support?' — '+support:''));
+}
+
+function rafraichirDetailApresVisionnageEpisode(f,saisonNum,epNum){
   afficherDetail(f);
-  snack('✓ Épisode vu le '+new Date(date).toLocaleDateString('fr-FR')+(support?' — '+support:''));
+  requestAnimationFrame(()=>{
+    const bloc=document.getElementById('episodes-bloc-'+f.id);
+    const bouton=document.getElementById('episodes-toggle-'+f.id);
+    const liste=document.getElementById('ep-list-'+f.id+'-s'+saisonNum);
+    if(bloc) bloc.style.display='block';
+    if(bouton) bouton.textContent='📺 Saisons & Épisodes −';
+    if(liste) liste.style.display='flex';
+    const key=f.id+'_s'+saisonNum+'_e'+epNum;
+    const carte=document.getElementById('episode-card-'+key);
+    if(carte){
+      carte.style.outline='2px solid var(--green-light)';
+      carte.style.boxShadow='0 0 0 3px rgba(42,223,138,.12)';
+      carte.scrollIntoView({behavior:'smooth',block:'center'});
+      setTimeout(()=>{carte.style.outline='';carte.style.boxShadow='';},2200);
+    }
+  });
 }
 
 function supprimerVisionnageEpisode(filmId,saisonNum,epNum,idx){
@@ -4039,7 +4201,7 @@ function supprimerVisionnageEpisode(filmId,saisonNum,epNum,idx){
   if(!f.episodesVus||!f.episodesVus[key]) return;
   f.episodesVus[key].splice(idx,1);
   sauvegarder();
-  afficherDetail(f);
+  rafraichirDetailApresVisionnageEpisode(f,saisonNum,epNum);
   snack('Visionnage supprimé');
 }
 
@@ -4509,6 +4671,11 @@ window.modifierTitreAlt = modifierTitreAlt;
 window.sauvegarderEmplacement = sauvegarderEmplacement;
 window.ajouterVisionnage = ajouterVisionnage;
 window.ajouterVisionnageEpisode = ajouterVisionnageEpisode;
+window.ajouterVisionnageEpisodeSelectionne = ajouterVisionnageEpisodeSelectionne;
+window.actualiserSelectEpisodeSerie = actualiserSelectEpisodeSerie;
+window.toggleEpisodesBloc = toggleEpisodesBloc;
+window.toggleEpisodeSeason = toggleEpisodeSeason;
+window.supprimerVisionnageEpisode = supprimerVisionnageEpisode;
 window.ouvrirFicheFilm = ouvrirFicheFilm;
 window.setCatTab = setCatTab;
 window.searchTmdb = searchTmdb;
