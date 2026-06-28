@@ -297,9 +297,9 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .note-card.dragging{opacity:0.5}
 
 
-/* ===== MyCinebox v1.7.4 — Bandeau de suggestions ===== */
+/* ===== MyCinebox v1.7.8 — Vitesse du bandeau fiable ===== */
 :root{
-  --suggested-scroll-duration:38s;
+  --suggested-scroll-duration:600s;
 }
 .suggested-banner{width:100%;overflow:hidden;background:var(--surface);border:1px solid #222;border-radius:14px;margin:0 0 14px;padding:10px 0;position:relative;box-shadow:0 2px 8px rgba(0,0,0,.15)}
 .suggested-banner-header{display:flex;align-items:center;gap:8px;padding:0 14px 8px;font-size:14px;font-weight:700;color:var(--text)}
@@ -658,12 +658,12 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 
     <div class="settings-section">
       <h3>🎲 Bandeau des suggestions</h3>
-      <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Règle la vitesse du bandeau affiché sur Accueil et Collection.</p>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Choisis le temps entre le passage de deux affiches. Le réglage ralentit vraiment le défilement, quelle que soit la quantité de films.</p>
       <div class="banner-speed-row">
         <span style="font-size:12px;color:var(--text2)">Rapide</span>
-        <input type="range" id="banner-speed-slider" min="15" max="90" step="1" value="38" oninput="setSuggestedBannerSpeed(this.value,true)">
-        <span style="font-size:12px;color:var(--text2)">Lent</span>
-        <span class="banner-speed-value" id="banner-speed-label">38s</span>
+        <input type="range" id="banner-speed-slider" min="3" max="20" step="0.5" value="7" oninput="setSuggestedBannerSpeed(this.value,true)">
+        <span style="font-size:12px;color:var(--text2)">Très lent</span>
+        <span class="banner-speed-value" id="banner-speed-label">7 s / affiche</span>
       </div>
     </div>
     <div class="settings-section">
@@ -1008,7 +1008,7 @@ const TMDB_API='https://api.themoviedb.org/3';
 // Traduction pays anglais → français
 const CATS={films:{icon:'🎬',label:'Film'},series:{icon:'📺',label:'Série'},spectacles:{icon:'🎭',label:'Spectacle'},documentaires:{icon:'🎥',label:'Documentaire'},theatre:{icon:'🎪',label:'Théâtre'},animation:{icon:'🎨',label:'Animation'},humour:{icon:'😂',label:'Humour/Sketchs'}};
 
-let films=[],prefs={apiKey:'1847535cfa0ee0cdcd25f1954cd9614f',cols:2,suggestedBannerSpeed:38};
+let films=[],prefs={apiKey:'1847535cfa0ee0cdcd25f1954cd9614f',cols:2,suggestedBannerSpeed:38,suggestedBannerCardSeconds:7};
 let triActuel='date',prevPage='collection',currentPage='home';
 let pageScrollPositions={home:0,collection:0,search:0,visionnages:0,notes:0,settings:0};
 let _listeFiltreCourante=[];
@@ -3340,15 +3340,36 @@ let _suggestedBannerSignature='';
 let _suggestedBannerHtml='';
 let _suggestedBannerStart=Date.now();
 
+function getSuggestedBannerCardSeconds(){
+  const saved=parseFloat(prefs.suggestedBannerCardSeconds);
+  if(Number.isFinite(saved)) return Math.max(3,Math.min(20,saved));
+  // Migration des anciennes versions : leur valeur était une durée globale peu lisible.
+  // On la convertit en secondes par affiche, avec un minimum volontairement lent.
+  const legacy=parseFloat(prefs.suggestedBannerSpeed);
+  if(Number.isFinite(legacy)) return Math.max(5,Math.min(20,legacy/10));
+  return 7;
+}
+function restartSuggestedBannerAnimation(track){
+  // Force le navigateur à prendre immédiatement en compte la nouvelle vitesse.
+  track.style.animation='none';
+  void track.offsetWidth;
+  track.style.animation='';
+}
 function setSuggestedBannerSpeed(val,save=true){
-  const oldSpeed=prefs.suggestedBannerSpeed||38;
-  const n=Math.max(15,Math.min(90,parseInt(val)||38));
-  prefs.suggestedBannerSpeed=n;
-  document.documentElement.style.setProperty('--suggested-scroll-duration',n+'s');
+  const oldSpeed=getSuggestedBannerCardSeconds();
+  const n=Math.max(3,Math.min(20,parseFloat(val)||7));
+  prefs.suggestedBannerCardSeconds=n;
+  // Conservé pour les anciennes sauvegardes et les anciennes installations.
+  prefs.suggestedBannerSpeed=Math.round(n*10);
+  const duration=getSuggestedBannerAnimationSeconds();
+  document.documentElement.style.setProperty('--suggested-scroll-duration',duration+'s');
   const sl=document.getElementById('banner-speed-slider');if(sl) sl.value=n;
-  const lab=document.getElementById('banner-speed-label');if(lab) lab.textContent=n+'s';
-  if(oldSpeed!==n){_suggestedBannerStart=Date.now();}
-  document.querySelectorAll('.suggested-track').forEach(applySuggestedBannerPhase);
+  const lab=document.getElementById('banner-speed-label');if(lab) lab.textContent=(Number.isInteger(n)?n:n.toFixed(1))+' s / affiche';
+  const changed=Math.abs(oldSpeed-n)>0.001;
+  document.querySelectorAll('.suggested-track').forEach(track=>{
+    if(changed) restartSuggestedBannerAnimation(track);
+    applySuggestedBannerPhase(track);
+  });
   if(save){savePrefs();schedulePrefsDriveSave();}
 }
 function suggestionMeta(f){
@@ -3428,15 +3449,23 @@ function getSuggestedBannerPicked(base){
   }
   return picked;
 }
+function getSuggestedBannerAnimationSeconds(){
+  // Le track contient trois fois la liste et l'animation parcourt 50 %, soit 1,5 liste.
+  // Cette formule garantit que le réglage correspond réellement au temps d'une affiche.
+  const secondsPerCard=getSuggestedBannerCardSeconds();
+  const itemCount=Math.max(1,_suggestedBannerIds.length||14);
+  return Math.max(45,Math.round(secondsPerCard*itemCount*1.5));
+}
 function applySuggestedBannerPhase(track){
-  const speed=Math.max(15,Math.min(90,parseInt(prefs.suggestedBannerSpeed)||38));
-  const elapsed=((Date.now()-_suggestedBannerStart)/1000)%speed;
+  const duration=getSuggestedBannerAnimationSeconds();
+  const elapsed=((Date.now()-_suggestedBannerStart)/1000)%duration;
+  track.style.animationDuration=duration+'s';
   track.style.animationDelay='-'+elapsed.toFixed(2)+'s';
 }
 function renderSuggestedBanners(){
   const tracks=document.querySelectorAll('.suggested-track');
   if(!tracks.length) return;
-  setSuggestedBannerSpeed(prefs.suggestedBannerSpeed||38,false);
+  setSuggestedBannerSpeed(getSuggestedBannerCardSeconds(),false);
   const base=getSuggestedBannerBase();
   let html='';
   if(!base.length){
@@ -3566,7 +3595,7 @@ window.addEventListener('popstate', (e)=>{
   document.getElementById('cols-slider').value=prefs.cols||2;
   appliquerCols(prefs.cols||2);
   appliquerPolice(prefs.fontSize||16);
-  setSuggestedBannerSpeed(prefs.suggestedBannerSpeed||38,false);
+  setSuggestedBannerSpeed(getSuggestedBannerCardSeconds(),false);
 }
 
 
@@ -4381,7 +4410,7 @@ document.documentElement.style.setProperty('--home-cols',prefs.homeCols||4);
 if(prefs.theme==='light') document.body.classList.add('light-mode');
 if(prefs.sagaMode){setTimeout(()=>setSagaMode(prefs.sagaMode,null),100);}
 document.documentElement.style.fontSize=(prefs.fontSize||16)+'px';
-setSuggestedBannerSpeed(prefs.suggestedBannerSpeed||38,false);
+setSuggestedBannerSpeed(getSuggestedBannerCardSeconds(),false);
 renderHome();
 renderSuggestedBanners();
 </script>
@@ -4462,7 +4491,7 @@ async function trouverFichierDriveNom(nom){
 async function sauvegarderPrefsDrive(silencieux=true){
   if(!_googleToken) return;
   try{
-    const body=JSON.stringify({prefs:{suggestedBannerSpeed:prefs.suggestedBannerSpeed||38},updatedAt:new Date().toISOString()},null,2);
+    const body=JSON.stringify({prefs:{suggestedBannerSpeed:prefs.suggestedBannerSpeed||38,suggestedBannerCardSeconds:getSuggestedBannerCardSeconds()},updatedAt:new Date().toISOString()},null,2);
     const fichier=await trouverFichierDriveNom(DRIVE_PREFS_FILENAME);
     if(fichier){
       await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fichier.id+'?uploadType=media',
@@ -4489,7 +4518,7 @@ async function chargerPrefsDrive(silencieux=true){
     if(data&&data.prefs){
       prefs={...prefs,...data.prefs};
       savePrefs();
-      setSuggestedBannerSpeed(prefs.suggestedBannerSpeed||38,false);
+      setSuggestedBannerSpeed(getSuggestedBannerCardSeconds(),false);
       renderSuggestedBanners();
     }
   }catch(e){ if(!silencieux) snack('⚠️ Erreur chargement paramètres Drive'); }
