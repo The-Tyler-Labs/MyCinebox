@@ -1,4 +1,4 @@
-// MyCinebox service worker — version 2026-06-29-v1.7.9-recherche-tmdb-fiable
+// MyCinebox service worker — version 2026-06-29-v1.7.10-tmdb-anti-blocage
 const CACHE_NAME = 'mycinebox-cache-2026-06-29-v1-7-9-recherche-tmdb-fiable';
 const APP_SHELL = [
   '/MyCinebox/',
@@ -33,6 +33,10 @@ self.addEventListener('fetch', event => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
+
+  // TMDB ne doit pas passer par le cache du service worker :
+  // la requête reste directement contrôlée par l'écran de recherche.
+  if (url.hostname === 'api.themoviedb.org') return;
 
   // Fichiers de l'application : réseau d'abord, cache en secours.
   if (url.origin === self.location.origin) {

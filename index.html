@@ -297,7 +297,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .note-card.dragging{opacity:0.5}
 
 
-/* ===== MyCinebox v1.7.9 — Recherche TMDB fiable ===== */
+/* ===== MyCinebox v1.7.10 — Recherche TMDB anti-blocage ===== */
 :root{
   --suggested-scroll-duration:600s;
 }
@@ -2488,18 +2488,30 @@ function tmdbSearchErrorMessage(error){
   return 'Impossible de joindre TMDB. Vérifie ton réseau et la clé TMDB dans Paramètres.';
 }
 
-async function fetchTmdbSearchJson(url,timeoutMs=15000){
+async function fetchTmdbSearchJson(url,timeoutMs=12000){
+  // Promise.race garantit une sortie même si un navigateur ou le service worker
+  // ne propage pas correctement l'annulation d'une requête réseau.
   const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(),timeoutMs);
+  let timer=null;
+  const timeout=new Promise((_,reject)=>{
+    timer=setTimeout(()=>{
+      try{controller.abort();}catch(_){}
+      reject(new Error('Délai TMDB dépassé'));
+    },timeoutMs);
+  });
   try{
-    const response=await fetch(url,{signal:controller.signal});
-    if(!response.ok) throw new Error('HTTP '+response.status);
+    const response=await Promise.race([
+      fetch(url,{signal:controller.signal,cache:'no-store',headers:{Accept:'application/json'}}),
+      timeout
+    ]);
+    if(!response||!response.ok) throw new Error('HTTP '+(response?response.status:''));
     return await response.json();
   }finally{
     clearTimeout(timer);
   }
 }
 
+let tmdbSearchSequence=0;
 async function searchTmdb(type){
   const isTV=type==='tv';
   const inputId=isTV?'serie-query':'tmdb-query';
@@ -2511,8 +2523,18 @@ async function searchTmdb(type){
 
   const loader=document.getElementById(loaderId);
   const results=document.getElementById(resultsId);
+  const searchId=++tmdbSearchSequence;
   loader.style.display='block';
   results.innerHTML='';
+
+  // Filet de sécurité visuel : le rond ne peut jamais rester affiché indéfiniment.
+  const hardStop=setTimeout(()=>{
+    if(searchId!==tmdbSearchSequence) return;
+    loader.style.display='none';
+    if(!results.innerHTML){
+      results.innerHTML='<div style="text-align:center;padding:20px;color:var(--text2)"><p style="margin:0 0 12px">⚠️ TMDB ne répond pas. Vérifie Internet ou réessaie.</p><button class="btn btn-primary" onclick="searchTmdb(\''+type+'\')">Réessayer</button></div>';
+    }
+  },13000);
 
   try{
     let data=await fetchTmdbSearchJson(TMDB_API+'/search/'+type+'?api_key='+encodeURIComponent(prefs.apiKey)+'&query='+encodeURIComponent(q)+'&language=fr-FR');
@@ -2555,7 +2577,8 @@ async function searchTmdb(type){
     results.innerHTML='<div style="text-align:center;padding:20px;color:var(--text2)"><p style="margin:0 0 12px">⚠️ '+esc(message)+'</p><button class="btn btn-primary" onclick="searchTmdb(\''+type+'\')">Réessayer</button></div>';
     snack('⚠️ '+message);
   }finally{
-    loader.style.display='none';
+    clearTimeout(hardStop);
+    if(searchId===tmdbSearchSequence) loader.style.display='none';
   }
 }
 
