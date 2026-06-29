@@ -297,7 +297,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .note-card.dragging{opacity:0.5}
 
 
-/* ===== MyCinebox v1.7.8 — Vitesse du bandeau fiable ===== */
+/* ===== MyCinebox v1.7.9 — Recherche TMDB fiable ===== */
 :root{
   --suggested-scroll-duration:600s;
 }
@@ -2471,6 +2471,35 @@ function setSearchTab(tab){
 }
 
 // ── TMDB SEARCH (film ou série) ──
+function tmdbSearchErrorMessage(error){
+  const message=String((error&&error.message)||'');
+  if(error&&error.name==='AbortError'||message.includes('délai')){
+    return 'La recherche prend trop de temps. Vérifie ton réseau puis réessaie.';
+  }
+  if(message.includes('HTTP 401')){
+    return 'La clé TMDB est invalide ou n’est plus acceptée. Vérifie-la dans Paramètres.';
+  }
+  if(message.includes('HTTP 429')){
+    return 'TMDB limite temporairement les recherches. Attends une minute puis réessaie.';
+  }
+  if(typeof navigator!=='undefined'&&!navigator.onLine){
+    return 'Tu sembles hors connexion. Vérifie Internet puis réessaie.';
+  }
+  return 'Impossible de joindre TMDB. Vérifie ton réseau et la clé TMDB dans Paramètres.';
+}
+
+async function fetchTmdbSearchJson(url,timeoutMs=15000){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try{
+    const response=await fetch(url,{signal:controller.signal});
+    if(!response.ok) throw new Error('HTTP '+response.status);
+    return await response.json();
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
 async function searchTmdb(type){
   const isTV=type==='tv';
   const inputId=isTV?'serie-query':'tmdb-query';
@@ -2479,35 +2508,35 @@ async function searchTmdb(type){
   const q=document.getElementById(inputId).value.trim();
   if(!q) return;
   if(!prefs.apiKey){snack('⚠️ Configurez votre clé API dans Paramètres');return;}
-  document.getElementById(loaderId).style.display='block';
-  document.getElementById(resultsId).innerHTML='';
+
+  const loader=document.getElementById(loaderId);
+  const results=document.getElementById(resultsId);
+  loader.style.display='block';
+  results.innerHTML='';
+
   try{
-    const r=await fetch(TMDB_API+'/search/'+type+'?api_key='+prefs.apiKey+'&query='+encodeURIComponent(q)+'&language=fr-FR');
-    const data=await r.json();
-    document.getElementById(loaderId).style.display='none';
+    let data=await fetchTmdbSearchJson(TMDB_API+'/search/'+type+'?api_key='+encodeURIComponent(prefs.apiKey)+'&query='+encodeURIComponent(q)+'&language=fr-FR');
     if(!data.results||data.results.length===0){
       // Essai avec les 6 premiers caractères de chaque mot (tolérance fautes)
       const mots=q.split(' ').filter(m=>m.length>3).map(m=>m.slice(0,6));
       if(mots.length>0){
         const q2=mots.join(' ');
-        const r2=await fetch(TMDB_API+'/search/'+type+'?api_key='+prefs.apiKey+'&query='+encodeURIComponent(q2)+'&language=fr-FR');
-        const d2=await r2.json();
+        const d2=await fetchTmdbSearchJson(TMDB_API+'/search/'+type+'?api_key='+encodeURIComponent(prefs.apiKey)+'&query='+encodeURIComponent(q2)+'&language=fr-FR');
         if(d2.results&&d2.results.length>0){
           data.results=d2.results;
         } else {
-          document.getElementById(loaderId).style.display='none';
-          document.getElementById(resultsId).innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">Aucun résultat pour "'+esc(q)+'"</p>';
+          results.innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">Aucun résultat pour "'+esc(q)+'"</p>';
           return;
         }
       } else {
-        document.getElementById(loaderId).style.display='none';
-        document.getElementById(resultsId).innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">Aucun résultat</p>';
+        results.innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">Aucun résultat</p>';
         return;
       }
     }
+
     let results_=data.results.slice(0,50);
     if(_searchSort==='date') results_.sort((a,b)=>(b.release_date||b.first_air_date||'').localeCompare(a.release_date||a.first_air_date||''));
-    document.getElementById(resultsId).innerHTML=results_.map(f=>{
+    results.innerHTML=results_.map(f=>{
       const titre=f.title||f.name||'';
       const date=(f.release_date||f.first_air_date||'').slice(0,4);
       const img=f.poster_path?TMDB_IMG+f.poster_path:'';
@@ -2521,7 +2550,13 @@ async function searchTmdb(type){
         +'<button class="btn '+(deja?'':'btn-primary')+' add-btn" style="flex-shrink:0;padding:6px 12px;font-size:13px;'+(deja?'background:#333;color:var(--text2)':'')+'" onclick="event.stopPropagation();event.preventDefault();ajouterTmdb('+f.id+',\''+type+'\',this)" '+(deja?'disabled':'')+'>'
         +(deja?'✓':'+')+'</button></div>';
     }).join('');
-  }catch(e){document.getElementById(loaderId).style.display='none';snack('Erreur de connexion');}
+  }catch(e){
+    const message=tmdbSearchErrorMessage(e);
+    results.innerHTML='<div style="text-align:center;padding:20px;color:var(--text2)"><p style="margin:0 0 12px">⚠️ '+esc(message)+'</p><button class="btn btn-primary" onclick="searchTmdb(\''+type+'\')">Réessayer</button></div>';
+    snack('⚠️ '+message);
+  }finally{
+    loader.style.display='none';
+  }
 }
 
 // ── FICHE FILM/SÉRIE ──

@@ -1,5 +1,5 @@
-// MyCinebox service worker — version 2026-06-25-v1.7.8-vitesse-fiable
-const CACHE_NAME = 'mycinebox-cache-2026-06-25-v1-7-8-vitesse-fiable';
+// MyCinebox service worker — version 2026-06-29-v1.7.9-recherche-tmdb-fiable
+const CACHE_NAME = 'mycinebox-cache-2026-06-29-v1-7-9-recherche-tmdb-fiable';
 const APP_SHELL = [
   '/MyCinebox/',
   '/MyCinebox/index.html',
