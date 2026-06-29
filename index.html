@@ -297,7 +297,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .note-card.dragging{opacity:0.5}
 
 
-/* ===== MyCinebox v1.7.10 — Recherche TMDB anti-blocage ===== */
+/* ===== MyCinebox v1.7.11 — Clé TMDB restaurée ===== */
 :root{
   --suggested-scroll-duration:600s;
 }
@@ -701,6 +701,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     <div class="settings-section">
       <h3>🔑 Clé API TMDB</h3>
       <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Pour la recherche en ligne.</p>
+      <div id="api-key-status" style="font-size:12px;color:var(--green-light);margin:-2px 0 10px"></div>
       <div class="input-group"><input type="password" id="api-key-input" placeholder="Votre clé API TMDB"></div>
       <button class="btn btn-primary" style="width:100%" onclick="saveApiKey()">Sauvegarder</button></div>
     </div>
@@ -1008,7 +1009,21 @@ const TMDB_API='https://api.themoviedb.org/3';
 // Traduction pays anglais → français
 const CATS={films:{icon:'🎬',label:'Film'},series:{icon:'📺',label:'Série'},spectacles:{icon:'🎭',label:'Spectacle'},documentaires:{icon:'🎥',label:'Documentaire'},theatre:{icon:'🎪',label:'Théâtre'},animation:{icon:'🎨',label:'Animation'},humour:{icon:'😂',label:'Humour/Sketchs'}};
 
-let films=[],prefs={apiKey:'1847535cfa0ee0cdcd25f1954cd9614f',cols:2,suggestedBannerSpeed:38,suggestedBannerCardSeconds:7};
+const DEFAULT_TMDB_API_KEY='1847535cfa0ee0cdcd25f1954cd9614f';
+let films=[],prefs={apiKey:DEFAULT_TMDB_API_KEY,cols:2,suggestedBannerSpeed:38,suggestedBannerCardSeconds:7};
+
+// Une ancienne préférence locale ne doit jamais désactiver la recherche TMDB
+// en remplaçant la clé intégrée par une valeur vide.
+function ensureTmdbApiKey(){
+  const key=String((prefs&&prefs.apiKey)||'').trim();
+  if(key.length<20){
+    prefs.apiKey=DEFAULT_TMDB_API_KEY;
+    try{ localStorage.setItem(PREFS_KEY,JSON.stringify(prefs)); }catch(e){}
+  }else{
+    prefs.apiKey=key;
+  }
+  return prefs.apiKey;
+}
 let triActuel='date',prevPage='collection',currentPage='home';
 let pageScrollPositions={home:0,collection:0,search:0,visionnages:0,notes:0,settings:0};
 let _listeFiltreCourante=[];
@@ -1044,6 +1059,7 @@ function charger(){
     return{...f,categorie,statut,qualite:f.qualite||'',qualites,versions:f.versions||[],pays};
   });
   try{prefs={...prefs,...JSON.parse(localStorage.getItem(PREFS_KEY)||'{}') };}catch(e){}
+  ensureTmdbApiKey();
 }
 let _saveCount=0;
 function sauvegarder(){
@@ -2519,7 +2535,8 @@ async function searchTmdb(type){
   const resultsId=isTV?'serie-results':'search-results';
   const q=document.getElementById(inputId).value.trim();
   if(!q) return;
-  if(!prefs.apiKey){snack('⚠️ Configurez votre clé API dans Paramètres');return;}
+  const apiKey=ensureTmdbApiKey();
+  if(!apiKey){snack('⚠️ Configurez votre clé API dans Paramètres');return;}
 
   const loader=document.getElementById(loaderId);
   const results=document.getElementById(resultsId);
@@ -2537,13 +2554,13 @@ async function searchTmdb(type){
   },13000);
 
   try{
-    let data=await fetchTmdbSearchJson(TMDB_API+'/search/'+type+'?api_key='+encodeURIComponent(prefs.apiKey)+'&query='+encodeURIComponent(q)+'&language=fr-FR');
+    let data=await fetchTmdbSearchJson(TMDB_API+'/search/'+type+'?api_key='+encodeURIComponent(apiKey)+'&query='+encodeURIComponent(q)+'&language=fr-FR');
     if(!data.results||data.results.length===0){
       // Essai avec les 6 premiers caractères de chaque mot (tolérance fautes)
       const mots=q.split(' ').filter(m=>m.length>3).map(m=>m.slice(0,6));
       if(mots.length>0){
         const q2=mots.join(' ');
-        const d2=await fetchTmdbSearchJson(TMDB_API+'/search/'+type+'?api_key='+encodeURIComponent(prefs.apiKey)+'&query='+encodeURIComponent(q2)+'&language=fr-FR');
+        const d2=await fetchTmdbSearchJson(TMDB_API+'/search/'+type+'?api_key='+encodeURIComponent(apiKey)+'&query='+encodeURIComponent(q2)+'&language=fr-FR');
         if(d2.results&&d2.results.length>0){
           data.results=d2.results;
         } else {
@@ -2585,7 +2602,7 @@ async function searchTmdb(type){
 // ── FICHE FILM/SÉRIE ──
 async function ouvrirFicheFilm(tmdbId,type){
   type=type||'movie';
-  if(!prefs.apiKey){
+  if(!ensureTmdbApiKey()){
     snack('⚠️ Clé API TMDB manquante dans Paramètres');
     return;
   }
@@ -3649,7 +3666,11 @@ window.addEventListener('popstate', (e)=>{
     ?'<br><small style="color:var(--green-light)">💾 Dernière sauvegarde auto : '+new Date(backupDate).toLocaleString('fr-FR')+'</small>'
     :'';
   document.getElementById('settings-stats').innerHTML='Total : '+films.length+'<br>🔍 À trouver : '+trouver+'<br>📋 À voir : '+avoir+'<br>▶️ En cours : '+cours+'<br>👁 Vus : '+vus+'<br><br>'+bycat+backupInfo;
-  if(prefs.apiKey) document.getElementById('api-key-input').placeholder='Clé : '+prefs.apiKey.slice(0,8)+'...';
+  const tmdbKey=ensureTmdbApiKey();
+  const keyInput=document.getElementById('api-key-input');
+  const keyStatus=document.getElementById('api-key-status');
+  if(keyInput&&tmdbKey) keyInput.placeholder='Clé active : '+tmdbKey.slice(0,8)+'...';
+  if(keyStatus) keyStatus.textContent=tmdbKey?'✓ Clé TMDB active':'⚠️ Aucune clé TMDB détectée';
   document.getElementById('cols-slider').value=prefs.cols||2;
   appliquerCols(prefs.cols||2);
   appliquerPolice(prefs.fontSize||16);
@@ -3662,7 +3683,9 @@ function saveApiKey(){
   if(!k){snack('⚠️ Entrez une clé API');return;}
   prefs.apiKey=k;savePrefs();
   document.getElementById('api-key-input').value='';
-  document.getElementById('api-key-input').placeholder='Clé : '+k.slice(0,8)+'...';
+  document.getElementById('api-key-input').placeholder='Clé active : '+k.slice(0,8)+'...';
+  const keyStatus=document.getElementById('api-key-status');
+  if(keyStatus) keyStatus.textContent='✓ Clé TMDB active';
   snack('✓ Clé API sauvegardée');
 }
 
@@ -4575,6 +4598,7 @@ async function chargerPrefsDrive(silencieux=true){
     const data=await r.json();
     if(data&&data.prefs){
       prefs={...prefs,...data.prefs};
+      ensureTmdbApiKey();
       savePrefs();
       setSuggestedBannerSpeed(getSuggestedBannerCardSeconds(),false);
       renderSuggestedBanners();

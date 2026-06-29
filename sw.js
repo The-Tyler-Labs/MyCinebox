@@ -1,5 +1,5 @@
-// MyCinebox service worker — version 2026-06-29-v1.7.10-tmdb-anti-blocage
-const CACHE_NAME = 'mycinebox-cache-2026-06-29-v1-7-9-recherche-tmdb-fiable';
+// MyCinebox service worker — version 2026-06-29-v1.7.11-cle-tmdb-restauree
+const CACHE_NAME = 'mycinebox-cache-2026-06-29-v1-7-11-cle-tmdb-restauree';
 const APP_SHELL = [
   '/MyCinebox/',
   '/MyCinebox/index.html',
