@@ -1,5 +1,5 @@
-// MyCinebox service worker — version 2026-07-04-v1.7.16-tmdb-jsonp-fallback
-const CACHE_NAME = 'mycinebox-cache-2026-07-04-v1-7-16-tmdb-jsonp-fallback';
+// MyCinebox service worker — version 2026-07-04-v1.7.17-tmdb-revert-top-add
+const CACHE_NAME = 'mycinebox-cache-2026-07-04-v1-7-17-tmdb-revert-top-add';
 const APP_SHELL = [
   '/MyCinebox/',
   '/MyCinebox/index.html',
