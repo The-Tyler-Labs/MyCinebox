@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque</title>
+<title>Vidéothèque v1.7.14</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -297,7 +297,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .note-card.dragging{opacity:0.5}
 
 
-/* ===== MyCinebox v1.7.11 — Clé TMDB restaurée ===== */
+/* ===== MyCinebox v1.7.12 — Trailers séries corrigés ===== */
 :root{
   --suggested-scroll-duration:600s;
 }
@@ -335,7 +335,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light)">🎬 Vidéothèque</h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.14</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -703,7 +703,10 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Pour la recherche en ligne.</p>
       <div id="api-key-status" style="font-size:12px;color:var(--green-light);margin:-2px 0 10px"></div>
       <div class="input-group"><input type="password" id="api-key-input" placeholder="Votre clé API TMDB"></div>
-      <button class="btn btn-primary" style="width:100%" onclick="saveApiKey()">Sauvegarder</button></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" id="save-api-key-btn" style="flex:1" onclick="saveApiKey()">Sauvegarder</button>
+        <button class="btn" id="test-api-key-btn" style="flex:1;background:var(--surface2);color:var(--text);border:1px solid #333" onclick="testerCleTmdb()">Tester la clé</button>
+      </div></div>
     </div>
     <div class="settings-section">
       <h3>☁️ Google Drive</h3>
@@ -939,7 +942,10 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     <svg viewBox="0 0 24 24"><path d="M18 3v2h-2V3H8v2H6V3H4v18h2v-2h2v2h8v-2h2v2h2V3h-2zM8 17H6v-2h2v2zm0-4H6v-2h2v2zm0-4H6V7h2v2zm10 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V7h2v2z"/></svg>Collection
   </button>
   <button class="nav-btn" id="nav-search" onclick="goPage('search')">
-    <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Recherche/Ajout
+    <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Recherche
+  </button>
+  <button class="nav-btn" id="nav-add" onclick="toggleFabAjout()" title="Ajouter">
+    <svg viewBox="0 0 24 24"><path d="M19 11H13V5h-2v6H5v2h6v6h2v-6h6z"/></svg><span class="nav-add-label">Ajout</span>
   </button>
   <button class="nav-btn" id="nav-visionnages" onclick="goPage('visionnages')">
     <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>Visionnages
@@ -955,7 +961,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     <div id="nav-drive-date" style="font-size:10px;color:#fff;margin-top:2px;line-height:1;font-weight:400;opacity:0.7"></div>
   </button>
 </nav>
-<button class="fab" id="fab-btn" onclick="toggleFabAjout()">+</button>
+<button class="fab" id="fab-btn" onclick="toggleFabAjout()" style="display:none !important">+</button>
 
 <script>
 // MyCinebox : le service worker est enregistré plus bas.
@@ -963,8 +969,17 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
+const APP_VERSION='v1.7.14';
 const TMDB_IMG='https://image.tmdb.org/t/p/w500';
 const TMDB_BACKDROP='https://image.tmdb.org/t/p/original';
+
+(function(){
+  document.addEventListener('DOMContentLoaded',()=>{
+    const v=document.getElementById('app-version-label');
+    if(v) v.textContent=APP_VERSION;
+  });
+})();
+
 
 const PAYS_FR={
   'Afghanistan':'Afghanistan','Albania':'Albanie','Algeria':'Algérie','Argentina':'Argentine',
@@ -1099,11 +1114,17 @@ function nouveauFilm(data){
 // ── NAVIGATION ──
 function updateFab(){
   const fab=document.getElementById('fab-btn');
-  if(!fab) return;
-  const visible=(currentPage==='home'||currentPage==='collection'||currentPage==='search');
-  fab.style.display=visible?'flex':'none';
-  fab.textContent=currentPage==='search'?'✓':'+';
-  fab.title=currentPage==='search'?'Terminer / revenir':'Ajouter';
+  if(fab) fab.style.display='none';
+
+  const addBtn=document.getElementById('nav-add');
+  if(addBtn){
+    const visible=(currentPage==='home'||currentPage==='collection'||currentPage==='search');
+    addBtn.style.display=visible?'flex':'none';
+    addBtn.classList.toggle('active', currentPage==='search');
+    addBtn.title=currentPage==='search'?'Terminer / revenir':'Ajouter';
+    const label=addBtn.querySelector('.nav-add-label');
+    if(label) label.textContent=currentPage==='search'?'Retour':'Ajout';
+  }
 }
 
 function toggleFabAjout(){
@@ -2017,6 +2038,42 @@ function selAction(action){
 
 
 const STATUTS=['','trouver','avoir','plustard','cours','vu','critique'];
+
+// ── TRAILERS TMDB ──
+// Les séries et les films utilisent la même règle : français en priorité,
+// puis une bande-annonce officielle YouTube, puis n'importe quelle vidéo YouTube.
+function extraireCleTrailer(videos){
+  const liste=(videos&&Array.isArray(videos.results))?videos.results:[];
+  const youtube=liste.filter(v=>v&&v.site==='YouTube'&&v.key);
+  const trailer=youtube.find(v=>v.type==='Trailer'&&v.iso_639_1==='fr')
+    ||youtube.find(v=>v.type==='Trailer'&&v.official)
+    ||youtube.find(v=>v.type==='Trailer')
+    ||youtube[0];
+  return trailer?trailer.key:null;
+}
+
+const _trailersSeriesEnCours=new Set();
+function actualiserTrailerSerie(f){
+  if(!f||f.categorie!=='series'||!f.tmdbId||f.trailerKey) return;
+  const identifiant='tv-'+f.tmdbId;
+  if(_trailersSeriesEnCours.has(identifiant)) return;
+  _trailersSeriesEnCours.add(identifiant);
+
+  const demander=(langue)=>fetch(
+    TMDB_API+'/tv/'+f.tmdbId+'/videos?api_key='+encodeURIComponent(prefs.apiKey)+'&language='+langue
+  ).then(r=>r.ok?r.json():null).then(d=>extraireCleTrailer(d&&d.results?{results:d.results}:d));
+
+  demander('fr-FR')
+    .then(cle=>cle||demander('en-US'))
+    .then(cle=>{
+      if(!cle) return;
+      f.trailerKey=cle;
+      sauvegarder();
+      if(currentPage==='detail') afficherDetail(f);
+    })
+    .catch(()=>{})
+    .finally(()=>_trailersSeriesEnCours.delete(identifiant));
+}
 function cycleStatut(id){
   const f=films.find(f=>f.id===id);if(!f) return;
   const idx=STATUTS.indexOf(f.statut||'');
@@ -2037,6 +2094,10 @@ function ouvrirDetail(id){
   // Afficher immédiatement
   afficherDetail(f);
 
+  // Les anciennes séries peuvent avoir été ajoutées avant l'enregistrement
+  // du trailer : on les complète avec l'endpoint vidéo dédié.
+  actualiserTrailerSerie(f);
+
   // Toujours recharger depuis TMDB pour avoir photos, trailer à jour
   if(f.tmdbId){
     const endpoint=f.categorie==='series'?'/tv/':'/movie/';
@@ -2047,13 +2108,9 @@ function ouvrirDetail(id){
         if(currentPage!=='detail') return;
         const duree=d.runtime||((d.episode_run_time&&d.episode_run_time[0])||0);
         if(duree>0) f.duree=duree;
-        // Trailer FR en priorité
-        const videos=d.videos&&d.videos.results||[];
-        const trailer=videos.find(v=>v.type==='Trailer'&&v.site==='YouTube'&&v.iso_639_1==='fr')
-          ||videos.find(v=>v.type==='Trailer'&&v.site==='YouTube'&&v.official)
-          ||videos.find(v=>v.type==='Trailer'&&v.site==='YouTube')
-          ||videos.find(v=>v.site==='YouTube');
-        if(trailer) f.trailerKey=trailer.key;
+        // Trailer FR en priorité, pour films comme pour séries.
+        const trailerKey=extraireCleTrailer(d.videos);
+        if(trailerKey) f.trailerKey=trailerKey;
         if(d.credits&&d.credits.crew){
           f.realisateur=(d.credits.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', ');
         }
@@ -2489,11 +2546,11 @@ function setSearchTab(tab){
 // ── TMDB SEARCH (film ou série) ──
 function tmdbSearchErrorMessage(error){
   const message=String((error&&error.message)||'');
-  if(error&&error.name==='AbortError'||message.includes('délai')){
-    return 'La recherche prend trop de temps. Vérifie ton réseau puis réessaie.';
+  if(error&&error.name==='AbortError'||message.includes('Délai TMDB')){
+    return 'TMDB met trop de temps à répondre. La recherche a été arrêtée : réessaie dans un instant.';
   }
-  if(message.includes('HTTP 401')){
-    return 'La clé TMDB est invalide ou n’est plus acceptée. Vérifie-la dans Paramètres.';
+  if(message.includes('HTTP 401')||message.includes('HTTP 403')){
+    return 'La clé TMDB est refusée. Va dans Paramètres, colle ta clé API v3 puis appuie sur « Tester la clé ».';
   }
   if(message.includes('HTTP 429')){
     return 'TMDB limite temporairement les recherches. Attends une minute puis réessaie.';
@@ -2501,30 +2558,50 @@ function tmdbSearchErrorMessage(error){
   if(typeof navigator!=='undefined'&&!navigator.onLine){
     return 'Tu sembles hors connexion. Vérifie Internet puis réessaie.';
   }
-  return 'Impossible de joindre TMDB. Vérifie ton réseau et la clé TMDB dans Paramètres.';
+  return 'Impossible de joindre TMDB. Vérifie le réseau, puis teste la clé dans Paramètres.';
 }
 
-async function fetchTmdbSearchJson(url,timeoutMs=12000){
-  // Promise.race garantit une sortie même si un navigateur ou le service worker
-  // ne propage pas correctement l'annulation d'une requête réseau.
+async function tmdbFetchJson(url,timeoutMs=15000){
   const controller=new AbortController();
   let timer=null;
-  const timeout=new Promise((_,reject)=>{
+  let timedOut=false;
+  const request=(async()=>{
+    const response=await fetch(url,{
+      method:'GET',
+      mode:'cors',
+      cache:'no-store',
+      signal:controller.signal,
+      headers:{Accept:'application/json'}
+    });
+    const raw=await response.text();
+    let data=null;
+    try{ data=raw?JSON.parse(raw):{}; }catch(_){ throw new Error('Réponse TMDB illisible'); }
+    if(!response.ok){
+      const detail=data&&data.status_message?': '+data.status_message:'';
+      throw new Error('HTTP '+response.status+detail);
+    }
+    return data;
+  })();
+  const watchdog=new Promise((_,reject)=>{
     timer=setTimeout(()=>{
+      timedOut=true;
       try{controller.abort();}catch(_){}
       reject(new Error('Délai TMDB dépassé'));
     },timeoutMs);
   });
   try{
-    const response=await Promise.race([
-      fetch(url,{signal:controller.signal,cache:'no-store',headers:{Accept:'application/json'}}),
-      timeout
-    ]);
-    if(!response||!response.ok) throw new Error('HTTP '+(response?response.status:''));
-    return await response.json();
+    return await Promise.race([request,watchdog]);
+  }catch(error){
+    if(timedOut||error&&error.name==='AbortError') throw new Error('Délai TMDB dépassé');
+    throw error;
   }finally{
     clearTimeout(timer);
   }
+}
+
+// Conservé pour le reste du code : toutes les recherches passent par la même protection.
+async function fetchTmdbSearchJson(url,timeoutMs=15000){
+  return tmdbFetchJson(url,timeoutMs);
 }
 
 let tmdbSearchSequence=0;
@@ -2533,47 +2610,32 @@ async function searchTmdb(type){
   const inputId=isTV?'serie-query':'tmdb-query';
   const loaderId=isTV?'serie-loader':'search-loader';
   const resultsId=isTV?'serie-results':'search-results';
-  const q=document.getElementById(inputId).value.trim();
+  const q=(document.getElementById(inputId)?.value||'').trim();
   if(!q) return;
+
   const apiKey=ensureTmdbApiKey();
-  if(!apiKey){snack('⚠️ Configurez votre clé API dans Paramètres');return;}
+  if(!apiKey){snack('⚠️ Configure ta clé TMDB dans Paramètres');return;}
 
   const loader=document.getElementById(loaderId);
   const results=document.getElementById(resultsId);
+  if(!loader||!results){snack('Erreur interne de recherche');return;}
   const searchId=++tmdbSearchSequence;
   loader.style.display='block';
   results.innerHTML='';
 
-  // Filet de sécurité visuel : le rond ne peut jamais rester affiché indéfiniment.
-  const hardStop=setTimeout(()=>{
-    if(searchId!==tmdbSearchSequence) return;
-    loader.style.display='none';
-    if(!results.innerHTML){
-      results.innerHTML='<div style="text-align:center;padding:20px;color:var(--text2)"><p style="margin:0 0 12px">⚠️ TMDB ne répond pas. Vérifie Internet ou réessaie.</p><button class="btn btn-primary" onclick="searchTmdb(\''+type+'\')">Réessayer</button></div>';
-    }
-  },13000);
-
   try{
-    let data=await fetchTmdbSearchJson(TMDB_API+'/search/'+type+'?api_key='+encodeURIComponent(apiKey)+'&query='+encodeURIComponent(q)+'&language=fr-FR');
-    if(!data.results||data.results.length===0){
-      // Essai avec les 6 premiers caractères de chaque mot (tolérance fautes)
-      const mots=q.split(' ').filter(m=>m.length>3).map(m=>m.slice(0,6));
-      if(mots.length>0){
-        const q2=mots.join(' ');
-        const d2=await fetchTmdbSearchJson(TMDB_API+'/search/'+type+'?api_key='+encodeURIComponent(apiKey)+'&query='+encodeURIComponent(q2)+'&language=fr-FR');
-        if(d2.results&&d2.results.length>0){
-          data.results=d2.results;
-        } else {
-          results.innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">Aucun résultat pour "'+esc(q)+'"</p>';
-          return;
-        }
-      } else {
-        results.innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">Aucun résultat</p>';
-        return;
-      }
+    const url=TMDB_API+'/search/'+type+'?api_key='+encodeURIComponent(apiKey)
+      +'&query='+encodeURIComponent(q)+'&language=fr-FR&page=1&include_adult=false';
+    const data=await tmdbFetchJson(url,15000);
+    if(searchId!==tmdbSearchSequence) return;
+
+    const found=Array.isArray(data.results)?data.results:[];
+    if(found.length===0){
+      results.innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">Aucun résultat pour "'+esc(q)+'"</p>';
+      return;
     }
 
-    let results_=data.results.slice(0,50);
+    let results_=found.slice(0,50);
     if(_searchSort==='date') results_.sort((a,b)=>(b.release_date||b.first_air_date||'').localeCompare(a.release_date||a.first_air_date||''));
     results.innerHTML=results_.map(f=>{
       const titre=f.title||f.name||'';
@@ -2590,11 +2652,11 @@ async function searchTmdb(type){
         +(deja?'✓':'+')+'</button></div>';
     }).join('');
   }catch(e){
+    if(searchId!==tmdbSearchSequence) return;
     const message=tmdbSearchErrorMessage(e);
     results.innerHTML='<div style="text-align:center;padding:20px;color:var(--text2)"><p style="margin:0 0 12px">⚠️ '+esc(message)+'</p><button class="btn btn-primary" onclick="searchTmdb(\''+type+'\')">Réessayer</button></div>';
     snack('⚠️ '+message);
   }finally{
-    clearTimeout(hardStop);
     if(searchId===tmdbSearchSequence) loader.style.display='none';
   }
 }
@@ -2614,9 +2676,7 @@ async function ouvrirFicheFilm(tmdbId,type){
   document.getElementById('modal-fiche-add').onclick=()=>ajouterTmdbDepuisModal(tmdbId,type);
   try{
     const endpoint=type==='tv'?'/tv/':'/movie/';
-    const r=await fetch(TMDB_API+endpoint+tmdbId+'?api_key='+prefs.apiKey+'&language=fr-FR&append_to_response=credits');
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const d=await r.json();
+    const d=await tmdbFetchJson(TMDB_API+endpoint+tmdbId+'?api_key='+encodeURIComponent(ensureTmdbApiKey())+'&language=fr-FR&append_to_response=credits,videos',15000);
     if(!d||d.success===false) throw new Error('Données invalides');
     ficheFilmCourante={...d,_type:type};
     const titre=d.title||d.name||'';
@@ -2644,6 +2704,7 @@ async function ouvrirFicheFilm(tmdbId,type){
       +'</div></div></div>'
       +(genres?'<div class="genres-wrap" style="margin-bottom:14px">'+genres+'</div>':'')
       +(d.overview?'<p class="modal-film-overview">'+esc(d.overview)+'</p>':'')
+      +(extraireCleTrailer(d.videos)?'<a href="https://www.youtube.com/watch?v='+extraireCleTrailer(d.videos)+'" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#c0392b;color:#fff;border-radius:10px;padding:10px;margin:0 0 16px;text-decoration:none;font-weight:bold;font-size:14px">▶ Voir le trailer</a>':'')
       +(cast.length>0?
         '<p class="section-sub">🎭 Casting</p><div class="cast-grid">'
         +cast.map(a=>{
@@ -2676,7 +2737,7 @@ async function ajouterTmdbDepuisModal(tmdbId,type){
     casting:(d.credits?.cast||[]).slice(0,10).map(a=>a.name).join(','),
     castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({id:a.id,name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
     realisateur:(d.credits?.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', '),
-    trailerKey:(()=>{const vids=d.videos&&d.videos.results||[];const t=vids.find(v=>v.type==='Trailer'&&v.site==='YouTube'&&v.iso_639_1==='fr')||vids.find(v=>v.type==='Trailer'&&v.site==='YouTube')||vids.find(v=>v.site==='YouTube');return t?t.key:null;})(),
+    trailerKey:extraireCleTrailer(d.videos),
     nationalite:nat, pays,
     duree:d.runtime||((d.episode_run_time&&d.episode_run_time[0])||0)
   });
@@ -2702,8 +2763,8 @@ async function ajouterTmdb(tmdbId,type,btn){
       d=ficheFilmCourante;
     } else {
       const endpoint=type==='tv'?'/tv/':'/movie/';
-      const r=await fetch(TMDB_API+endpoint+tmdbId+'?api_key='+prefs.apiKey+'&language=fr-FR&append_to_response=credits,videos');
-      d=await r.json();
+      d=await tmdbFetchJson(TMDB_API+endpoint+tmdbId+'?api_key='+encodeURIComponent(ensureTmdbApiKey())+'&language=fr-FR&append_to_response=credits,videos',15000);
+      if(!d||!d.id) throw new Error('Données TMDB invalides');
     }
     const titre=d.title||d.name||'';
     const date=d.release_date||d.first_air_date||'';
@@ -2719,7 +2780,7 @@ async function ajouterTmdb(tmdbId,type,btn){
       casting:(d.credits?.cast||[]).slice(0,10).map(a=>a.name).join(','),
       castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({id:a.id,name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
       realisateur:(d.credits?.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', '),
-      trailerKey:(()=>{const vids=d.videos&&d.videos.results||[];const t=vids.find(v=>v.type==='Trailer'&&v.site==='YouTube'&&v.iso_639_1==='fr')||vids.find(v=>v.type==='Trailer'&&v.site==='YouTube')||vids.find(v=>v.site==='YouTube');return t?t.key:null;})(),
+      trailerKey:extraireCleTrailer(d.videos),
       nationalite:nat, pays,
       duree:d.runtime||((d.episode_run_time&&d.episode_run_time[0])||0)
     });
@@ -2774,8 +2835,7 @@ async function searchSaga(){
     if(studio){
       // Recherche par studio — récupère plusieurs pages pour être exhaustif
       const pages=await Promise.all([1,2,3,4].map(p=>
-        fetch(TMDB_API+'/discover/movie?api_key='+prefs.apiKey+'&with_companies='+studio.companyId+'&language=fr-FR&sort_by=release_date.asc&page='+p+'&include_adult=false')
-        .then(r=>r.json())
+        tmdbFetchJson(TMDB_API+'/discover/movie?api_key='+encodeURIComponent(ensureTmdbApiKey())+'&with_companies='+studio.companyId+'&language=fr-FR&sort_by=release_date.asc&page='+p+'&include_adult=false',15000)
       ));
       filmsResults=pages.flatMap(p=>p.results||[])
         .filter(f=>f.poster_path&&f.title)
@@ -2784,16 +2844,15 @@ async function searchSaga(){
         .sort((a,b)=>(a.release_date||'').localeCompare(b.release_date||''));
 
       // Aussi récupérer les collections pour ce studio
-      const rCol=await fetch(TMDB_API+'/search/collection?api_key='+prefs.apiKey+'&query='+encodeURIComponent(q)+'&language=fr-FR');
-      const dCol=await rCol.json();
+      const dCol=await tmdbFetchJson(TMDB_API+'/search/collection?api_key='+encodeURIComponent(ensureTmdbApiKey())+'&query='+encodeURIComponent(q)+'&language=fr-FR&page=1',15000);
       colResults=dCol.results||[];
     } else {
       // Recherche standard : collections + films par titre
       const [rCol,rFilms]=await Promise.all([
-        fetch(TMDB_API+'/search/collection?api_key='+prefs.apiKey+'&query='+encodeURIComponent(q)+'&language=fr-FR'),
-        fetch(TMDB_API+'/search/movie?api_key='+prefs.apiKey+'&query='+encodeURIComponent(q)+'&language=fr-FR&page=1')
+        tmdbFetchJson(TMDB_API+'/search/collection?api_key='+encodeURIComponent(ensureTmdbApiKey())+'&query='+encodeURIComponent(q)+'&language=fr-FR&page=1',15000),
+        tmdbFetchJson(TMDB_API+'/search/movie?api_key='+encodeURIComponent(ensureTmdbApiKey())+'&query='+encodeURIComponent(q)+'&language=fr-FR&page=1',15000)
       ]);
-      const [dCol,dFilms]=await Promise.all([rCol.json(),rFilms.json()]);
+      const [dCol,dFilms]=await Promise.all([rCol,rFilms]);
       colResults=dCol.results||[];
       filmsResults=(dFilms.results||[]).filter(f=>f.poster_path&&f.title);
     }
@@ -2839,7 +2898,7 @@ async function searchSaga(){
     if(!html) html='<p style="color:var(--text2);text-align:center;padding:20px">Aucun résultat pour "'+esc(q)+'"</p>';
     document.getElementById('saga-results').innerHTML=html;
 
-  }catch(e){document.getElementById('saga-loader').style.display='none';snack('Erreur de connexion');}
+  }catch(e){const msg=tmdbSearchErrorMessage(e);document.getElementById('saga-loader').style.display='none';document.getElementById('saga-results').innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">⚠️ '+esc(msg)+'</p>';snack('⚠️ '+msg);}
 }
 
 async function ajouterTousFilmsStudio(ids, label, btn){
@@ -3112,20 +3171,21 @@ function rechercheTmdbActeur(nom){
 }
 
 async function searchActeur(){
-  const q=document.getElementById('acteur-query').value.trim();
+  const q=(document.getElementById('acteur-query')?.value||'').trim();
   if(!q) return;
-  if(!prefs.apiKey){snack('⚠️ Configurez votre clé API dans Paramètres');return;}
-  document.getElementById('acteur-loader').style.display='block';
-  document.getElementById('acteur-results').innerHTML='';
+  const apiKey=ensureTmdbApiKey();
+  if(!apiKey){snack('⚠️ Configure ta clé TMDB dans Paramètres');return;}
+  const loader=document.getElementById('acteur-loader');
+  const results=document.getElementById('acteur-results');
+  loader.style.display='block';
+  results.innerHTML='';
   try{
-    const r=await fetch(TMDB_API+'/search/person?api_key='+prefs.apiKey+'&query='+encodeURIComponent(q)+'&language=fr-FR');
-    const data=await r.json();
-    document.getElementById('acteur-loader').style.display='none';
+    const data=await tmdbFetchJson(TMDB_API+'/search/person?api_key='+encodeURIComponent(apiKey)+'&query='+encodeURIComponent(q)+'&language=fr-FR&page=1',15000);
     if(!data.results||data.results.length===0){
-      document.getElementById('acteur-results').innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">Aucun acteur trouvé</p>';
+      results.innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">Aucun acteur trouvé</p>';
       return;
     }
-    document.getElementById('acteur-results').innerHTML=data.results.slice(0,8).map(p=>{
+    results.innerHTML=data.results.slice(0,8).map(p=>{
       const connu=(p.known_for||[]).slice(0,3).map(f=>esc(f.title||f.name||'')).join(', ');
       return '<div style="display:flex;gap:12px;background:var(--surface);border-radius:10px;padding:10px;margin-bottom:8px;align-items:center;cursor:pointer" data-pid="'+p.id+'" data-pname="'+esc(p.name)+'" onclick="chargerFilmographie(this.dataset.pid,this.dataset.pname)">'
         +'<img src="'+(p.profile_path?'https://image.tmdb.org/t/p/w185'+p.profile_path:'')+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="" style="width:52px;height:78px;object-fit:cover;border-radius:8px;flex-shrink:0;background:var(--green-dark)">'
@@ -3134,7 +3194,13 @@ async function searchActeur(){
         +'<div style="font-size:11px;color:var(--text2)">'+(connu?'Connu pour : '+connu:'')+'</div>'
         +'</div><span style="color:var(--green-light);font-size:20px">›</span></div>';
     }).join('');
-  }catch(e){document.getElementById('acteur-loader').style.display='none';snack('Erreur de connexion');}
+  }catch(e){
+    const msg=tmdbSearchErrorMessage(e);
+    results.innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">⚠️ '+esc(msg)+'</p>';
+    snack('⚠️ '+msg);
+  }finally{
+    loader.style.display='none';
+  }
 }
 
 async function chargerFilmographie(acteurId,nom){
@@ -3678,15 +3744,50 @@ window.addEventListener('popstate', (e)=>{
 }
 
 
-function saveApiKey(){
-  const k=document.getElementById('api-key-input').value.trim();
-  if(!k){snack('⚠️ Entrez une clé API');return;}
-  prefs.apiKey=k;savePrefs();
-  document.getElementById('api-key-input').value='';
-  document.getElementById('api-key-input').placeholder='Clé active : '+k.slice(0,8)+'...';
-  const keyStatus=document.getElementById('api-key-status');
-  if(keyStatus) keyStatus.textContent='✓ Clé TMDB active';
-  snack('✓ Clé API sauvegardée');
+async function testerCleTmdb(){
+  const keyInput=document.getElementById('api-key-input');
+  const candidate=String((keyInput&&keyInput.value)||prefs.apiKey||'').trim();
+  const status=document.getElementById('api-key-status');
+  const testBtn=document.getElementById('test-api-key-btn');
+  if(candidate.length<20){
+    if(status){status.style.color='var(--red)';status.textContent='⚠️ Colle une clé API TMDB v3 avant de la tester.';}
+    return false;
+  }
+  if(testBtn){testBtn.disabled=true;testBtn.textContent='Test…';}
+  if(status){status.style.color='var(--text2)';status.textContent='Test de connexion à TMDB…';}
+  try{
+    await tmdbFetchJson(TMDB_API+'/configuration?api_key='+encodeURIComponent(candidate),15000);
+    if(status){status.style.color='var(--green-light)';status.textContent='✓ Clé TMDB testée et valide.';}
+    return true;
+  }catch(e){
+    if(status){status.style.color='var(--red)';status.textContent='⚠️ '+tmdbSearchErrorMessage(e);}
+    return false;
+  }finally{
+    if(testBtn){testBtn.disabled=false;testBtn.textContent='Tester la clé';}
+  }
+}
+
+async function saveApiKey(){
+  const input=document.getElementById('api-key-input');
+  const k=String((input&&input.value)||'').trim();
+  const status=document.getElementById('api-key-status');
+  const saveBtn=document.getElementById('save-api-key-btn');
+  if(k.length<20){snack('⚠️ Entre une clé API TMDB v3 complète');return;}
+  if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Vérification…';}
+  if(status){status.style.color='var(--text2)';status.textContent='Vérification de la clé…';}
+  try{
+    await tmdbFetchJson(TMDB_API+'/configuration?api_key='+encodeURIComponent(k),15000);
+    prefs.apiKey=k;savePrefs();
+    if(input){input.value='';input.placeholder='Clé active : '+k.slice(0,8)+'…';}
+    if(status){status.style.color='var(--green-light)';status.textContent='✓ Clé TMDB testée et sauvegardée.';}
+    snack('✓ Clé API TMDB sauvegardée');
+  }catch(e){
+    const msg=tmdbSearchErrorMessage(e);
+    if(status){status.style.color='var(--red)';status.textContent='⚠️ '+msg;}
+    snack('⚠️ '+msg);
+  }finally{
+    if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Sauvegarder';}
+  }
 }
 
 function exporterJSON(){
