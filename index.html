@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.14</title>
+<title>Vidéothèque v1.7.16</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -335,7 +335,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.14</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.16</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -544,6 +544,10 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <button class="search-tab" id="stab-serie" onclick="setSearchTab('serie')">📺 Série</button>
       <button class="search-tab" id="stab-saga" onclick="setSearchTab('saga')">🎯 Saga</button>
       <button class="search-tab" id="stab-manuel" onclick="setSearchTab('manuel')">✏️ Manuel</button>
+    </div>
+
+    <div class="search-action-row" style="display:flex;justify-content:flex-end;gap:8px;margin:-4px 0 12px">
+      <button class="btn btn-primary" id="search-add-shortcut" onclick="openQuickAddFromSearch()" style="padding:8px 14px">➕ Ajout</button>
     </div>
 
     <!-- Film -->
@@ -969,7 +973,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.14';
+const APP_VERSION='v1.7.16';
 const TMDB_IMG='https://image.tmdb.org/t/p/w500';
 const TMDB_BACKDROP='https://image.tmdb.org/t/p/original';
 
@@ -2536,6 +2540,14 @@ function supprimerFilm(id){
 }
 
 // ── SEARCH TABS ──
+function openQuickAddFromSearch(){
+  setSearchTab('manuel');
+  const panel=document.getElementById('panel-manuel');
+  if(panel){
+    panel.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+}
+
 function setSearchTab(tab){
   ['film','acteur','serie','saga','manuel'].forEach(t=>{
     document.getElementById('panel-'+t).style.display=t===tab?'block':'none';
@@ -2561,11 +2573,52 @@ function tmdbSearchErrorMessage(error){
   return 'Impossible de joindre TMDB. Vérifie le réseau, puis teste la clé dans Paramètres.';
 }
 
+function tmdbJsonp(url,timeoutMs=10000){
+  return new Promise((resolve,reject)=>{
+    const callbackName='__tmdb_jsonp_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+    const script=document.createElement('script');
+    let ended=false;
+    let timer=null;
+
+    const cleanup=()=>{
+      if(ended) return;
+      ended=true;
+      clearTimeout(timer);
+      try{ delete window[callbackName]; }catch(_){ window[callbackName]=undefined; }
+      script.remove();
+    };
+
+    window[callbackName]=(data)=>{
+      cleanup();
+      if(data&&data.status_code){
+        reject(new Error('HTTP '+data.status_code+(data.status_message?': '+data.status_message:'')));
+        return;
+      }
+      resolve(data||{});
+    };
+
+    script.async=true;
+    script.src=url+(url.includes('?')?'&':'?')+'callback='+encodeURIComponent(callbackName);
+    script.onerror=()=>{
+      cleanup();
+      reject(new Error('Relais JSONP TMDB indisponible'));
+    };
+    timer=setTimeout(()=>{
+      cleanup();
+      reject(new Error('Délai JSONP TMDB dépassé'));
+    },timeoutMs);
+    document.head.appendChild(script);
+  });
+}
+
 async function tmdbFetchJson(url,timeoutMs=15000){
+  // Essai normal en premier. Sur certains navigateurs/réseaux, cette requête reste
+  // pendante : TMDB propose aussi JSONP, qui passe par un script et évite ce blocage.
   const controller=new AbortController();
   let timer=null;
-  let timedOut=false;
-  const request=(async()=>{
+  const fetchTimeout=Math.min(6500,Math.max(3000,timeoutMs-8000));
+  try{
+    timer=setTimeout(()=>{ try{ controller.abort(); }catch(_){} },fetchTimeout);
     const response=await fetch(url,{
       method:'GET',
       mode:'cors',
@@ -2574,26 +2627,25 @@ async function tmdbFetchJson(url,timeoutMs=15000){
       headers:{Accept:'application/json'}
     });
     const raw=await response.text();
-    let data=null;
+    let data={};
     try{ data=raw?JSON.parse(raw):{}; }catch(_){ throw new Error('Réponse TMDB illisible'); }
     if(!response.ok){
       const detail=data&&data.status_message?': '+data.status_message:'';
       throw new Error('HTTP '+response.status+detail);
     }
     return data;
-  })();
-  const watchdog=new Promise((_,reject)=>{
-    timer=setTimeout(()=>{
-      timedOut=true;
-      try{controller.abort();}catch(_){}
-      reject(new Error('Délai TMDB dépassé'));
-    },timeoutMs);
-  });
-  try{
-    return await Promise.race([request,watchdog]);
-  }catch(error){
-    if(timedOut||error&&error.name==='AbortError') throw new Error('Délai TMDB dépassé');
-    throw error;
+  }catch(fetchError){
+    const message=String((fetchError&&fetchError.message)||'');
+    // Une vraie réponse API (clé refusée, limite, titre introuvable...) ne doit pas
+    // être masquée par un second essai.
+    if(/^HTTP\s+(401|403|404|429)\b/.test(message)) throw fetchError;
+    try{
+      return await tmdbJsonp(url,Math.max(9000,timeoutMs));
+    }catch(jsonpError){
+      const jsonpMessage=String((jsonpError&&jsonpError.message)||'');
+      if(/^HTTP\s+\d+\b/.test(jsonpMessage)) throw jsonpError;
+      throw new Error('Délai TMDB dépassé');
+    }
   }finally{
     clearTimeout(timer);
   }
@@ -2618,10 +2670,20 @@ async function searchTmdb(type){
 
   const loader=document.getElementById(loaderId);
   const results=document.getElementById(resultsId);
+  const input=document.getElementById(inputId);
+  const searchBtn=input?input.parentElement.querySelector('button'):null;
   if(!loader||!results){snack('Erreur interne de recherche');return;}
   const searchId=++tmdbSearchSequence;
   loader.style.display='block';
   results.innerHTML='';
+  if(searchBtn){ searchBtn.disabled=true; searchBtn.textContent='⏳'; }
+
+  const watchdog=setTimeout(()=>{
+    if(searchId!==tmdbSearchSequence) return;
+    loader.style.display='none';
+    results.innerHTML='<div style="text-align:center;padding:20px;color:var(--text2)"><p style="margin:0 0 12px">⚠️ TMDB ne répond pas par la connexion normale ni par le relais de secours. Vérifie la clé dans Paramètres, puis réessaie.</p><button class="btn btn-primary" onclick="searchTmdb(\''+type+'\')">Réessayer</button></div>';
+    if(searchBtn){ searchBtn.disabled=false; searchBtn.textContent='🔍'; }
+  },24000);
 
   try{
     const url=TMDB_API+'/search/'+type+'?api_key='+encodeURIComponent(apiKey)
@@ -2657,7 +2719,9 @@ async function searchTmdb(type){
     results.innerHTML='<div style="text-align:center;padding:20px;color:var(--text2)"><p style="margin:0 0 12px">⚠️ '+esc(message)+'</p><button class="btn btn-primary" onclick="searchTmdb(\''+type+'\')">Réessayer</button></div>';
     snack('⚠️ '+message);
   }finally{
+    clearTimeout(watchdog);
     if(searchId===tmdbSearchSequence) loader.style.display='none';
+    if(searchBtn){ searchBtn.disabled=false; searchBtn.textContent='🔍'; }
   }
 }
 
