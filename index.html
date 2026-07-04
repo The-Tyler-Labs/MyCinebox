@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.17</title>
+<title>Vidéothèque v1.7.18</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -335,7 +335,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.17</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.18</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -428,7 +428,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <input type="search" placeholder="🔍 Rechercher dans toute la médiathèque..." id="search-local"
         style="flex:1;background:var(--surface);border:1px solid #333;border-radius:10px;padding:10px 14px;color:#fff;font-size:14px;outline:none"
         oninput="renderCollection()">
-      <button id="btn-ajout-top" onclick="ouvrirAjoutDepuisCollection()"
+      <button id="btn-ajout-top" data-role="collection-add" onclick="ouvrirAjoutDepuisCollection()"
         style="background:var(--green);border:1px solid var(--green-light);border-radius:10px;padding:10px 14px;color:#fff;font-size:22px;line-height:1;cursor:pointer" title="Ajouter un film, une série ou autre" aria-label="Ajouter">+</button>
       <button id="btn-filtres" onclick="toggleFiltres()"
         style="background:var(--surface);border:1px solid #333;border-radius:10px;padding:10px 14px;color:var(--text2);font-size:20px;cursor:pointer">⚙️</button>
@@ -968,7 +968,17 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.17';
+const APP_VERSION='v1.7.18';
+
+// Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
+// On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
+function nettoyerAncienBoutonAjoutRecherche(){
+  const page=document.getElementById('page-search');
+  if(!page) return;
+  page.querySelectorAll('.search-action-row,#search-add-shortcut,#btn-ajout-search,[data-role="search-add"]').forEach(el=>el.remove());
+}
+document.addEventListener('DOMContentLoaded', nettoyerAncienBoutonAjoutRecherche);
+
 const TMDB_IMG='https://image.tmdb.org/t/p/w500';
 const TMDB_BACKDROP='https://image.tmdb.org/t/p/original';
 

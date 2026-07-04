@@ -1,5 +1,5 @@
-// MyCinebox service worker — version 2026-07-04-v1.7.17-tmdb-revert-top-add
-const CACHE_NAME = 'mycinebox-cache-2026-07-04-v1-7-17-tmdb-revert-top-add';
+// MyCinebox service worker — version 2026-07-04-v1.7.18-placement-ajout
+const CACHE_NAME = 'mycinebox-cache-2026-07-04-v1-7-18-placement-ajout';
 const APP_SHELL = [
   '/MyCinebox/',
   '/MyCinebox/index.html',
