@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.20</title>
+<title>Vidéothèque v1.7.21</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -335,7 +335,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.20</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.21</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -971,7 +971,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.20';
+const APP_VERSION='v1.7.21';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1090,10 +1090,40 @@ function charger(){
 }
 let _saveCount=0;
 function sauvegarder(){
-  localStorage.setItem(DB_KEY,JSON.stringify(films));
+  // Garder deux copies complètes de la collection dans localStorage consommait
+  // inutilement beaucoup de place et empêchait l'import d'images normales.
+  const contenu=JSON.stringify(films);
+  const backupKey=DB_KEY+'_backup';
+  const backupDateKey=DB_KEY+'_backup_date';
+  const ancienBackup=localStorage.getItem(backupKey);
+  const ancienneDate=localStorage.getItem(backupDateKey);
 
-  localStorage.setItem(DB_KEY+'_backup',JSON.stringify(films));
-  localStorage.setItem(DB_KEY+'_backup_date',new Date().toISOString());
+  try{
+    // On libère d'abord la copie de secours : le stockage navigateur est limité.
+    localStorage.removeItem(backupKey);
+    localStorage.removeItem(backupDateKey);
+    localStorage.setItem(DB_KEY,contenu);
+
+    // Une deuxième copie locale reste utile pour les petites collections, sans
+    // bloquer les collections plus grandes ou avec des photos personnalisées.
+    if(contenu.length<=1500000){
+      try{
+        localStorage.setItem(backupKey,contenu);
+        localStorage.setItem(backupDateKey,new Date().toISOString());
+      }catch(_){
+        localStorage.removeItem(backupKey);
+        localStorage.removeItem(backupDateKey);
+      }
+    }
+  }catch(e){
+    // On tente de restaurer l'ancien secours si l'écriture principale échoue.
+    try{
+      if(ancienBackup!==null) localStorage.setItem(backupKey,ancienBackup);
+      if(ancienneDate!==null) localStorage.setItem(backupDateKey,ancienneDate);
+    }catch(_){}
+    throw e;
+  }
+
   _saveCount++;
   // Sauvegarde auto Drive si connecté (avec délai pour éviter trop d'appels)
   if(_googleToken){
@@ -4060,28 +4090,56 @@ function importerImageMedia(input){
   }
 
   const estPhotoDuHaut=cible==='backdrop';
-  const maxW=estPhotoDuHaut?1280:600;
-  const maxH=estPhotoDuHaut?720:900;
-  const maxChars=estPhotoDuHaut?650000:380000;
+  // Plusieurs niveaux : une photo venant d’un téléphone ou d’un PC est réduite
+  // automatiquement jusqu’à pouvoir être sauvegardée dans MyCinebox.
+  const profils=estPhotoDuHaut
+    ?[
+        {maxW:960,maxH:540,maxChars:170000},
+        {maxW:760,maxH:428,maxChars:110000},
+        {maxW:600,maxH:338,maxChars:75000}
+      ]
+    :[
+        {maxW:420,maxH:630,maxChars:105000},
+        {maxW:340,maxH:510,maxChars:70000},
+        {maxW:280,maxH:420,maxChars:48000}
+      ];
 
-  compresserImageImportee(file,maxW,maxH,maxChars)
-    .then(dataUrl=>{
-      const cle=estPhotoDuHaut?'backdropPath':'affichePath';
-      const ancienneValeur=f[cle];
+  const cle=estPhotoDuHaut?'backdropPath':'affichePath';
+  const ancienneValeur=f[cle];
+  let derniereErreur=null;
+
+  (async()=>{
+    for(const profil of profils){
+      let dataUrl;
+      try{
+        dataUrl=await compresserImageImportee(file,profil.maxW,profil.maxH,profil.maxChars);
+      }catch(e){
+        derniereErreur=e;
+        break;
+      }
+
       f[cle]=dataUrl;
       try{
         sauvegarder();
-      }catch(e){
-        f[cle]=ancienneValeur;
-        snack('⚠️ Cette image est encore trop lourde. Essaie une photo plus légère.');
+        fermerModal('modal-affiche-film');
+        afficherDetail(f);
+        snack(estPhotoDuHaut?'✓ Photo du haut importée':'✓ Affiche importée');
         return;
+      }catch(e){
+        derniereErreur=e;
+        f[cle]=ancienneValeur;
       }
-      fermerModal('modal-affiche-film');
-      afficherDetail(f);
-      snack(estPhotoDuHaut?'✓ Photo du haut importée':'✓ Affiche importée');
-    })
-    .catch(()=>snack('⚠️ Impossible de lire cette image.'))
-    .finally(()=>{ if(input) input.value=''; });
+    }
+
+    f[cle]=ancienneValeur;
+    const quota=derniereErreur&&(
+      derniereErreur.name==='QuotaExceededError'||
+      /quota|storage|espace/i.test(String(derniereErreur.message||''))
+    );
+    snack(quota
+      ?'⚠️ Plus assez de place dans le navigateur pour cette image. Sauvegarde sur Drive puis réessaie.'
+      :'⚠️ Impossible de préparer cette image. Essaie un autre fichier.');
+  })().finally(()=>{ if(input) input.value=''; });
 }
 
 function compresserImageImportee(file,maxW,maxH,maxChars){
@@ -4108,16 +4166,21 @@ function compresserImageImportee(file,maxW,maxH,maxChars){
           return canvas.toDataURL('image/jpeg',qualite);
         };
 
-        let qualite=.84;
+        let qualite=.78;
         let data=render(largeur,hauteur,qualite);
-        while(data.length>maxChars&&qualite>.48){
-          qualite-=.08;
+        while(data.length>maxChars&&qualite>.30){
+          qualite=Math.max(.30,qualite-.08);
           data=render(largeur,hauteur,qualite);
         }
-        while(data.length>maxChars&&largeur>260&&hauteur>260){
-          largeur=Math.max(260,Math.round(largeur*.82));
-          hauteur=Math.max(260,Math.round(hauteur*.82));
+        while(data.length>maxChars&&(largeur>180||hauteur>180)){
+          largeur=Math.max(180,Math.round(largeur*.80));
+          hauteur=Math.max(180,Math.round(hauteur*.80));
           data=render(largeur,hauteur,qualite);
+          while(data.length>maxChars&&qualite>.30){
+            qualite=Math.max(.30,qualite-.06);
+            data=render(largeur,hauteur,qualite);
+          }
+          if(largeur===180&&hauteur===180) break;
         }
         resolve(data);
       };
