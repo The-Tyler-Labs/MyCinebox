@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.18</title>
+<title>Vidéothèque v1.7.20</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -335,7 +335,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.18</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.20</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -765,10 +765,13 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   </div>
 </div>
 
-<!-- MODAL CHOIX AFFICHE FILM -->
+<!-- MODAL PHOTO DU FILM : choix TMDB ou import depuis l'appareil -->
 <div class="modal-overlay" id="modal-affiche-film" onclick="if(event.target===this)fermerModal('modal-affiche-film')">
   <div class="modal-box" style="padding:20px;max-height:80vh;overflow-y:auto">
-    <h3 style="font-size:17px;font-weight:bold;margin-bottom:14px">🖼 Choisir une affiche</h3>
+    <h3 id="media-picker-title" style="font-size:17px;font-weight:bold;margin-bottom:5px">🖼 Choisir une affiche</h3>
+    <p id="media-picker-help" style="font-size:12px;color:var(--text2);margin:0 0 12px">Choisis une image TMDB ou importe la tienne.</p>
+    <button class="btn btn-primary" type="button" style="width:100%;margin-bottom:12px" onclick="document.getElementById('media-upload-input').click()">📤 Importer une image depuis cet appareil</button>
+    <input id="media-upload-input" type="file" accept="image/*" style="display:none" onchange="importerImageMedia(this)">
     <div id="affiche-film-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px"></div>
     <button class="btn" style="width:100%;margin-top:14px;background:var(--surface2);color:var(--text2)" onclick="fermerModal('modal-affiche-film')">Fermer</button>
   </div>
@@ -968,7 +971,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.18';
+const APP_VERSION='v1.7.20';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -2051,27 +2054,55 @@ function extraireCleTrailer(videos){
   return trailer?trailer.key:null;
 }
 
-const _trailersSeriesEnCours=new Set();
-function actualiserTrailerSerie(f){
-  if(!f||f.categorie!=='series'||!f.tmdbId||f.trailerKey) return;
-  const identifiant='tv-'+f.tmdbId;
-  if(_trailersSeriesEnCours.has(identifiant)) return;
-  _trailersSeriesEnCours.add(identifiant);
+const _trailersEnCours=new Set();
 
-  const demander=(langue)=>fetch(
-    TMDB_API+'/tv/'+f.tmdbId+'/videos?api_key='+encodeURIComponent(prefs.apiKey)+'&language='+langue
-  ).then(r=>r.ok?r.json():null).then(d=>extraireCleTrailer(d&&d.results?{results:d.results}:d));
+// Cherche une vraie bande-annonce TMDB pour les films ET les séries.
+// On teste le français, puis l’anglais, puis toutes les vidéos disponibles.
+function actualiserTrailer(f){
+  if(!f||!f.tmdbId||f.trailerKey) return Promise.resolve(f&&f.trailerKey?f.trailerKey:null);
+  const type=f.categorie==='series'?'tv':'movie';
+  const identifiant=type+'-'+f.tmdbId;
+  if(_trailersEnCours.has(identifiant)) return Promise.resolve(null);
+  _trailersEnCours.add(identifiant);
 
-  demander('fr-FR')
-    .then(cle=>cle||demander('en-US'))
+  const chercher=async()=>{
+    const cleApi=ensureTmdbApiKey();
+    if(!cleApi) return null;
+    const langues=['fr-FR','en-US',''];
+    for(const langue of langues){
+      try{
+        const suffix=langue?'&language='+encodeURIComponent(langue):'';
+        const data=await tmdbFetchJson(
+          TMDB_API+'/'+type+'/'+f.tmdbId+'/videos?api_key='+encodeURIComponent(cleApi)+suffix,
+          12000
+        );
+        const cle=extraireCleTrailer(data);
+        if(cle) return cle;
+      }catch(_){
+        // On essaie la langue suivante ; le bouton YouTube de secours reste disponible.
+      }
+    }
+    return null;
+  };
+
+  return chercher()
     .then(cle=>{
-      if(!cle) return;
+      if(!cle) return null;
       f.trailerKey=cle;
       sauvegarder();
       if(currentPage==='detail') afficherDetail(f);
+      return cle;
     })
-    .catch(()=>{})
-    .finally(()=>_trailersSeriesEnCours.delete(identifiant));
+    .finally(()=>_trailersEnCours.delete(identifiant));
+}
+
+// Compatibilité avec les anciennes fonctions déjà appelées dans le code.
+function actualiserTrailerSerie(f){ return actualiserTrailer(f); }
+
+function urlRechercheTrailerYoutube(f){
+  const annee=(f&&f.dateSortie?String(f.dateSortie).slice(0,4):'');
+  const titre=f&&f.titre?f.titre:'';
+  return 'https://www.youtube.com/results?search_query='+encodeURIComponent(titre+(annee?' '+annee:'')+' bande-annonce officielle');
 }
 function cycleStatut(id){
   const f=films.find(f=>f.id===id);if(!f) return;
@@ -2095,13 +2126,12 @@ function ouvrirDetail(id){
 
   // Les anciennes séries peuvent avoir été ajoutées avant l'enregistrement
   // du trailer : on les complète avec l'endpoint vidéo dédié.
-  actualiserTrailerSerie(f);
+  actualiserTrailer(f);
 
   // Toujours recharger depuis TMDB pour avoir photos, trailer à jour
   if(f.tmdbId){
     const endpoint=f.categorie==='series'?'/tv/':'/movie/';
-    fetch(TMDB_API+endpoint+f.tmdbId+'?api_key='+prefs.apiKey+'&language=fr-FR&append_to_response=season/1,season/2,season/3,season/4,season/5,videos,credits')
-      .then(r=>r.json())
+    tmdbFetchJson(TMDB_API+endpoint+f.tmdbId+'?api_key='+encodeURIComponent(ensureTmdbApiKey())+'&language=fr-FR&append_to_response=season/1,season/2,season/3,season/4,season/5,videos,credits',15000)
       .then(d=>{
         // Vérifier qu'on est encore sur cette fiche
         if(currentPage!=='detail') return;
@@ -2110,6 +2140,7 @@ function ouvrirDetail(id){
         // Trailer FR en priorité, pour films comme pour séries.
         const trailerKey=extraireCleTrailer(d.videos);
         if(trailerKey) f.trailerKey=trailerKey;
+        else actualiserTrailer(f);
         if(d.credits&&d.credits.crew){
           f.realisateur=(d.credits.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', ');
         }
@@ -2222,11 +2253,12 @@ function afficherDetail(f){
     +'<img class="detail-backdrop" src="'+(f.backdropPath||f.affichePath||'')+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="" onclick="voirPhoto(this.src)" style="cursor:pointer" title="Cliquer pour agrandir">'
     +'<button onclick="goPage(prevPage)" style="position:absolute;top:12px;left:12px;background:rgba(0,0,0,.6);border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-size:20px;border:none;color:#fff;cursor:pointer">←</button>'
     +'<span style="position:absolute;top:12px;right:12px;background:rgba(0,0,0,.6);padding:4px 10px;border-radius:12px;font-size:13px">'+cat.icon+' '+cat.label+'</span>'
+    +'<button onclick="choisirBackdropFilm('+f.id+')" style="position:absolute;bottom:10px;right:12px;background:rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.35);border-radius:14px;padding:6px 10px;color:#fff;font-size:11px;cursor:pointer">🖼 Photo du haut</button>'
     +'</div>'
     +'<div class="detail-body">'
     +'<div class="detail-header">'
     +'<img class="detail-poster" src="'+(f.affichePath||'')+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="" onclick="voirPhoto(\''+(f.affichePath||'')+'\')" style="cursor:pointer" title="Voir en grand">'
-    +'<div style="font-size:9px;color:var(--text2);text-align:center;margin-top:3px;cursor:pointer" onclick="choisirAfficheFilm('+f.id+')">🖼 Changer</div>'
+    +'<div style="font-size:9px;color:var(--text2);text-align:center;margin-top:3px;cursor:pointer" onclick="choisirAfficheFilm('+f.id+')">🖼 Affiche / importer</div>'
     +'<div class="detail-info">'
     +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px"><h2 style="margin:0">'+esc(f.titre)+'</h2><button onclick="modifierTitre('+f.id+')" style="background:none;border:none;color:var(--text2);font-size:14px;cursor:pointer;padding:2px">✏️</button></div>'
     +(f.titreAlt?'<p style="font-size:12px;color:var(--text2);margin-bottom:4px;font-style:italic;cursor:pointer" onclick="modifierTitreAlt('+f.id+')">('+esc(f.titreAlt)+')</p>':'<p style="font-size:11px;color:var(--text2);opacity:.5;cursor:pointer;margin-bottom:4px" onclick="modifierTitreAlt('+f.id+')">+ Ajouter un titre alternatif</p>')
@@ -2290,10 +2322,10 @@ function afficherDetail(f){
     +'</div>'
     +(f.resume?'<p class="detail-overview">'+esc(f.resume)+'</p>':'')
     +(f.trailerKey
-      ?'<a href="https://www.youtube.com/watch?v='+f.trailerKey+'" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:10px;background:#c0392b;color:#fff;border-radius:10px;padding:12px;margin-bottom:16px;text-decoration:none;font-weight:bold;font-size:14px">'
+      ?'<a href="https://www.youtube.com/watch?v='+f.trailerKey+'" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:10px;background:#c0392b;color:#fff;border-radius:10px;padding:12px;margin-bottom:16px;text-decoration:none;font-weight:bold;font-size:14px">'
         +'<svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>'
         +'▶ Voir le trailer</a>'
-      :''
+      :'<a href="'+urlRechercheTrailerYoutube(f)+'" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:10px;background:#333;color:#fff;border:1px solid #555;border-radius:10px;padding:12px;margin-bottom:16px;text-decoration:none;font-weight:bold;font-size:14px">🔎 Chercher la bande-annonce sur YouTube</a>'
     )
     +(f.noteManuelle?'<p style="font-size:13px;color:var(--text2);background:var(--surface2);padding:10px;border-radius:8px;margin-bottom:16px">📝 '+esc(f.noteManuelle)+'</p>':'')
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Catégorie</p>'
@@ -2301,7 +2333,7 @@ function afficherDetail(f){
     +Object.entries(CATS).map(([k,v])=>`<button class="qualite-btn${f.categorie===k?' active':''}" onclick="changerCategorie(${f.id},'${k}')">${v.icon} ${v.label}</button>`).join('')
     +'</div>'
     +'<div class="statut-row">'
-    +STATUTS.filter(s=>s!=='').map(s=>{const si=statutInfo(s);const actif=(f.statut||'')=== s?' active':'';return '<button class="statut-opt '+si.cls+actif+'" data-statut="'+s+'" data-fid="'+f.id+'" onclick="setStatutDetailBtn(this)">'+si.label+'</button>';}).join('')
+    +STATUTS.filter(s=>s!=='').map(s=>{const si=statutInfo(s);const actif=(f.statut||'')=== s?' active':'';return '<button class="statut-opt '+si.cls+actif+'" data-statut="'+s+'" data-fid="'+f.id+'" onclick="event.preventDefault();return setStatutDetailBtn(this)">'+si.label+'</button>';}).join('')
     +'</div>'
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Qualité</p>'
     +'<div class="qualite-row" id="qualite-row-'+f.id+'">'
@@ -2418,19 +2450,25 @@ function changerCategorie(id,cat){
 function setStatutDetailBtn(btn){
   const id=parseInt(btn.dataset.fid);
   const s=btn.dataset.statut;
-  const f=films.find(f=>f.id===id);if(!f) return;
-  // Si déjà actif, désélectionner
-  const nouveau=f.statut===s?'':s;
-  f.statut=nouveau;f.estVu=(nouveau==='vu');
+  const f=films.find(f=>f.id===id);if(!f) return false;
+
+  // Un deuxième clic sur le même statut l’enlève réellement.
+  // On vérifie aussi la classe affichée afin que l’interface reste cohérente
+  // même pour une ancienne fiche importée.
+  const estDejaActif=(f.statut===s)||btn.classList.contains('active');
+  const nouveau=estDejaActif?'':s;
+  f.statut=nouveau;
+  f.estVu=(nouveau==='vu');
   sauvegarder();
-  // Mettre à jour visuellement tous les boutons du groupe
-  (btn.closest('.statut-row')||btn.parentElement).querySelectorAll('.statut-opt').forEach(b=>{
-    b.classList.toggle('active', b.dataset.statut===nouveau);
-    // Mettre à jour les classes de couleur
-    const si=statutInfo(b.dataset.statut);
-    b.className='statut-opt '+si.cls+(b.dataset.statut===nouveau?' active':'');
+
+  const ligne=btn.closest('.statut-row')||btn.parentElement;
+  ligne.querySelectorAll('.statut-opt').forEach(b=>{
+    const actif=b.dataset.statut===nouveau;
+    b.className='statut-opt '+statutInfo(b.dataset.statut).cls+(actif?' active':'');
+    b.setAttribute('aria-pressed',actif?'true':'false');
   });
   snack(nouveau?statutInfo(nouveau).label+' ✓':'Statut retiré');
+  return false;
 }
 function setStatutDetail(id,statut){
   const f=films.find(f=>f.id===id);if(!f) return;
@@ -3950,69 +3988,163 @@ function setAfficheSaga(saga,affiche){
 }
 
 function choisirAfficheFilm(id){
-  const f=films.find(f=>f.id===id);if(!f) return;
-  // Rechercher une nouvelle affiche sur TMDB
-  if(f.tmdbId){
-    const endpoint=f.categorie==='series'?'/tv/':'/movie/';
-    fetch(TMDB_API+endpoint+f.tmdbId+'/images?api_key='+prefs.apiKey+'&include_image_language=fr,null,en')
-      .then(r=>r.json())
-      .then(d=>{
-        const posters=[...(d.posters||[])].slice(0,12);
-        if(!posters.length){snack('Aucune affiche disponible');return;}
-        const modal=document.getElementById('modal-affiche-film');
-        if(!modal){snack('Erreur: modal manquante');return;}
-        window._afficheFilmId=id;
-        const grid=document.getElementById('affiche-film-grid');
-        grid.innerHTML='';
-        posters.forEach(p=>{
-          const url='https://image.tmdb.org/t/p/w342'+p.file_path;
-          const div=document.createElement('div');
-          div.style.cssText='cursor:pointer;border-radius:8px;overflow:hidden;border:3px solid transparent';
-          const img=document.createElement('img');
-          img.src=url;
-          img.style.cssText='width:100%;aspect-ratio:2/3;object-fit:cover;display:block';
-          div.appendChild(img);
-          div.addEventListener('click',function(e){
-            e.stopPropagation();
-            const f=films.find(f=>f.id===window._afficheFilmId);
-            if(!f){snack('Film non trouvé');return;}
-            f.affichePath=url;
-            sauvegarder();
-            document.getElementById('modal-affiche-film').classList.remove('open');
-            document.querySelectorAll('.detail-backdrop').forEach(i=>{i.src=url;});
-            document.querySelectorAll('#page-detail .poster-wrap img').forEach(i=>{i.src=url;});
-            // Aussi mettre à jour l'affichage complet de la fiche
-            const filmAff=films.find(ff=>ff.id===window._afficheFilmId);
-            if(filmAff) afficherDetail(filmAff);
-            snack('✓ Affiche mise à jour');
-          });
-          grid.appendChild(div);
-        });
-        modal.classList.add('open');
-      })
-      .catch(()=>snack('Erreur chargement affiches'));
-  } else {
-    snack('⚠️ Pas de TMDB ID — affiche non disponible');
+  ouvrirChoixImageFilm(id,'poster');
+}
+
+function choisirBackdropFilm(id){
+  ouvrirChoixImageFilm(id,'backdrop');
+}
+
+function ouvrirChoixImageFilm(id,cible){
+  const f=films.find(x=>x.id===id);
+  const modal=document.getElementById('modal-affiche-film');
+  const grid=document.getElementById('affiche-film-grid');
+  const title=document.getElementById('media-picker-title');
+  const help=document.getElementById('media-picker-help');
+  const input=document.getElementById('media-upload-input');
+  if(!f||!modal||!grid){snack('Erreur : choix d’image indisponible');return;}
+
+  window._mediaFilmId=id;
+  window._mediaTarget=cible;
+  if(input) input.value='';
+  if(title) title.textContent=cible==='backdrop'?'🖼 Choisir la photo du haut':'🖼 Choisir une affiche';
+  if(help) help.textContent='Choisis une image proposée par TMDB ou importe une image depuis ton téléphone, ta tablette ou ton PC.';
+  grid.style.gridTemplateColumns=cible==='backdrop'?'repeat(2,1fr)':'repeat(3,1fr)';
+  grid.innerHTML='<div style="grid-column:1/-1;color:var(--text2);font-size:12px;text-align:center;padding:10px">Chargement des images proposées…</div>';
+  modal.classList.add('open');
+
+  // L’import local reste disponible même si le titre a été créé manuellement
+  // ou si TMDB ne répond pas.
+  if(!f.tmdbId){
+    grid.innerHTML='<div style="grid-column:1/-1;color:var(--text2);font-size:12px;text-align:center;padding:10px">Aucune image TMDB pour ce titre. Utilise le bouton « Importer une image » ci-dessus.</div>';
+    return;
   }
+
+  const endpoint=f.categorie==='series'?'/tv/':'/movie/';
+  tmdbFetchJson(TMDB_API+endpoint+f.tmdbId+'/images?api_key='+encodeURIComponent(ensureTmdbApiKey())+'&include_image_language=fr,null,en',15000)
+    .then(d=>{
+      const images=(cible==='backdrop'?(d.backdrops||[]):(d.posters||[])).slice(0,18);
+      if(!images.length){
+        grid.innerHTML='<div style="grid-column:1/-1;color:var(--text2);font-size:12px;text-align:center;padding:10px">Aucune image proposée. Tu peux importer la tienne ci-dessus.</div>';
+        return;
+      }
+      grid.innerHTML='';
+      images.forEach(item=>{
+        const url='https://image.tmdb.org/t/p/'+(cible==='backdrop'?'w780':'w342')+item.file_path;
+        const div=document.createElement('div');
+        div.style.cssText='cursor:pointer;border-radius:8px;overflow:hidden;border:2px solid transparent;background:var(--surface2)';
+        const img=document.createElement('img');
+        img.src=url;
+        img.alt='';
+        img.style.cssText='width:100%;aspect-ratio:'+(cible==='backdrop'?'16/9':'2/3')+';object-fit:cover;display:block';
+        div.appendChild(img);
+        div.addEventListener('click',()=>setImageFilm(id,url,cible));
+        grid.appendChild(div);
+      });
+    })
+    .catch(()=>{
+      grid.innerHTML='<div style="grid-column:1/-1;color:var(--text2);font-size:12px;text-align:center;padding:10px">Les images TMDB ne sont pas disponibles. Tu peux quand même importer la tienne ci-dessus.</div>';
+    });
+}
+
+function importerImageMedia(input){
+  const file=input&&input.files&&input.files[0];
+  const id=window._mediaFilmId;
+  const cible=window._mediaTarget||'poster';
+  const f=films.find(x=>x.id===id);
+  if(!file||!f) return;
+  if(!String(file.type||'').startsWith('image/')){
+    snack('⚠️ Choisis un fichier image.');
+    input.value='';
+    return;
+  }
+
+  const estPhotoDuHaut=cible==='backdrop';
+  const maxW=estPhotoDuHaut?1280:600;
+  const maxH=estPhotoDuHaut?720:900;
+  const maxChars=estPhotoDuHaut?650000:380000;
+
+  compresserImageImportee(file,maxW,maxH,maxChars)
+    .then(dataUrl=>{
+      const cle=estPhotoDuHaut?'backdropPath':'affichePath';
+      const ancienneValeur=f[cle];
+      f[cle]=dataUrl;
+      try{
+        sauvegarder();
+      }catch(e){
+        f[cle]=ancienneValeur;
+        snack('⚠️ Cette image est encore trop lourde. Essaie une photo plus légère.');
+        return;
+      }
+      fermerModal('modal-affiche-film');
+      afficherDetail(f);
+      snack(estPhotoDuHaut?'✓ Photo du haut importée':'✓ Affiche importée');
+    })
+    .catch(()=>snack('⚠️ Impossible de lire cette image.'))
+    .finally(()=>{ if(input) input.value=''; });
+}
+
+function compresserImageImportee(file,maxW,maxH,maxChars){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onerror=()=>reject(reader.error||new Error('Lecture impossible'));
+    reader.onload=()=>{
+      const image=new Image();
+      image.onerror=()=>reject(new Error('Image invalide'));
+      image.onload=()=>{
+        let largeur=image.naturalWidth||image.width;
+        let hauteur=image.naturalHeight||image.height;
+        const ratio=Math.min(maxW/largeur,maxH/hauteur,1);
+        largeur=Math.max(1,Math.round(largeur*ratio));
+        hauteur=Math.max(1,Math.round(hauteur*ratio));
+
+        const render=(w,h,qualite)=>{
+          const canvas=document.createElement('canvas');
+          canvas.width=w;canvas.height=h;
+          const ctx=canvas.getContext('2d');
+          ctx.fillStyle='#000';
+          ctx.fillRect(0,0,w,h);
+          ctx.drawImage(image,0,0,w,h);
+          return canvas.toDataURL('image/jpeg',qualite);
+        };
+
+        let qualite=.84;
+        let data=render(largeur,hauteur,qualite);
+        while(data.length>maxChars&&qualite>.48){
+          qualite-=.08;
+          data=render(largeur,hauteur,qualite);
+        }
+        while(data.length>maxChars&&largeur>260&&hauteur>260){
+          largeur=Math.max(260,Math.round(largeur*.82));
+          hauteur=Math.max(260,Math.round(hauteur*.82));
+          data=render(largeur,hauteur,qualite);
+        }
+        resolve(data);
+      };
+      image.src=reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function setAfficheFilmFromEl(el){
   const id=parseInt(el.dataset.id);
   const url=el.dataset.url;
-  setAfficheFilm(id,url);
+  setImageFilm(id,url,'poster');
 }
 
 function setAfficheFilm(id,url){
-  const f=films.find(f=>f.id===id);if(!f) return;
-  f.affichePath=url;
+  setImageFilm(id,url,'poster');
+}
+
+function setImageFilm(id,url,cible='poster'){
+  const f=films.find(x=>x.id===id);if(!f) return;
+  if(cible==='backdrop') f.backdropPath=url;
+  else f.affichePath=url;
   sauvegarder();
   fermerModal('modal-affiche-film');
-  // Mettre à jour l'image sans recharger toute la page
-  const backdrop=document.querySelector('#page-detail .detail-backdrop');
-  if(backdrop) backdrop.src=url;
-  const poster=document.querySelector('#page-detail .detail-poster img');
-  if(poster) poster.src=url;
-  snack('✓ Affiche mise à jour');
+  afficherDetail(f);
+  snack(cible==='backdrop'?'✓ Photo du haut mise à jour':'✓ Affiche mise à jour');
 }
 
 function supprimerPays(id,idx){
