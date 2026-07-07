@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.21</title>
+<title>Vidéothèque v1.7.23</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -335,7 +335,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.21</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.23</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -425,7 +425,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   </div>
   <div id="coll-sticky" style="position:sticky;top:0;z-index:95;background:var(--bg);padding:8px 0 0">
     <div style="display:flex;gap:8px;margin-bottom:10px">
-      <input type="search" placeholder="🔍 Rechercher dans toute la médiathèque..." id="search-local"
+      <input type="search" placeholder="🔍 Rechercher par titre..." id="search-local"
         style="flex:1;background:var(--surface);border:1px solid #333;border-radius:10px;padding:10px 14px;color:#fff;font-size:14px;outline:none"
         oninput="renderCollection()">
       <button id="btn-ajout-top" data-role="collection-add" onclick="ouvrirAjoutDepuisCollection()"
@@ -495,7 +495,19 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       </div>
       <div class="filtre-groupe">
         <span class="filtre-label">Acteur / Actrice</span>
-        <input class="filtre-input" type="text" id="filtre-acteur" placeholder="ex: Arnold Schwarzenegger" oninput="renderCollection()">
+        <input class="filtre-input" type="search" id="filtre-acteur" placeholder="ex: Arnold Schwarzenegger" autocomplete="off" oninput="renderCollection()">
+      </div>
+      <div class="filtre-groupe">
+        <span class="filtre-label">Réalisateur / Réalisatrice</span>
+        <input class="filtre-input" type="search" id="filtre-realisateur" placeholder="ex: Richard Donner" autocomplete="off" oninput="renderCollection()">
+      </div>
+      <div class="filtre-groupe">
+        <span class="filtre-label">Producteur / Productrice</span>
+        <input class="filtre-input" type="search" id="filtre-producteur" placeholder="ex: Steven Spielberg" autocomplete="off" oninput="renderCollection()">
+      </div>
+      <div class="filtre-groupe">
+        <span class="filtre-label">Scénariste / Créateur</span>
+        <input class="filtre-input" type="search" id="filtre-scenariste" placeholder="ex: Aaron Sorkin" autocomplete="off" oninput="renderCollection()">
       </div>
       <button class="btn btn-sm" onclick="resetFiltres()" style="margin-top:8px;background:var(--surface2);color:var(--text2);border:1px solid #333">✕ Effacer les filtres</button>
     </div>
@@ -630,6 +642,9 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <div class="input-group"><label>Année</label><input type="number" id="manual-annee" placeholder="2024"></div>
       <div class="input-group"><label>Genres</label><input type="text" id="manual-genres" placeholder="Action, Thriller..."></div>
       <div class="input-group"><label>Nationalité</label><input type="text" id="manual-nationalite" placeholder="Américain, Français..."></div>
+      <div class="input-group"><label>Réalisateur / Réalisatrice</label><input type="text" id="manual-realisateur" placeholder="ex: Richard Donner"></div>
+      <div class="input-group"><label>Producteur / Productrice</label><input type="text" id="manual-producteur" placeholder="ex: Steven Spielberg"></div>
+      <div class="input-group"><label>Scénariste / Créateur</label><input type="text" id="manual-scenariste" placeholder="ex: Aaron Sorkin"></div>
       <div class="input-group"><label>Note personnelle</label><input type="text" id="manual-note" placeholder="Vos notes..."></div>
       <button class="btn btn-primary" style="width:100%" onclick="ajouterManuel()">Ajouter</button>
     </div>
@@ -971,7 +986,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.21';
+const APP_VERSION='v1.7.23';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1050,6 +1065,27 @@ function ensureTmdbApiKey(){
     prefs.apiKey=key;
   }
   return prefs.apiKey;
+}
+
+// Crédits techniques récupérés depuis TMDB. Ils servent aussi aux filtres de Collection.
+function extraireCreditsEquipe(d){
+  const crew=(d&&d.credits&&Array.isArray(d.credits.crew))?d.credits.crew:[];
+  const nomsPour=(jobs)=>[...new Set(
+    crew.filter(c=>jobs.includes(c.job))
+      .map(c=>String(c.name||'').trim())
+      .filter(Boolean)
+  )].join(', ');
+  const createurs=(d&&Array.isArray(d.created_by)?d.created_by:[])
+    .map(c=>String(c.name||'').trim()).filter(Boolean);
+  const createursEquipe=crew
+    .filter(c=>['Creator','Created By','Showrunner'].includes(c.job))
+    .map(c=>String(c.name||'').trim()).filter(Boolean);
+  return {
+    realisateur:nomsPour(['Director']),
+    producteur:nomsPour(['Producer','Executive Producer','Co-Producer','Associate Producer','Line Producer','Supervising Producer']),
+    scenariste:nomsPour(['Screenplay','Writer','Story','Teleplay','Novel','Characters','Dialogue']),
+    createur:[...new Set([...createurs,...createursEquipe])].join(', ')
+  };
 }
 let triActuel='date',prevPage='collection',currentPage='home';
 let pageScrollPositions={home:0,collection:0,search:0,visionnages:0,notes:0,settings:0};
@@ -1143,6 +1179,8 @@ function nouveauFilm(data){
     affichePath:data.affichePath||null,backdropPath:data.backdropPath||null,
     dateSortie:data.dateSortie||'',notesTmdb:data.notesTmdb||0,
     genres:data.genres||'',sousGenres:data.sousGenres||'',casting:data.casting||'',
+    realisateur:data.realisateur||'',producteur:data.producteur||'',
+    scenariste:data.scenariste||'',createur:data.createur||'',
     nationalite:data.nationalite||'',noteManuelle:data.noteManuelle||'',
     pays:data.pays||[],duree:data.duree||0,emplacement:data.emplacement||'',
     visionnages:data.visionnages||[],episodesVus:data.episodesVus||{},
@@ -1493,7 +1531,9 @@ function buildFiltresDynamiques(){
 
 function resetFiltres(){
   tagFiltres={statut:'tous',decennie:new Set(),annee:'',genre:'',nationalite:'',qualite:'',saga:'',catFilter:''};
-  document.getElementById('filtre-acteur').value='';
+  ['filtre-acteur','filtre-realisateur','filtre-producteur','filtre-scenariste'].forEach(id=>{
+    const input=document.getElementById(id); if(input) input.value='';
+  });
   buildFiltresDynamiques();
   renderCollection();
 }
@@ -1501,9 +1541,12 @@ function resetFiltres(){
 function renderCollection(){
   const q=(document.getElementById('search-local').value||'').toLowerCase();
   const acteurFiltre=(document.getElementById('filtre-acteur').value||'').toLowerCase().trim();
-  // Dès qu'un titre est saisi, la recherche doit parcourir toute la médiathèque :
-  // films, séries et tous les statuts, y compris À trouver et Critiques.
-  // Les filtres volontairement choisis dans ⚙️ restent toutefois appliqués.
+  const realisateurFiltre=(document.getElementById('filtre-realisateur').value||'').toLowerCase().trim();
+  const producteurFiltre=(document.getElementById('filtre-producteur').value||'').toLowerCase().trim();
+  const scenaristeFiltre=(document.getElementById('filtre-scenariste').value||'').toLowerCase().trim();
+  // Dès qu'un titre est saisi, la recherche parcourt toute la médiathèque
+  // (films, séries et tous les statuts), mais uniquement par titre.
+  // La recherche par acteur reste disponible via le filtre Acteur.
   const rechercheGlobale=q.trim().length>0;
 
   // Mode saga avec filtre actif — afficher les films de la saga
@@ -1575,12 +1618,16 @@ function renderCollection(){
     if(tagFiltres.qualite&&!(f.qualites||[]).includes(tagFiltres.qualite)) return false;
     if(!rechercheGlobale&&tagFiltres.saga){const fSagas=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);if(!fSagas.includes(tagFiltres.saga)) return false;}
     if(acteurFiltre&&!normaliser(f.casting).includes(normaliser(acteurFiltre))) return false;
+    if(realisateurFiltre&&!normaliser(f.realisateur).includes(normaliser(realisateurFiltre))) return false;
+    if(producteurFiltre&&!normaliser(f.producteur).includes(normaliser(producteurFiltre))) return false;
+    if(scenaristeFiltre&&!normaliser([f.scenariste,f.createur].filter(Boolean).join(', ')).includes(normaliser(scenaristeFiltre))) return false;
     if(q){
+      // Par défaut, la barre de recherche cherche uniquement dans le titre
+      // et le titre alternatif. Les noms d'acteurs ne sont recherchés que
+      // dans le filtre Acteur prévu à cet effet.
       const nq=normaliser(q);
       const inTitre=normaliser(f.titre).includes(nq)||normaliser(f.titreAlt||'').includes(nq);
-      const inActeurs=(f.castingDetails||[]).some(a=>normaliser(a.name).includes(nq));
-      const inCasting=normaliser(f.casting||'').includes(nq);
-      if(!inTitre&&!inActeurs&&!inCasting) return false;
+      if(!inTitre) return false;
     }
     return true;
   });
@@ -1627,6 +1674,9 @@ function renderCollection(){
   if(tagFiltres.qualite) actifs.push('📀 '+tagFiltres.qualite);
   if(tagFiltres.saga) actifs.push('🎯 '+tagFiltres.saga);
   if(acteurFiltre) actifs.push('Acteur: '+acteurFiltre);
+  if(realisateurFiltre) actifs.push('Réalisation: '+realisateurFiltre);
+  if(producteurFiltre) actifs.push('Production: '+producteurFiltre);
+  if(scenaristeFiltre) actifs.push('Écriture / création: '+scenaristeFiltre);
   document.getElementById('active-filters-bar').textContent=actifs.length?'Filtres: '+actifs.join(' • '):'';
 
   const grid=document.getElementById('coll-grid');
@@ -2172,7 +2222,7 @@ function ouvrirDetail(id){
         if(trailerKey) f.trailerKey=trailerKey;
         else actualiserTrailer(f);
         if(d.credits&&d.credits.crew){
-          f.realisateur=(d.credits.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', ');
+          Object.assign(f,extraireCreditsEquipe(d));
         }
         if(d.credits&&d.credits.cast){
           f.castingDetails=(d.credits.cast||[]).slice(0,15).map(a=>({
@@ -2201,6 +2251,7 @@ function afficherDetail(f){
   const cat=CATS[f.categorie]||CATS.films;
   const genres=f.genres?(f.genres.split(',').map(g=>'<span class="genre-tag">'+esc(g.trim())+'</span>').join('')):'';
   const casting=f.casting?f.casting.split(',').slice(0,5).join(', '):'';
+  const ecritureCreation=[f.scenariste,f.createur].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' • ');
 
   // Bloc épisodes pour séries
   let episodesHtml='';
@@ -2298,7 +2349,9 @@ function afficherDetail(f){
     +(f.duree>0?'⏱ '+formatDuree(f.duree)+'<br>':'')
     +(f.nbSaisons?'📺 '+f.nbSaisons+' saison(s) • '+(f.nbEpisodes||'')+(f.nbEpisodes?' épisodes<br>':'<br>'):'')
     +(f.notesTmdb>0?'⭐ '+f.notesTmdb.toFixed(1)+' / 10<br>':'')
-    +(f.realisateur?'🎬 '+esc(f.realisateur)+'<br>':'')
+    +(f.realisateur?'🎬 Réalisation : '+esc(f.realisateur)+'<br>':'')
+    +(f.producteur?'💼 Production : '+esc(f.producteur)+'<br>':'')
+    +(ecritureCreation?'✍️ Écriture / création : '+esc(ecritureCreation)+'<br>':'')
     +(casting?'🎭 '+esc(casting):'')
     +'</div></div></div>'
     // Casting avec photos
@@ -2429,10 +2482,8 @@ function afficherDetail(f){
     +'<div id="saga-detail-sugg-'+f.id+'" style="display:none;position:absolute;top:100%;left:0;right:56px;background:var(--surface);border:1px solid #333;border-radius:0 0 8px 8px;z-index:50;max-height:150px;overflow-y:auto"></div>'
     +'</div>'
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">📍 Emplacement</p>'
-    +'<div style="position:relative;margin-bottom:16px">'
-    +'<input class="version-input" id="empl-input-'+f.id+'" value="'+(f.emplacement||'')+'" placeholder="ex: Disque dur 1, DVD, NAS..." oninput="showEmplSuggestions('+f.id+')" onblur="setTimeout(()=>hideEmplSuggestions('+f.id+'),200)" onfocus="showEmplSuggestions('+f.id+')">'
-    +'<div id="empl-suggestions-'+f.id+'" style="display:none;position:absolute;top:100%;left:0;right:0;background:#222;border:1px solid #333;border-radius:0 0 8px 8px;z-index:50"></div>'
-    +'<button class="btn btn-primary btn-sm" style="margin-top:6px;width:100%" onclick="sauvegarderEmplacement('+f.id+')">Sauvegarder l\'emplacement</button>'
+    +'<div id="emplacement-zone-'+f.id+'" style="margin-bottom:16px">'
+    +(f.emplacement?renderEmplacementAffichage(f):renderEmplacementEdition(f))
     +'</div>'
     // Galerie photos
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">📸 Galerie (jaquettes, photos...)</p>'
@@ -2795,7 +2846,7 @@ async function ajouterTmdbDepuisModal(tmdbId,type){
     genres:(d.genres||[]).map(g=>g.name).join(','),
     casting:(d.credits?.cast||[]).slice(0,10).map(a=>a.name).join(','),
     castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({id:a.id,name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
-    realisateur:(d.credits?.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', '),
+    ...extraireCreditsEquipe(d),
     trailerKey:extraireCleTrailer(d.videos),
     nationalite:nat, pays,
     duree:d.runtime||((d.episode_run_time&&d.episode_run_time[0])||0)
@@ -2838,7 +2889,7 @@ async function ajouterTmdb(tmdbId,type,btn){
       genres:(d.genres||[]).map(g=>g.name).join(','),
       casting:(d.credits?.cast||[]).slice(0,10).map(a=>a.name).join(','),
       castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({id:a.id,name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
-      realisateur:(d.credits?.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', '),
+      ...extraireCreditsEquipe(d),
       trailerKey:extraireCleTrailer(d.videos),
       nationalite:nat, pays,
       duree:d.runtime||((d.episode_run_time&&d.episode_run_time[0])||0)
@@ -2977,7 +3028,7 @@ async function ajouterTousFilmsStudio(ids, label, btn){
         genres:(d.genres||[]).map(g=>g.name).join(','),
         casting:(d.credits?.cast||[]).slice(0,10).map(a=>a.name).join(','),
             castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({id:a.id,name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
-            realisateur:(d.credits?.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', '),
+            ...extraireCreditsEquipe(d),
         nationalite:paysArr.join(', '),pays:paysArr,saga:label
       }));
       count++;
@@ -3013,7 +3064,7 @@ async function ajouterTousFilmsRecherche(query){
           genres:(d.genres||[]).map(g=>g.name).join(','),
           casting:(d.credits?.cast||[]).slice(0,10).map(a=>a.name).join(','),
             castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({id:a.id,name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
-            realisateur:(d.credits?.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', '),
+            ...extraireCreditsEquipe(d),
           nationalite:paysArr.join(', '),pays:paysArr
         }));
         count++;
@@ -3089,7 +3140,7 @@ async function ajouterTouteLaCollection(collectionId, nom){
           genres:(d.genres||[]).map(g=>g.name).join(','),
           casting:(d.credits?.cast||[]).slice(0,10).map(a=>a.name).join(','),
             castingDetails:(d.credits?.cast||[]).slice(0,10).map(a=>({id:a.id,name:a.name,character:a.character,photo:a.profile_path?'https://image.tmdb.org/t/p/w185'+a.profile_path:null})),
-            realisateur:(d.credits?.crew||[]).filter(c=>c.job==='Director').map(c=>c.name).join(', '),
+            ...extraireCreditsEquipe(d),
           nationalite:paysArr.join(', '),pays:paysArr,
           saga:nom
         }));
@@ -3526,10 +3577,13 @@ function ajouterManuel(){
     dateSortie:document.getElementById('manual-annee').value.trim(),
     genres:document.getElementById('manual-genres').value.trim(),
     nationalite:document.getElementById('manual-nationalite').value.trim(),
+    realisateur:document.getElementById('manual-realisateur').value.trim(),
+    producteur:document.getElementById('manual-producteur').value.trim(),
+    scenariste:document.getElementById('manual-scenariste').value.trim(),
     noteManuelle:document.getElementById('manual-note').value.trim()
   }));
   sauvegarder();
-  ['manual-titre','manual-annee','manual-genres','manual-nationalite','manual-note'].forEach(id=>document.getElementById(id).value='');
+  ['manual-titre','manual-annee','manual-genres','manual-nationalite','manual-realisateur','manual-producteur','manual-scenariste','manual-note'].forEach(id=>document.getElementById(id).value='');
   snack('✓ "'+titre+'" ajouté !');
 }
 
@@ -4463,11 +4517,38 @@ function toggleApiKeySection(){
   if(s) s.style.display=s.style.display==='none'?'block':'none';
 }
 
+function renderEmplacementAffichage(f){
+  return '<div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid #355c4a;border-radius:9px;padding:10px 12px">'
+    +'<span style="flex:1;color:var(--green-light);font-size:14px;font-weight:700">📍 '+esc(f.emplacement||'')+'</span>'
+    +'<button class="btn btn-sm" style="background:#2a2a2a;color:var(--text);border:1px solid #444" onclick="modifierEmplacement('+f.id+')">✏️ Modifier</button>'
+    +'</div>';
+}
+
+function renderEmplacementEdition(f){
+  return '<div style="position:relative">'
+    +'<input class="version-input" id="empl-input-'+f.id+'" value="'+esc(f.emplacement||'')+'" placeholder="ex: Disque dur 1, DVD, NAS..." oninput="showEmplSuggestions('+f.id+')" onblur="setTimeout(()=>hideEmplSuggestions('+f.id+'),200)" onfocus="showEmplSuggestions('+f.id+')">'
+    +'<div id="empl-suggestions-'+f.id+'" style="display:none;position:absolute;top:100%;left:0;right:0;background:#222;border:1px solid #333;border-radius:0 0 8px 8px;z-index:50"></div>'
+    +'<button class="btn btn-primary btn-sm" style="margin-top:6px;width:100%" onclick="sauvegarderEmplacement('+f.id+')">Sauvegarder l\'emplacement</button>'
+    +'</div>';
+}
+
+function modifierEmplacement(id){
+  const f=films.find(f=>f.id===id); if(!f) return;
+  const zone=document.getElementById('emplacement-zone-'+id);
+  if(!zone) return;
+  zone.innerHTML=renderEmplacementEdition(f);
+  const input=document.getElementById('empl-input-'+id);
+  if(input){ input.focus(); input.select(); }
+}
+
 function sauvegarderEmplacement(id){
   const f=films.find(f=>f.id===id);if(!f) return;
-  const val=(document.getElementById('empl-input-'+id).value||'').trim();
+  const input=document.getElementById('empl-input-'+id);
+  const val=(input&&input.value||'').trim();
   f.emplacement=val;sauvegarder();
   hideEmplSuggestions(id);
+  const zone=document.getElementById('emplacement-zone-'+id);
+  if(zone) zone.innerHTML=val?renderEmplacementAffichage(f):renderEmplacementEdition(f);
   snack(val?'📍 Emplacement sauvegardé : '+val:'Emplacement effacé');
 }
 
@@ -5066,6 +5147,7 @@ window.supprimerLangue = supprimerLangue;
 window.ajouterLangueCustom = ajouterLangueCustom;
 window.modifierTitre = modifierTitre;
 window.modifierTitreAlt = modifierTitreAlt;
+window.modifierEmplacement = modifierEmplacement;
 window.sauvegarderEmplacement = sauvegarderEmplacement;
 window.ajouterVisionnage = ajouterVisionnage;
 window.ajouterVisionnageEpisode = ajouterVisionnageEpisode;
