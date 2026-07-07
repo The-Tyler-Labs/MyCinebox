@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.23</title>
+<title>Vidéothèque v1.7.24</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -335,7 +335,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.23</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.24</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -986,7 +986,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.23';
+const APP_VERSION='v1.7.24';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1119,7 +1119,25 @@ function charger(){
     // Migration saga -> sagas (tableau)
     if(f.saga&&!f.sagas) f.sagas=[f.saga];
     else if(!f.sagas) f.sagas=[];
-    return{...f,categorie,statut,qualite:f.qualite||'',qualites,versions:f.versions||[],pays};
+    // Les anciennes « versions » étaient de simples étiquettes. Elles deviennent
+    // automatiquement des éditions, sans perdre les données déjà ajoutées.
+    const legacyVersions=Array.isArray(f.versions)?f.versions:[];
+    const editions=Array.isArray(f.editions)
+      ?f.editions.map((e,i)=>({
+          id:e.id||('ed-'+(f.id||'x')+'-'+i),
+          label:e.label||e.nom||('Édition '+(i+1)),
+          rawName:e.rawName||e.nomFichier||'',
+          details:Array.isArray(e.details)?e.details:[],
+          languages:Array.isArray(e.languages)?e.languages:[],
+          source:e.source||'',
+          emplacement:e.emplacement||''
+        }))
+      :legacyVersions.map((label,i)=>({
+          id:'ed-'+(f.id||'x')+'-'+i,
+          label:String(label||'Version '+(i+1)),
+          rawName:'',details:[],languages:[],source:'',emplacement:''
+        }));
+    return{...f,categorie,statut,qualite:f.qualite||'',qualites,versions:legacyVersions,editions,pays};
   });
   try{prefs={...prefs,...JSON.parse(localStorage.getItem(PREFS_KEY)||'{}') };}catch(e){}
   ensureTmdbApiKey();
@@ -1185,7 +1203,7 @@ function nouveauFilm(data){
     pays:data.pays||[],duree:data.duree||0,emplacement:data.emplacement||'',
     visionnages:data.visionnages||[],episodesVus:data.episodesVus||{},
     maNote:0,statut:data.statut||'',qualite:data.qualite||'',
-    qualites:data.qualites||[],versions:data.versions||[],
+    qualites:data.qualites||[],versions:data.versions||[],editions:data.editions||[],
     estVu:false, // compatibilité Android
     dateAjout:Date.now()
   };
@@ -1777,6 +1795,7 @@ function itemCard(f){
     +'<span class="fc-stars">'+(f.maNote>0?'★'.repeat(Math.min(f.maNote,10)):'')+'</span></div>'
     +(f.saga?'<div style="font-size:10px;color:#90d0ff;padding:0 8px 2px">🎯 '+esc(f.saga)+'</div>':'')
     +(f.emplacement?'<div style="font-size:10px;color:var(--green-light);padding:0 8px 6px">📍 '+esc(f.emplacement)+'</div>':'')
+    +(()=>{const es=(f.editions||[]);if(!es.length)return '';const label=es.length===1?(es[0].label||'1 édition'):(es.length+' éditions');return '<div style="font-size:10px;color:#cbb8ff;padding:0 8px 6px">💿 '+esc(label)+'</div>';})()
     +'</div></div>';
 }
 
@@ -2455,20 +2474,7 @@ function afficherDetail(f){
     +'<input class="version-input" id="langue-custom-'+f.id+'" placeholder="Autre langue..." style="flex:1" onkeydown="if(event.key===\'Enter\'){event.preventDefault();ajouterLangueCustom('+f.id+')}">'
     +'<button class="btn btn-primary btn-sm" onclick="ajouterLangueCustom('+f.id+')">+</button>'
     +'</div>'
-    +'<p style="font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Versions</p>'
-    +'<div class="version-tags" id="version-tags-'+f.id+'">'
-    +(f.versions||[]).map((v,i)=>'<span class="version-tag">'+esc(v)+'<span class="del" onclick="supprimerVersion('+f.id+','+i+')"> ✕</span></span>').join('')
-    +'</div>'
-    +'<div style="display:flex;gap:8px;margin-bottom:8px">'
-    +'<input class="version-input" id="version-input-'+f.id+'" placeholder="Écrire une version..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();ajouterVersion('+f.id+')}">'
-    +'<button class="btn btn-primary btn-sm" onclick="ajouterVersion('+f.id+')">+</button>'
-    +'</div>'
-    +'<div class="qualite-row" style="margin-bottom:16px">'
-    +["Director's Cut","Version longue","Version non censurée","Version cinéma","Version étendue","Version télé","Version internationale"].map((v,i)=>{
-      const fid=f.id;
-      return '<button class="qualite-btn" onclick="ajouterVersionRapide('+fid+','+i+')">'+v+'</button>';
-    }).join('')
-    +'</div>'
+    +renderEditionsSection(f)
     +episodesHtml
     +episodeQuickHtml
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">⭐ Ma note</p>'
@@ -2588,6 +2594,177 @@ function toggleQualite(id,qualite,btn){
   f.qualite=f.qualites[0]||'';
   sauvegarder();
   snack(f.qualites.length?'Qualité : '+f.qualites.join(', '):'Qualité retirée');
+}
+
+
+// ── ÉDITIONS / VERSIONS PHYSIQUES ──
+// Une fiche reste « Terminator ». Les différentes copies (Director's Cut,
+// Open Matte, non censurée…) sont rangées dessous, avec leur nom de release.
+function getEditions(f){
+  if(!f) return [];
+  if(!Array.isArray(f.editions)){
+    f.editions=(Array.isArray(f.versions)?f.versions:[]).map((label,i)=>({
+      id:'ed-'+(f.id||'x')+'-'+i,label:String(label||('Édition '+(i+1))),rawName:'',details:[],languages:[],source:'',emplacement:''
+    }));
+  }
+  return f.editions;
+}
+
+function editionId(){
+  return 'ed-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7);
+}
+
+function ajouterUnique(arr,val){
+  if(val && !arr.includes(val)) arr.push(val);
+}
+
+function analyserNomEdition(texte){
+  const raw=String(texte||'').trim();
+  const norm=raw.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const labels=[];
+  const details=[];
+  const languages=[];
+  const addLabel=(label,re)=>{if(re.test(norm)) ajouterUnique(labels,label);};
+  const addDetail=(label,re)=>{if(re.test(norm)) ajouterUnique(details,label);};
+
+  addLabel("Director's Cut", /director'?s[ ._-]*cut|directors[ ._-]*cut/);
+  addLabel('Enhanced Extended Cut', /enhanced[ ._-]*extended[ ._-]*cut/);
+  addLabel('Extended Cut', /extended[ ._-]*cut|version[ ._-]*etendue/);
+  addLabel('Version longue', /long[ue]?[ ._-]*(version|cut)|longue?[ ._-]version/);
+  addLabel('Version non censurée', /non[ ._-]*(censure|censurato)|uncut|unrated/);
+  addLabel('Open Matte', /open[ ._-]*matte/);
+  addLabel('Version cinéma', /theatrical|version[ ._-]*cinema/);
+  addLabel('Version télé', /tv[ ._-]*(cut|version)|television/);
+  addLabel('IMAX', /\bimax\b/);
+  addLabel('Remaster', /remaster(ed)?|restaur[ée]/);
+  addLabel('Final Cut', /final[ ._-]*cut/);
+
+  addDetail('2160p / 4K', /\b(2160p|4k)\b/);
+  addDetail('1080p', /\b1080p\b/);
+  addDetail('720p', /\b720p\b/);
+  addDetail('H265 / x265', /\b(x265|h[ ._-]?265|hevc)\b/);
+  addDetail('H264 / x264', /\b(x264|h[ ._-]?264|avc)\b/);
+  addDetail('10 bits', /\b10[ ._-]?bit\b/);
+  addDetail('8 bits', /\b8[ ._-]?bit\b/);
+  addDetail('BluRay', /blu[ ._-]?ray|bdrip|brrip/);
+  addDetail('WEBRip', /webrip|web[ ._-]?dl/);
+  addDetail('DVD', /dvd/);
+  addDetail('AC3 2.0', /ac3[ ._-]?2[ ._-]?0/);
+  addDetail('AC3 5.1', /ac3[ ._-]?5[ ._-]?1/);
+  addDetail('DTS', /\bdts\b/);
+  addDetail('AAC', /\baac\b/);
+
+  if(/\b(ita|italian[oa]?|audio[ ._-]*ita)\b/.test(norm)) ajouterUnique(languages,'IT');
+  if(/\b(fra|french|francais|vff|vfi|vfq)\b/.test(norm)) ajouterUnique(languages,'FR');
+  if(/\b(eng|english|audio[ ._-]*eng)\b/.test(norm)) ajouterUnique(languages,'EN');
+  if(/\b(spa|spanish|espanol)\b/.test(norm)) ajouterUnique(languages,'ES');
+  if(/\b(deu|ger|german|deutsch)\b/.test(norm)) ajouterUnique(languages,'DE');
+  if(/\b(jpn|japanese|jap)\b/.test(norm)) ajouterUnique(languages,'JA');
+
+  let source='';
+  const by=raw.match(/\(\s*by\.?\s*([^\)]+)\)/i);
+  const crew=raw.match(/\b(MIRCrew|YTS|RARBG|EVO|PSA|NTG|HDLight)\b/i);
+  if(by) source='by '+by[1].trim();
+  if(crew) source=(source?source+' · ':'')+crew[1];
+
+  // Si aucun mot-clé n'est reconnu, on garde ce que l'utilisateur a écrit.
+  const label=labels.join(' · ') || 'Édition personnalisée';
+  return {label,rawName:raw,details,languages,source};
+}
+
+function editionInfos(e){
+  const infos=[];
+  (e.details||[]).forEach(v=>ajouterUnique(infos,v));
+  (e.languages||[]).forEach(v=>ajouterUnique(infos,v));
+  if(e.source) ajouterUnique(infos,e.source);
+  if(e.emplacement) ajouterUnique(infos,'📍 '+e.emplacement);
+  return infos;
+}
+
+function renderEditionsList(f){
+  const editions=getEditions(f);
+  if(!editions.length){
+    return '<p style="font-size:12px;color:var(--text2);margin:0">Une seule version pour le moment.</p>';
+  }
+  return editions.map((e,i)=>{
+    const infos=editionInfos(e);
+    return '<div style="background:var(--surface2);border:1px solid #333;border-radius:10px;padding:10px;margin-bottom:8px">'
+      +'<div style="display:flex;gap:8px;align-items:flex-start">'
+      +'<div style="flex:1"><div style="font-size:13px;font-weight:700;color:#d8c8ff">💿 '+esc(e.label||('Édition '+(i+1)))+'</div>'
+      +(infos.length?'<div style="font-size:11px;color:var(--text2);margin-top:4px">'+infos.map(esc).join(' · ')+'</div>':'')
+      +(e.rawName?'<details style="margin-top:7px"><summary style="font-size:11px;color:var(--green-light);cursor:pointer">Nom complet du fichier / release</summary><div style="font-size:10px;color:var(--text2);margin-top:5px;word-break:break-word">'+esc(e.rawName)+'</div></details>':'')
+      +'</div><button class="btn btn-sm" style="background:#3a1f25;color:#ffb0b8;border:1px solid #74333c" onclick="supprimerEdition('+f.id+','+i+')">✕</button></div></div>';
+  }).join('');
+}
+
+function renderEditionsSection(f){
+  const nb=getEditions(f).length;
+  return '<div style="margin:4px 0 16px;padding:12px;background:rgba(116,84,180,.09);border:1px solid rgba(160,130,220,.32);border-radius:12px">'
+    +'<p style="font-size:11px;color:#d8c8ff;margin:0 0 6px;text-transform:uppercase;letter-spacing:.5px">💿 Éditions / versions '+(nb?'('+nb+')':'')+'</p>'
+    +'<p style="font-size:11px;color:var(--text2);margin:0 0 10px">Garde une seule fiche pour le film et ajoute ici ses Director’s Cut, versions longues, non censurées, etc.</p>'
+    +'<div id="editions-list-'+f.id+'">'+renderEditionsList(f)+'</div>'
+    +'<input class="version-input" id="edition-label-'+f.id+'" placeholder="Nom de l’édition (facultatif)" style="width:100%;box-sizing:border-box;margin:4px 0 8px">'
+    +'<textarea class="version-input" id="edition-release-'+f.id+'" placeholder="Colle le nom complet du fichier / release : Terminator [Enhanced Extended Cut Open Matte Audio ITA non censurato] [1080p.x265.10bit.ITA.AC3.2.0] (by.phadron) MIRCrew" style="width:100%;min-height:74px;box-sizing:border-box;resize:vertical"></textarea>'
+    +'<button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="ajouterEdition('+f.id+')">✨ Analyser et ajouter cette édition</button>'
+    +'<div class="qualite-row" style="margin-top:10px">'
+    +["Director's Cut",'Version longue','Version étendue','Version non censurée','Open Matte','Version cinéma','Remaster'].map(v=>'<button class="qualite-btn" onclick="ajouterEditionRapide('+f.id+',\''+v.replace(/'/g,"\\'")+'\')">'+v+'</button>').join('')
+    +'</div></div>';
+}
+
+function ajouterEdition(id){
+  const f=films.find(x=>x.id===id); if(!f) return;
+  const labelInput=document.getElementById('edition-label-'+id);
+  const rawInput=document.getElementById('edition-release-'+id);
+  const chosenLabel=String((labelInput&&labelInput.value)||'').trim();
+  const raw=String((rawInput&&rawInput.value)||'').trim();
+  if(!chosenLabel&&!raw){snack('Écris un nom d’édition ou colle le nom complet du fichier');return;}
+
+  const analysed=analyserNomEdition(raw);
+  const label=chosenLabel||analysed.label;
+  const editions=getEditions(f);
+  const duplicate=editions.some(e=>String(e.label||'').toLowerCase()===label.toLowerCase() && String(e.rawName||'').toLowerCase()===raw.toLowerCase());
+  if(duplicate){snack('Cette édition est déjà présente');return;}
+
+  editions.push({id:editionId(),label,rawName:raw,details:analysed.details,languages:analysed.languages,source:analysed.source,emplacement:f.emplacement||''});
+  // Conserve la compatibilité avec les anciennes sauvegardes et enrichit les filtres.
+  f.versions=editions.map(e=>e.label);
+  if(!f.qualites) f.qualites=[];
+  analysed.details.forEach(d=>{
+    const map={'2160p / 4K':'4K UHD','1080p':'1080p','720p':'720p','H265 / x265':'H265','H264 / x264':'H264','BluRay':'BluRay','WEBRip':'WEBRip','DVD':'DVD'};
+    if(map[d]&&!f.qualites.includes(map[d])) f.qualites.push(map[d]);
+  });
+  if(!f.langues) f.langues=[];
+  analysed.languages.forEach(l=>{if(!f.langues.includes(l)) f.langues.push(l);});
+  sauvegarder();
+  if(labelInput) labelInput.value='';
+  if(rawInput) rawInput.value='';
+  rafraichirEditions(f);
+  renderCollection(); renderHome();
+  snack('✓ Édition ajoutée : '+label);
+}
+
+function ajouterEditionRapide(id,label){
+  const f=films.find(x=>x.id===id); if(!f) return;
+  const editions=getEditions(f);
+  if(editions.some(e=>String(e.label||'').toLowerCase()===String(label).toLowerCase())){snack('Cette édition est déjà présente');return;}
+  editions.push({id:editionId(),label:String(label),rawName:'',details:[],languages:[],source:'',emplacement:f.emplacement||''});
+  f.versions=editions.map(e=>e.label);
+  sauvegarder(); rafraichirEditions(f); renderCollection(); renderHome();
+  snack('✓ '+label+' ajoutée');
+}
+
+function supprimerEdition(id,index){
+  const f=films.find(x=>x.id===id); if(!f) return;
+  const editions=getEditions(f);
+  editions.splice(index,1);
+  f.versions=editions.map(e=>e.label);
+  sauvegarder(); rafraichirEditions(f); renderCollection(); renderHome();
+  snack('Édition supprimée');
+}
+
+function rafraichirEditions(f){
+  const el=document.getElementById('editions-list-'+f.id);
+  if(el) el.innerHTML=renderEditionsList(f);
 }
 
 function ajouterVersion(id){
@@ -2751,15 +2928,17 @@ async function searchTmdb(type){
       const titre=f.title||f.name||'';
       const date=(f.release_date||f.first_air_date||'').slice(0,4);
       const img=f.poster_path?TMDB_IMG+f.poster_path:'';
-      const deja=films.some(x=>x.tmdbId===f.id);
+      const dejaFilm=films.find(x=>x.tmdbId===f.id);
+      const deja=!!dejaFilm;
       const genres_=(f.genre_ids||[]).slice(0,3).map(id=>TMDB_GENRES[id]).filter(Boolean).join(', ');
+      const addAction=deja?'ouvrirDetail('+dejaFilm.id+')':'ajouterTmdb('+f.id+',\''+type+'\',this)';
       return '<div class="result-item" onclick="ouvrirFicheFilm('+f.id+',\''+type+'\')">'
         +'<img src="'+img+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="">'
         +'<div class="result-info"><h4>'+esc(titre)+'</h4>'
         +'<div class="rmeta">'+date+(f.vote_average>0?' • ⭐ '+f.vote_average.toFixed(1):'')+(genres_?' • '+esc(genres_):'')+'</div>'
         +'<div class="roverview">'+esc(f.overview||'')+'</div></div>'
-        +'<button class="btn '+(deja?'':'btn-primary')+' add-btn" style="flex-shrink:0;padding:6px 12px;font-size:13px;'+(deja?'background:#333;color:var(--text2)':'')+'" onclick="event.stopPropagation();event.preventDefault();ajouterTmdb('+f.id+',\''+type+'\',this)" '+(deja?'disabled':'')+'>'
-        +(deja?'✓':'+')+'</button></div>';
+        +'<button class="btn '+(deja?'':'btn-primary')+' add-btn" style="flex-shrink:0;padding:6px 12px;font-size:13px;'+(deja?'background:#483a68;color:#fff':'')+'" title="'+(deja?'Ajouter une édition à cette fiche':'Ajouter à la collection')+'" onclick="event.stopPropagation();event.preventDefault();'+addAction+'">'
+        +(deja?'💿':'+')+'</button></div>';
     }).join('');
   }catch(e){
     if(searchId!==tmdbSearchSequence) return;

@@ -1,5 +1,5 @@
-// MyCinebox service worker — version 2026-07-07-v1.7.23-filtres-equipe
-const CACHE_NAME = 'mycinebox-cache-2026-07-07-v1-7-23-filtres-equipe';
+// MyCinebox service worker — version 2026-07-07-v1.7.24-editions-multiples
+const CACHE_NAME = 'mycinebox-cache-2026-07-07-v1-7-24-editions-multiples';
 const APP_SHELL = [
   '/MyCinebox/',
   '/MyCinebox/index.html',
