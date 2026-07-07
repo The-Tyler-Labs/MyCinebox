@@ -1,5 +1,5 @@
-// MyCinebox service worker — version 2026-07-07-v1.7.24-editions-multiples
-const CACHE_NAME = 'mycinebox-cache-2026-07-07-v1-7-24-editions-multiples';
+// MyCinebox service worker — version 2026-07-07-v1.7.25-editions-repliables-tri
+const CACHE_NAME = 'mycinebox-cache-2026-07-07-v1-7-25-editions-repliables-tri';
 const APP_SHELL = [
   '/MyCinebox/',
   '/MyCinebox/index.html',

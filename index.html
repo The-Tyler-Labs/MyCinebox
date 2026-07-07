@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.24</title>
+<title>Vidéothèque v1.7.25</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -259,6 +259,21 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .version-tag{padding:5px 10px;border-radius:16px;font-size:11px;font-weight:600;border:1px solid #555;background:#2a2a2a;color:#ffffff;cursor:pointer;display:flex;align-items:center;gap:4px}
 .version-tag .del{color:#888;font-size:13px;line-height:1}
 
+
+/* Éditions / versions : bloc compact et tri manuel */
+.editions-section{margin:2px 0 16px;padding:0;background:rgba(116,84,180,.09);border:1px solid rgba(160,130,220,.32);border-radius:12px;overflow:hidden}
+.editions-toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:11px 12px;background:transparent;border:none;color:#e5dcff;cursor:pointer;text-align:left;font-size:13px;font-weight:750}
+.editions-toggle:hover{background:rgba(160,130,220,.09)}
+.editions-toggle-sub{font-size:11px;font-weight:600;color:var(--text2)}
+.editions-content{padding:0 12px 12px}
+.edition-card{background:var(--surface2);border:1px solid #333;border-radius:10px;padding:10px;margin-bottom:8px;transition:opacity .15s,transform .15s,border-color .15s}
+.edition-card.edition-dragging{opacity:.48;transform:scale(.985)}
+.edition-card.edition-drop-target{border-color:var(--green-light);box-shadow:0 0 0 2px rgba(91,183,145,.2)}
+.edition-card-head{display:flex;gap:8px;align-items:flex-start}
+.edition-drag-handle{touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;display:flex;align-items:center;justify-content:center;flex:0 0 28px;min-height:34px;border:none;background:transparent;color:#bdb0db;font-size:20px;line-height:1;padding:0;border-radius:8px}
+.edition-drag-handle:active{cursor:grabbing;background:rgba(160,130,220,.14)}
+.edition-order-help{font-size:10px;color:var(--text2);margin:0 0 9px}
+
 /* SETTINGS */
 .settings-section{background:var(--surface);border-radius:12px;padding:16px;margin-bottom:16px}
 .settings-section h3{font-size:14px;margin-bottom:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
@@ -335,7 +350,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.24</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.25</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -986,7 +1001,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.24';
+const APP_VERSION='v1.7.25';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -2218,7 +2233,10 @@ function toggleVu(id){cycleStatut(id);} // alias legacy
 // ── DETAIL ──
 function ouvrirDetail(id){
   const f=films.find(f=>f.id===id);if(!f) return;
-  if(currentPage!=='detail'){rememberPageScroll(currentPage);prevPage=currentPage;}
+  if(currentPage!=='detail'){
+    editionsOpenState[id]=false;
+    rememberPageScroll(currentPage);prevPage=currentPage;
+  }
 
   // Afficher immédiatement
   afficherDetail(f);
@@ -2437,6 +2455,7 @@ function afficherDetail(f){
     +'<div class="statut-row">'
     +STATUTS.filter(s=>s!=='').map(s=>{const si=statutInfo(s);const actif=(f.statut||'')=== s?' active':'';return '<button class="statut-opt '+si.cls+actif+'" data-statut="'+s+'" data-fid="'+f.id+'" onclick="event.preventDefault();return setStatutDetailBtn(this)">'+si.label+'</button>';}).join('')
     +'</div>'
+    +renderEditionsSection(f)
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Qualité</p>'
     +'<div class="qualite-row" id="qualite-row-'+f.id+'">'
     +(()=>{
@@ -2474,7 +2493,6 @@ function afficherDetail(f){
     +'<input class="version-input" id="langue-custom-'+f.id+'" placeholder="Autre langue..." style="flex:1" onkeydown="if(event.key===\'Enter\'){event.preventDefault();ajouterLangueCustom('+f.id+')}">'
     +'<button class="btn btn-primary btn-sm" onclick="ajouterLangueCustom('+f.id+')">+</button>'
     +'</div>'
-    +renderEditionsSection(f)
     +episodesHtml
     +episodeQuickHtml
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">⭐ Ma note</p>'
@@ -2681,35 +2699,151 @@ function editionInfos(e){
   return infos;
 }
 
+const editionsOpenState={};
+let editionNativeDrag=null;
+let editionPointerDrag=null;
+
+function editionsAreOpen(id){ return editionsOpenState[id]===true; }
+
+function toggleEditionsSection(id){
+  editionsOpenState[id]=!editionsAreOpen(id);
+  const f=films.find(x=>x.id===id);
+  if(f) rafraichirEditions(f);
+}
+
 function renderEditionsList(f){
   const editions=getEditions(f);
   if(!editions.length){
-    return '<p style="font-size:12px;color:var(--text2);margin:0">Une seule version pour le moment.</p>';
+    return '<p style="font-size:12px;color:var(--text2);margin:0">Aucune édition ajoutée pour le moment.</p>';
   }
   return editions.map((e,i)=>{
     const infos=editionInfos(e);
-    return '<div style="background:var(--surface2);border:1px solid #333;border-radius:10px;padding:10px;margin-bottom:8px">'
-      +'<div style="display:flex;gap:8px;align-items:flex-start">'
-      +'<div style="flex:1"><div style="font-size:13px;font-weight:700;color:#d8c8ff">💿 '+esc(e.label||('Édition '+(i+1)))+'</div>'
+    return '<div class="edition-card" id="edition-card-'+f.id+'-'+i+'" data-fid="'+f.id+'" data-edition-index="'+i+'" ondragover="editionNativeDragOver(event)" ondrop="editionNativeDrop(event,'+f.id+','+i+')">'
+      +'<div class="edition-card-head">'
+      +'<button class="edition-drag-handle" draggable="true" aria-label="Maintenir puis déplacer cette édition" title="Maintiens ici puis déplace la version" ondragstart="editionNativeDragStart(event,'+f.id+','+i+')" ondragend="editionNativeDragEnd()" onpointerdown="editionPointerDown(event,'+f.id+','+i+')">⋮⋮</button>'
+      +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:#d8c8ff">💿 '+esc(e.label||('Édition '+(i+1)))+'</div>'
       +(infos.length?'<div style="font-size:11px;color:var(--text2);margin-top:4px">'+infos.map(esc).join(' · ')+'</div>':'')
       +(e.rawName?'<details style="margin-top:7px"><summary style="font-size:11px;color:var(--green-light);cursor:pointer">Nom complet du fichier / release</summary><div style="font-size:10px;color:var(--text2);margin-top:5px;word-break:break-word">'+esc(e.rawName)+'</div></details>':'')
-      +'</div><button class="btn btn-sm" style="background:#3a1f25;color:#ffb0b8;border:1px solid #74333c" onclick="supprimerEdition('+f.id+','+i+')">✕</button></div></div>';
+      +'</div><button class="btn btn-sm" style="background:#3a1f25;color:#ffb0b8;border:1px solid #74333c" onclick="supprimerEdition('+f.id+','+i+')">✕</button>'
+      +'</div></div>';
   }).join('');
 }
 
 function renderEditionsSection(f){
   const nb=getEditions(f).length;
-  return '<div style="margin:4px 0 16px;padding:12px;background:rgba(116,84,180,.09);border:1px solid rgba(160,130,220,.32);border-radius:12px">'
-    +'<p style="font-size:11px;color:#d8c8ff;margin:0 0 6px;text-transform:uppercase;letter-spacing:.5px">💿 Éditions / versions '+(nb?'('+nb+')':'')+'</p>'
-    +'<p style="font-size:11px;color:var(--text2);margin:0 0 10px">Garde une seule fiche pour le film et ajoute ici ses Director’s Cut, versions longues, non censurées, etc.</p>'
-    +'<div id="editions-list-'+f.id+'">'+renderEditionsList(f)+'</div>'
-    +'<input class="version-input" id="edition-label-'+f.id+'" placeholder="Nom de l’édition (facultatif)" style="width:100%;box-sizing:border-box;margin:4px 0 8px">'
-    +'<textarea class="version-input" id="edition-release-'+f.id+'" placeholder="Colle le nom complet du fichier / release : Terminator [Enhanced Extended Cut Open Matte Audio ITA non censurato] [1080p.x265.10bit.ITA.AC3.2.0] (by.phadron) MIRCrew" style="width:100%;min-height:74px;box-sizing:border-box;resize:vertical"></textarea>'
-    +'<button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="ajouterEdition('+f.id+')">✨ Analyser et ajouter cette édition</button>'
-    +'<div class="qualite-row" style="margin-top:10px">'
-    +["Director's Cut",'Version longue','Version étendue','Version non censurée','Open Matte','Version cinéma','Remaster'].map(v=>'<button class="qualite-btn" onclick="ajouterEditionRapide('+f.id+',\''+v.replace(/'/g,"\\'")+'\')">'+v+'</button>').join('')
-    +'</div></div>';
+  const open=editionsAreOpen(f.id);
+  const title=nb===1?'1 édition':nb+' éditions';
+  return '<div class="editions-section" id="editions-section-'+f.id+'">'
+    +'<button class="editions-toggle" onclick="toggleEditionsSection('+f.id+')" aria-expanded="'+(open?'true':'false')+'">'
+      +'<span>💿 Éditions / versions <span class="editions-toggle-sub">('+title+')</span></span>'
+      +'<span style="font-size:18px;line-height:1">'+(open?'⌃':'⌄')+'</span>'
+    +'</button>'
+    +(open?'<div class="editions-content">'
+      +'<p style="font-size:11px;color:var(--text2);margin:0 0 8px">Garde une seule fiche pour le film et ajoute ici ses Director’s Cut, versions longues, non censurées, etc.</p>'
+      +(nb>1?'<p class="edition-order-help">⋮⋮ Maintiens la poignée d’une version puis fais-la glisser pour changer l’ordre.</p>':'')
+      +'<div id="editions-list-'+f.id+'">'+renderEditionsList(f)+'</div>'
+      +'<input class="version-input" id="edition-label-'+f.id+'" placeholder="Nom de l’édition (facultatif)" style="width:100%;box-sizing:border-box;margin:4px 0 8px">'
+      +'<textarea class="version-input" id="edition-release-'+f.id+'" placeholder="Colle le nom complet du fichier / release : Terminator [Enhanced Extended Cut Open Matte Audio ITA non censurato] [1080p.x265.10bit.ITA.AC3.2.0] (by.phadron) MIRCrew" style="width:100%;min-height:74px;box-sizing:border-box;resize:vertical"></textarea>'
+      +'<button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="ajouterEdition('+f.id+')">✨ Analyser et ajouter cette édition</button>'
+      +'<div class="qualite-row" style="margin-top:10px">'
+      +["Director's Cut",'Version longue','Version étendue','Version non censurée','Open Matte','Version cinéma','Remaster'].map(v=>'<button class="qualite-btn" onclick="ajouterEditionRapide('+f.id+',\''+v.replace(/'/g,"\\'")+'\')">'+v+'</button>').join('')
+      +'</div></div>':'')
+    +'</div>';
 }
+
+function editionMove(id,fromIndex,toIndex){
+  const f=films.find(x=>x.id===id); if(!f) return;
+  const editions=getEditions(f);
+  if(fromIndex===toIndex || fromIndex<0 || toIndex<0 || fromIndex>=editions.length || toIndex>=editions.length) return;
+  const moved=editions.splice(fromIndex,1)[0];
+  editions.splice(toIndex,0,moved);
+  f.versions=editions.map(e=>e.label);
+  editionsOpenState[id]=true;
+  sauvegarder();
+  rafraichirEditions(f);
+  renderCollection(); renderHome();
+  snack('✓ Ordre des éditions sauvegardé');
+}
+
+function clearEditionDropTargets(){
+  document.querySelectorAll('.edition-card.edition-drop-target').forEach(el=>el.classList.remove('edition-drop-target'));
+}
+
+function editionNativeDragStart(event,id,index){
+  if(editionPointerDrag){
+    clearTimeout(editionPointerDrag.timer);
+    document.removeEventListener('pointermove',editionPointerMove);
+    editionPointerDrag=null;
+  }
+  editionNativeDrag={id,from:index};
+  try{ event.dataTransfer.effectAllowed='move'; event.dataTransfer.setData('text/plain',String(index)); }catch(_){ }
+  const card=document.getElementById('edition-card-'+id+'-'+index);
+  if(card) setTimeout(()=>card.classList.add('edition-dragging'),0);
+}
+
+function editionNativeDragOver(event){
+  if(!editionNativeDrag) return;
+  event.preventDefault();
+  clearEditionDropTargets();
+  const card=event.currentTarget;
+  if(card) card.classList.add('edition-drop-target');
+}
+
+function editionNativeDrop(event,id,toIndex){
+  event.preventDefault();
+  const drag=editionNativeDrag;
+  clearEditionDropTargets();
+  if(drag && drag.id===id) editionMove(id,drag.from,toIndex);
+  editionNativeDrag=null;
+}
+
+function editionNativeDragEnd(){
+  document.querySelectorAll('.edition-card.edition-dragging').forEach(el=>el.classList.remove('edition-dragging'));
+  clearEditionDropTargets();
+  editionNativeDrag=null;
+}
+
+function editionPointerDown(event,id,index){
+  if(event.pointerType==='mouse' && event.button!==0) return;
+  const card=document.getElementById('edition-card-'+id+'-'+index);
+  editionPointerDrag={id,from:index,to:index,card,active:false,timer:null,pointerId:event.pointerId};
+  editionPointerDrag.timer=setTimeout(()=>{
+    if(!editionPointerDrag) return;
+    editionPointerDrag.active=true;
+    if(card) card.classList.add('edition-dragging');
+    snack('Déplace la version, puis relâche');
+  },320);
+  document.addEventListener('pointermove',editionPointerMove,{passive:false});
+  document.addEventListener('pointerup',editionPointerUp,{passive:false,once:true});
+  document.addEventListener('pointercancel',editionPointerCancel,{passive:false,once:true});
+}
+
+function editionPointerMove(event){
+  const drag=editionPointerDrag;
+  if(!drag || event.pointerId!==drag.pointerId || !drag.active) return;
+  event.preventDefault();
+  clearEditionDropTargets();
+  const target=document.elementFromPoint(event.clientX,event.clientY);
+  const card=target&&target.closest?target.closest('.edition-card'):null;
+  if(card && Number(card.dataset.fid)===Number(drag.id)){
+    drag.to=Number(card.dataset.editionIndex);
+    card.classList.add('edition-drop-target');
+  }
+}
+
+function editionPointerFinish(){
+  const drag=editionPointerDrag;
+  if(!drag) return;
+  clearTimeout(drag.timer);
+  if(drag.card) drag.card.classList.remove('edition-dragging');
+  clearEditionDropTargets();
+  document.removeEventListener('pointermove',editionPointerMove);
+  editionPointerDrag=null;
+  if(drag.active) editionMove(drag.id,drag.from,drag.to);
+}
+
+function editionPointerUp(event){ editionPointerFinish(); }
+function editionPointerCancel(event){ editionPointerFinish(); }
 
 function ajouterEdition(id){
   const f=films.find(x=>x.id===id); if(!f) return;
@@ -2726,6 +2860,7 @@ function ajouterEdition(id){
   if(duplicate){snack('Cette édition est déjà présente');return;}
 
   editions.push({id:editionId(),label,rawName:raw,details:analysed.details,languages:analysed.languages,source:analysed.source,emplacement:f.emplacement||''});
+  editionsOpenState[id]=true;
   // Conserve la compatibilité avec les anciennes sauvegardes et enrichit les filtres.
   f.versions=editions.map(e=>e.label);
   if(!f.qualites) f.qualites=[];
@@ -2748,6 +2883,7 @@ function ajouterEditionRapide(id,label){
   const editions=getEditions(f);
   if(editions.some(e=>String(e.label||'').toLowerCase()===String(label).toLowerCase())){snack('Cette édition est déjà présente');return;}
   editions.push({id:editionId(),label:String(label),rawName:'',details:[],languages:[],source:'',emplacement:f.emplacement||''});
+  editionsOpenState[id]=true;
   f.versions=editions.map(e=>e.label);
   sauvegarder(); rafraichirEditions(f); renderCollection(); renderHome();
   snack('✓ '+label+' ajoutée');
@@ -2763,8 +2899,8 @@ function supprimerEdition(id,index){
 }
 
 function rafraichirEditions(f){
-  const el=document.getElementById('editions-list-'+f.id);
-  if(el) el.innerHTML=renderEditionsList(f);
+  const el=document.getElementById('editions-section-'+f.id);
+  if(el) el.outerHTML=renderEditionsSection(f);
 }
 
 function ajouterVersion(id){
