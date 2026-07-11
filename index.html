@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.25</title>
+<title>Vidéothèque v1.7.27</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -123,6 +123,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .vu-badge.s-cours{background:rgba(26,60,120,.85);color:#7ab4f5}
 .vu-badge.s-vu{background:rgba(26,92,74,.9);color:#fff}
 .vu-badge.s-critique{background:rgba(120,20,120,.9);color:#f0a0ff}
+.vu-badge.s-meilleurequalite{background:rgba(0,78,96,.9);color:#7fe7ff}
 /* Badge catégorie */
 .cat-badge{position:absolute;top:6px;left:6px;border-radius:8px;padding:2px 7px;font-size:10px;font-weight:bold;z-index:2;opacity:.9}
 .cat-badge.films{background:#1a3d6e}
@@ -240,6 +241,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .vu-btn.s-cours{background:#1a3c78;color:#7ab4f5}
 .vu-btn.s-vu{background:var(--green);color:#fff}
 .vu-btn.s-critique{background:#4a1a4a;color:#f0a0ff}
+.vu-btn.s-meilleurequalite{background:#064c5a;color:#7fe7ff}
 /* Statut buttons dans détail */
 .statut-row{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
 .statut-opt{flex:1;min-width:70px;padding:8px 4px;border-radius:10px;font-size:11px;font-weight:600;border:1px solid #333;background:none;color:var(--text2);cursor:pointer;text-align:center}
@@ -249,6 +251,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .statut-opt.active.s-cours{background:#1a3c78;color:#7ab4f5;border-color:#2a5aaa}
 .statut-opt.active.s-vu{background:var(--green);color:#fff;border-color:var(--green-light)}
 .statut-opt.active.s-critique{background:#4a1a4a;color:#f0a0ff;border-color:#9040a0}
+.statut-opt.active.s-meilleurequalite{background:#064c5a;color:#7fe7ff;border-color:#2da8bd}
 /* Qualité & Versions */
 .qualite-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .qualite-btn{padding:6px 10px;border-radius:16px;font-size:11px;font-weight:600;border:1px solid #333;background:none;color:var(--text2);cursor:pointer}
@@ -350,7 +353,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.25</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.27</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -479,9 +482,9 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
           <button class="tag" onclick="setTagFiltre('statut','trouver',this)">🔍 À trouver</button>
           <button class="tag" onclick="setTagFiltre('statut','avoir',this)">📋 À voir</button>
           <button class="tag" onclick="setTagFiltre('statut','plustard',this)">⏰ Plus tard</button>
-          <button class="tag" onclick="setTagFiltre('statut','cours',this)">▶️ En cours</button>
-          <button class="tag" onclick="setTagFiltre('statut','vu',this)">👁 Vus</button>
+                    <button class="tag" onclick="setTagFiltre('statut','vu',this)">👁 Vus</button>
           <button class="tag" onclick="setTagFiltre('statut','critique',this)">🎬 Regarder critiques</button>
+          <button class="tag" onclick="setTagFiltre('statut','meilleurequalite',this)">🔎 Trouver meilleure qualité</button>
         </div>
       </div>
       <div class="filtre-groupe">
@@ -549,6 +552,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <button class="sel-btn" onclick="selAction('cours')" style="background:#1a3a1a;color:#6adf6a">▶ En cours</button>
         <button class="sel-btn" onclick="selAction('vu')" style="background:#1a4a2a;color:#2adf8a">👁 Vu</button>
         <button class="sel-btn" onclick="selAction('critique')" style="background:#4a1a4a;color:#f0a0ff">🎬 Critique</button>
+        <button class="sel-btn" onclick="selAction('meilleurequalite')" style="background:#064c5a;color:#7fe7ff">🔎 Meilleure qualité</button>
       </div>
     </div>
 
@@ -901,6 +905,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <button class="btn" onclick="actionRapide('cours')" style="background:#1a3a1a;color:#6adf6a;text-align:left;padding:10px 14px;font-size:13px">▶ En cours</button>
       <button class="btn" onclick="actionRapide('vu')" style="background:#1a4a2a;color:#2adf8a;text-align:left;padding:10px 14px;font-size:13px">👁 Vu</button>
       <button class="btn" onclick="actionRapide('critique')" style="background:#4a1a4a;color:#f0a0ff;text-align:left;padding:10px 14px;font-size:13px">🎬 Regarder critiques</button>
+      <button class="btn" onclick="actionRapide('meilleurequalite')" style="background:#064c5a;color:#7fe7ff;text-align:left;padding:10px 14px;font-size:13px">🔎 Trouver meilleure qualité</button>
       <button class="btn" onclick="actionRapide('detail')" style="background:var(--surface2);color:var(--text);text-align:left;padding:10px 14px;font-size:13px">📋 Ouvrir la fiche</button>
       <button class="btn" onclick="actionRapide('supprimer')" style="background:#5c1a1a;color:#ff6a6a;text-align:left;padding:10px 14px;font-size:13px">🗑 Supprimer</button>
     </div>
@@ -1001,7 +1006,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.25';
+const APP_VERSION='v1.7.27';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1697,7 +1702,7 @@ function renderCollection(){
   }
 
   const actifs=[];
-  const statutLabels={trouver:'🔍 À trouver',avoir:'📋 À voir',plustard:'⏰ Plus tard',cours:'▶️ En cours',vu:'👁 Vus',critique:'🎬 Critiques'};
+  const statutLabels={trouver:'🔍 À trouver',avoir:'📋 À voir',plustard:'⏰ Plus tard',cours:'▶️ En cours',vu:'👁 Vus',critique:'🎬 Critiques',meilleurequalite:'🔎 Trouver meilleure qualité'};
   if(rechercheGlobale) actifs.push('🔎 Recherche dans toute la médiathèque');
   if(tagFiltres.statut!=='tous') actifs.push(statutLabels[tagFiltres.statut]||tagFiltres.statut);
   if(tagFiltres.decennie&&tagFiltres.decennie.size>0) actifs.push('Décennie: '+[...tagFiltres.decennie].join(', '));
@@ -1728,7 +1733,7 @@ function renderCollection(){
 }
 
 function statutInfo(s){
-  const m={trouver:{cls:'s-trouver',label:'🔍 À trouver'},avoir:{cls:'s-avoir',label:'📋 À voir'},plustard:{cls:'s-plustard',label:'⏰ Plus tard'},cours:{cls:'s-cours',label:'▶ En cours'},vu:{cls:'s-vu',label:'👁 Vu'},critique:{cls:'s-critique',label:'🎬 Regarder critiques'}};
+  const m={trouver:{cls:'s-trouver',label:'🔍 À trouver'},avoir:{cls:'s-avoir',label:'📋 À voir'},plustard:{cls:'s-plustard',label:'⏰ Plus tard'},cours:{cls:'s-cours',label:'▶ En cours'},vu:{cls:'s-vu',label:'👁 Vu'},critique:{cls:'s-critique',label:'🎬 Regarder critiques'},meilleurequalite:{cls:'s-meilleurequalite',label:'🔎 Trouver meilleure qualité'}};
   return m[s]||{cls:'s-vide',label:'—'};
 }
 
@@ -2153,7 +2158,7 @@ function selAction(action){
 }
 
 
-const STATUTS=['','trouver','avoir','plustard','cours','vu','critique'];
+const STATUTS=['','trouver','avoir','plustard','cours','vu','critique','meilleurequalite'];
 
 // ── TRAILERS TMDB ──
 // Les séries et les films utilisent la même règle : français en priorité,
@@ -2323,7 +2328,7 @@ function afficherDetail(f){
         +(f.saisonQualites&&f.saisonQualites['s'+s.num]?' · '+esc(f.saisonQualites['s'+s.num]):'')
         +'</button>'
         +'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">'
-        +['DVD','DVDRip','BDRip','720p','1080p','4K UHD','HDTV','WEBRip','BluRay','H264','H265'].map(q=>{
+        +['DVD','DVDRip','BDRip','720p','1080p','4K Light','HDTV','WEBRip','BluRay','H264','H265','Remastered'].map(q=>{
           const actif=(f.saisonQualites&&f.saisonQualites['s'+s.num])?f.saisonQualites['s'+s.num]===q:false;
           return '<button class="qualite-btn'+(actif?' active':'')+'" style="font-size:10px;padding:3px 7px" onclick="setSaisonQualite('+f.id+','+s.num+',\''+q+'\',this)">'+q+'</button>';
         }).join('')
@@ -2459,7 +2464,7 @@ function afficherDetail(f){
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Qualité</p>'
     +'<div class="qualite-row" id="qualite-row-'+f.id+'">'
     +(()=>{
-      const standard=['DVD','DVDRip','BDRip','720p','1080p','4K UHD','HDTV','WEBRip','BluRay','H264','H265'];
+      const standard=['DVD','DVDRip','BDRip','720p','1080p','4K Light','HDTV','WEBRip','BluRay','H264','H265','Remastered'];
       const actives=(f.qualites||[]);
       const custom=actives.filter(q=>!standard.includes(q));
       // Actives d'abord, puis inactives
@@ -2483,11 +2488,11 @@ function afficherDetail(f){
     // Langues
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">🗣 Langues disponibles</p>'
     +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">'
-    +['VFF','VFI','VFQ','VOSTFR','VO','EN','ES','DE','IT','PT','JA','ZH'].map(l=>{
+    +['VFF','VFI','VFQ','VOSTFR','VO','EN','ES','DE','IT','PT','JA','ZH','Multi'].map(l=>{
       const actif=(f.langues||[]).includes(l);
       return '<button class="qualite-btn'+(actif?' active':'')+'" onclick="toggleLangue('+f.id+',\''+l+'\',this)">'+l+'</button>';
     }).join('')
-    +(f.langues||[]).filter(l=>!['VFF','VFI','VFQ','VOSTFR','VO','EN','ES','DE','IT','PT','JA','ZH'].includes(l)).map(l=>'<span class="genre-tag-edit" style="background:var(--green);color:#fff;padding:3px 10px;border-radius:8px;font-size:12px;display:inline-flex;align-items:center;gap:2px">'+esc(l)+'<span class="genre-del" onclick="supprimerLangue('+f.id+',\''+esc(l)+'\')">✕</span></span>').join('')
+    +(f.langues||[]).filter(l=>!['VFF','VFI','VFQ','VOSTFR','VO','EN','ES','DE','IT','PT','JA','ZH','Multi'].includes(l)).map(l=>'<span class="genre-tag-edit" style="background:var(--green);color:#fff;padding:3px 10px;border-radius:8px;font-size:12px;display:inline-flex;align-items:center;gap:2px">'+esc(l)+'<span class="genre-del" onclick="supprimerLangue('+f.id+',\''+esc(l)+'\')">✕</span></span>').join('')
     +'</div>'
     +'<div style="display:flex;gap:8px;margin-bottom:16px">'
     +'<input class="version-input" id="langue-custom-'+f.id+'" placeholder="Autre langue..." style="flex:1" onkeydown="if(event.key===\'Enter\'){event.preventDefault();ajouterLangueCustom('+f.id+')}">'
@@ -2865,7 +2870,7 @@ function ajouterEdition(id){
   f.versions=editions.map(e=>e.label);
   if(!f.qualites) f.qualites=[];
   analysed.details.forEach(d=>{
-    const map={'2160p / 4K':'4K UHD','1080p':'1080p','720p':'720p','H265 / x265':'H265','H264 / x264':'H264','BluRay':'BluRay','WEBRip':'WEBRip','DVD':'DVD'};
+    const map={'2160p / 4K':'4K Light','1080p':'1080p','720p':'720p','H265 / x265':'H265','H264 / x264':'H264','BluRay':'BluRay','WEBRip':'WEBRip','DVD':'DVD'};
     if(map[d]&&!f.qualites.includes(map[d])) f.qualites.push(map[d]);
   });
   if(!f.langues) f.langues=[];
@@ -4150,6 +4155,7 @@ window.addEventListener('popstate', (e)=>{
   const avoir=films.filter(f=>f.statut==='avoir').length;
   const trouver=films.filter(f=>f.statut==='trouver').length;
   const cours=films.filter(f=>f.statut==='cours').length;
+  const meilleureQualite=films.filter(f=>f.statut==='meilleurequalite').length;
   const bycat=['films','series','spectacles','documentaires','theatre','animation'].map(c=>{
     const n=films.filter(f=>f.categorie===c).length;
     const cat=CATS[c];
@@ -4159,7 +4165,7 @@ window.addEventListener('popstate', (e)=>{
   const backupInfo=backupDate
     ?'<br><small style="color:var(--green-light)">💾 Dernière sauvegarde auto : '+new Date(backupDate).toLocaleString('fr-FR')+'</small>'
     :'';
-  document.getElementById('settings-stats').innerHTML='Total : '+films.length+'<br>🔍 À trouver : '+trouver+'<br>📋 À voir : '+avoir+'<br>▶️ En cours : '+cours+'<br>👁 Vus : '+vus+'<br><br>'+bycat+backupInfo;
+  document.getElementById('settings-stats').innerHTML='Total : '+films.length+'<br>🔍 À trouver : '+trouver+'<br>📋 À voir : '+avoir+'<br>▶️ En cours : '+cours+'<br>👁 Vus : '+vus+'<br>🔎 Trouver meilleure qualité : '+meilleureQualite+'<br><br>'+bycat+backupInfo;
   const tmdbKey=ensureTmdbApiKey();
   const keyInput=document.getElementById('api-key-input');
   const keyStatus=document.getElementById('api-key-status');
@@ -4804,7 +4810,7 @@ function showQualiteCustomSugg(id){
   if(!input||!box) return;
   const val=(input.value||'').toLowerCase();
   const f=films.find(f=>f.id===id);
-  const standard=['DVD','DVDRip','BDRip','720p','1080p','4K UHD','HDTV','WEBRip','BluRay','H264','H265'];
+  const standard=['DVD','DVDRip','BDRip','720p','1080p','4K Light','HDTV','WEBRip','BluRay','H264','H265','Remastered'];
   // Récupérer toutes les qualités custom utilisées
   const toutesCustom=[...new Set(films.flatMap(x=>(x.qualites||[]).filter(q=>!standard.includes(q))))].sort();
   const filtres=val?toutesCustom.filter(q=>q.toLowerCase().startsWith(val)):toutesCustom;
