@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.27</title>
+<title>Vidéothèque v1.7.29</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -353,7 +353,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.27</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.29</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -446,6 +446,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <input type="search" placeholder="🔍 Rechercher par titre..." id="search-local"
         style="flex:1;background:var(--surface);border:1px solid #333;border-radius:10px;padding:10px 14px;color:#fff;font-size:14px;outline:none"
         oninput="renderCollection()">
+      <button onclick="document.getElementById('search-local').value='';renderCollection()" title="Effacer la recherche"
+        style="background:var(--surface);border:1px solid #333;border-radius:10px;padding:10px 14px;color:#fff;cursor:pointer">✕</button>
       <button id="btn-ajout-top" data-role="collection-add" onclick="ouvrirAjoutDepuisCollection()"
         style="background:var(--green);border:1px solid var(--green-light);border-radius:10px;padding:10px 14px;color:#fff;font-size:22px;line-height:1;cursor:pointer" title="Ajouter un film, une série ou autre" aria-label="Ajouter">+</button>
       <button id="btn-filtres" onclick="toggleFiltres()"
@@ -1006,7 +1008,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.27';
+const APP_VERSION='v1.7.29';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -3069,7 +3071,7 @@ async function searchTmdb(type){
       const titre=f.title||f.name||'';
       const date=(f.release_date||f.first_air_date||'').slice(0,4);
       const img=f.poster_path?TMDB_IMG+f.poster_path:'';
-      const dejaFilm=films.find(x=>x.tmdbId===f.id);
+      const dejaFilm=films.find(x=>x.tmdbId===f.id && ((x.categorie==='series') === (type==='tv')));
       const deja=!!dejaFilm;
       const genres_=(f.genre_ids||[]).slice(0,3).map(id=>TMDB_GENRES[id]).filter(Boolean).join(', ');
       const addAction=deja?'ouvrirDetail('+dejaFilm.id+')':'ajouterTmdb('+f.id+',\''+type+'\',this)';
@@ -3099,7 +3101,8 @@ async function ouvrirFicheFilm(tmdbId,type){
     return;
   }
   document.getElementById('modal-fiche-titre').textContent='Chargement...';
-  document.getElementById('modal-fiche-body').innerHTML='<div class="loader"><div class="spinner"></div></div>';
+  setTimeout(()=>bindLongPressImages(),100);
+    document.getElementById('modal-fiche-body').innerHTML='<div class="loader"><div class="spinner"></div></div>';
   document.getElementById('modal-fiche').classList.add('open');
   const ficheBack=document.getElementById('modal-fiche-back');
   if(ficheBack) ficheBack.onclick=()=>fermerModal('modal-fiche');
@@ -3120,6 +3123,7 @@ async function ouvrirFicheFilm(tmdbId,type){
     const addBtn=document.getElementById('modal-fiche-add');
     if(deja){addBtn.textContent='✓ Ajouté';addBtn.style.background='#333';addBtn.disabled=true;}
     else{addBtn.textContent='+ Ajouter';addBtn.style.background='';addBtn.disabled=false;}
+    setTimeout(()=>bindLongPressImages(),100);
     document.getElementById('modal-fiche-body').innerHTML=
       '<div class="modal-film-header">'
       +'<img class="modal-film-poster" src="'+(d.poster_path?TMDB_IMG+d.poster_path:'')+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="">'
@@ -3147,7 +3151,8 @@ async function ouvrirFicheFilm(tmdbId,type){
             +'</div>';
         }).join('')+'</div>'
       :'');
-  }catch(e){document.getElementById('modal-fiche-body').innerHTML='<p style="color:var(--red);text-align:center;padding:20px">Erreur de chargement</p>';}
+  }catch(e){setTimeout(()=>bindLongPressImages(),100);
+    document.getElementById('modal-fiche-body').innerHTML='<p style="color:var(--red);text-align:center;padding:20px">Erreur de chargement</p>';}
 }
 
 async function ajouterTmdbDepuisModal(tmdbId,type){
@@ -5813,6 +5818,44 @@ function rafraichirFicheCourante() {
 window.rafraichirFicheCourante = rafraichirFicheCourante;
 
 
+
+
+// v1.7.29 : améliorations interface
+function clearLocalSearch(){
+  const e=document.getElementById('search-local');
+  if(e){e.value='';renderCollection();e.focus();}
+}
+
+// Affichage long appui tactile des images de fiche
+(function(){
+ let timer=null;
+ function bindLongPress(el){
+  if(!el||el.dataset.longpress) return;
+  el.dataset.longpress='1';
+  const start=()=>{timer=setTimeout(()=>{openImageFullscreen(el.src);},600);};
+  const stop=()=>{clearTimeout(timer);};
+  el.addEventListener('touchstart',start,{passive:true});
+  el.addEventListener('touchend',stop);
+  el.addEventListener('touchmove',stop);
+ }
+ window.bindLongPressImages=function(){
+  document.querySelectorAll('.modal-film-poster,.detail-backdrop').forEach(bindLongPress);
+ };
+ window.openImageFullscreen=function(src){
+  if(!src)return;
+  let d=document.getElementById('img-fullscreen');
+  if(!d){d=document.createElement('div');d.id='img-fullscreen';d.style.cssText='position:fixed;inset:0;background:#000;z-index:9999;display:flex;align-items:center;justify-content:center';d.onclick=()=>d.remove();document.body.appendChild(d);}
+  d.innerHTML='<img src="'+src+'" style="max-width:100%;max-height:100%;object-fit:contain">';
+ };
+})();
+
+function trierQualitesAffichees(qs){
+ const pref=['4K Light','Remastered','1080p','1080p Light'];
+ return [...(qs||[])].sort((a,b)=>{
+  const ia=pref.indexOf(a), ib=pref.indexOf(b);
+  return (ia<0?99:ia)-(ib<0?99:ib);
+ });
+}
 </script>
 </body>
 </html>
