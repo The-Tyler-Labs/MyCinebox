@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.29</title>
+<title>Vidéothèque v1.7.30</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -353,7 +353,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.29</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.30</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -572,13 +572,23 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- RECHERCHE / AJOUT -->
 <div class="page" id="page-search">
   <div style="padding-top:8px">
-    <!-- Tabs film / acteur -->
+    <!-- Recherche globale puis filtres -->
     <div class="search-tabs" style="flex-wrap:wrap;gap:3px">
-      <button class="search-tab active" id="stab-film" onclick="setSearchTab('film')">🎬 Film</button>
+      <button class="search-tab active" id="stab-film" onclick="setSearchTab('film')">🔎 Tous</button>
       <button class="search-tab" id="stab-acteur" onclick="setSearchTab('acteur')">🎭 Acteur</button>
       <button class="search-tab" id="stab-serie" onclick="setSearchTab('serie')">📺 Série</button>
       <button class="search-tab" id="stab-saga" onclick="setSearchTab('saga')">🎯 Saga</button>
       <button class="search-tab" id="stab-manuel" onclick="setSearchTab('manuel')">✏️ Manuel</button>
+    </div>
+
+    <!-- Recherche globale -->
+    <div id="panel-global">
+      <div class="search-bar">
+        <input type="text" id="global-query" placeholder="Rechercher un titre..." onkeydown="if(event.key==='Enter')searchGlobalTmdb()">
+        <button class="btn btn-primary" onclick="searchGlobalTmdb()">🔍</button>
+      </div>
+      <div id="global-loader" class="loader" style="display:none"><div class="spinner"></div></div>
+      <div id="global-results"></div>
     </div>
 
     <!-- Film -->
@@ -1008,7 +1018,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.29';
+const APP_VERSION='v1.7.30';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -3035,6 +3045,25 @@ async function fetchTmdbSearchJson(url,timeoutMs=15000){
 }
 
 let tmdbSearchSequence=0;
+async function searchGlobalTmdb(){
+  const q=(document.getElementById('global-query')?.value||'').trim();
+  if(!q)return;
+  const apiKey=ensureTmdbApiKey();
+  if(!apiKey){snack('⚠️ Configure ta clé TMDB');return;}
+  const box=document.getElementById('global-results');
+  const loader=document.getElementById('global-loader');
+  loader.style.display='block'; box.innerHTML='';
+  try{
+    const [movies,tvs]=await Promise.all([
+      tmdbFetchJson(TMDB_API+'/search/movie?api_key='+encodeURIComponent(apiKey)+'&query='+encodeURIComponent(q)+'&language=fr-FR'),
+      tmdbFetchJson(TMDB_API+'/search/tv?api_key='+encodeURIComponent(apiKey)+'&query='+encodeURIComponent(q)+'&language=fr-FR')
+    ]);
+    const rows=[...(movies.results||[]).map(x=>({...x,_type:'movie'})),...(tvs.results||[]).map(x=>({...x,_type:'tv'}))];
+    box.innerHTML=rows.slice(0,30).map(x=>`<div class="result-item"><div class="result-info"><h4>${esc(x.title||x.name||'')}</h4><div>${x._type==='tv'?'📺 Série':'🎬 Film'} ${x.release_date||x.first_air_date||''}</div></div><button class="btn btn-primary" onclick="ouvrirFicheFilm(${x.id},'${x._type}')">+</button></div>`).join('') || '<p>Aucun résultat</p>';
+  }catch(e){box.innerHTML='<p>⚠️ Erreur TMDB</p>';}
+  finally{loader.style.display='none';}
+}
+
 async function searchTmdb(type){
   const isTV=type==='tv';
   const inputId=isTV?'serie-query':'tmdb-query';
@@ -5820,7 +5849,7 @@ window.rafraichirFicheCourante = rafraichirFicheCourante;
 
 
 
-// v1.7.29 : améliorations interface
+// v1.7.30 : améliorations interface
 function clearLocalSearch(){
   const e=document.getElementById('search-local');
   if(e){e.value='';renderCollection();e.focus();}
