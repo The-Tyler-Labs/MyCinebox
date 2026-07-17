@@ -1,5 +1,5 @@
-// MyCinebox service worker — version 2026-07-11-v1.7.28-meilleure-qualite
-const CACHE_NAME = 'mycinebox-cache-2026-07-11-v1-7-28-meilleure-qualite';
+// MyCinebox service worker — v1.7.31 recherche séparée
+const CACHE_NAME = 'mycinebox-cache-v1-7-31-recherche-separee';
 const APP_SHELL = [
   '/MyCinebox/',
   '/MyCinebox/index.html',
