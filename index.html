@@ -356,7 +356,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.35</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.38</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -418,23 +418,29 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   </div>
   <div class="carousel" id="carousel-plustard"></div>
 
-  <div class="section-header" id="section-header-critique">
-    <span class="section-title">🎬 Regarder critiques</span>
-    <button class="see-all" onclick="goCollectionCatStatut('critique')">Voir tout →</button>
+  <div id="home-section-critique">
+    <div class="section-header" id="section-header-critique">
+      <span class="section-title">🎬 Regarder critiques</span>
+      <button class="see-all" onclick="goCollectionCatStatut('critique')">Voir tout →</button>
+    </div>
+    <div class="carousel" id="carousel-critique"></div>
   </div>
-  <div class="carousel" id="carousel-critique"></div>
 
-  <div class="section-header" id="section-header-ccdr">
-    <span class="section-title">📀 À prendre CCDR</span>
-    <button class="see-all" onclick="goCollectionCatStatut('ccdr')">Voir tout →</button>
+  <div id="home-section-ccdr">
+    <div class="section-header" id="section-header-ccdr">
+      <span class="section-title">📀 À prendre CCDR</span>
+      <button class="see-all" onclick="goCollectionCatStatut('ccdr')">Voir tout →</button>
+    </div>
+    <div class="carousel" id="carousel-ccdr"></div>
   </div>
-  <div class="carousel" id="carousel-ccdr"></div>
 
-  <div class="section-header" id="section-header-trouver">
-    <span class="section-title">🔍 À trouver</span>
-    <button class="see-all" onclick="goCollectionCatStatut('trouver')">Voir tout →</button>
+  <div id="home-section-trouver">
+    <div class="section-header" id="section-header-trouver">
+      <span class="section-title">🔍 À trouver</span>
+      <button class="see-all" onclick="goCollectionCatStatut('trouver')">Voir tout →</button>
+    </div>
+    <div class="carousel" id="carousel-trouver"></div>
   </div>
-  <div class="carousel" id="carousel-trouver"></div>
 
   <div class="section-header">
     <span class="section-title">🕐 Récemment ajoutés</span>
@@ -1032,7 +1038,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.37';
+const APP_VERSION='v1.7.38';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1248,6 +1254,7 @@ function setAfficherStatut(statut,visible){
   renderHome();
   renderCollection();
   renderSettings();
+  requestAnimationFrame(()=>renderHome());
 }
 function nextId(){return films.length>0?Math.max(...films.map(f=>f.id||0))+1:1;}
 
@@ -1433,12 +1440,17 @@ function renderHome(){
       }).join('');
   }
 
-  // Afficher ou masquer les trois blocs selon les préférences
+  // Afficher ou masquer les trois blocs complets selon les préférences.
+  // Le conteneur entier est piloté afin d'éviter qu'un ancien style « display:none »
+  // reste appliqué au retour sur l'accueil.
   [['trouver',prefs.showTrouver!==false],['critique',prefs.showCritique!==false],['ccdr',prefs.showCcdr!==false]].forEach(([statut,visible])=>{
+    const section=document.getElementById('home-section-'+statut);
     const header=document.getElementById('section-header-'+statut);
     const carousel=document.getElementById('carousel-'+statut);
-    if(header) header.style.display=visible?'':'none';
-    if(carousel) carousel.style.display=visible?'flex':'none';
+    if(section) section.hidden=!visible;
+    if(section) section.style.display=visible?'block':'none';
+    if(header) header.style.display='flex';
+    if(carousel) carousel.style.display='flex';
   });
 
   // Carousel Plus tard
