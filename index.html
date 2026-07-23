@@ -356,7 +356,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.38</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.39</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -1038,7 +1038,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.38';
+const APP_VERSION='v1.7.39';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1148,6 +1148,23 @@ let manuelType='films';
 let ficheFilmCourante=null;
 let contexteRetourFilmographie=null;
 
+function normaliserStatut(statut){
+  const brut=String(statut==null?'':statut).trim().toLowerCase();
+  const cle=brut.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'');
+  const alias={
+    '':'',
+    'trouver':'trouver','atrouver':'trouver','rechercher':'trouver','wanted':'trouver','tofind':'trouver',
+    'avoir':'avoir','avoir':'avoir','towatch':'avoir',
+    'plustard':'plustard','aplustard':'plustard','watchlater':'plustard',
+    'cours':'cours','encours':'cours','watching':'cours',
+    'vu':'vu','vus':'vu','regarde':'vu','regardes':'vu','watched':'vu',
+    'critique':'critique','critiques':'critique','regardercritique':'critique','regardercritiques':'critique',
+    'ccdr':'ccdr','aprendreccdr':'ccdr','aprendresurccdr':'ccdr','prendreccdr':'ccdr','prendresurccdr':'ccdr',
+    'meilleurequalite':'meilleurequalite','trouvermeilleurequalite':'meilleurequalite'
+  };
+  return Object.prototype.hasOwnProperty.call(alias,cle)?alias[cle]:brut;
+}
+
 function charger(){
   try{
     const data=localStorage.getItem(DB_KEY);
@@ -1163,7 +1180,7 @@ function charger(){
     catch(e2){films=[];}
   }
   films=films.map(f=>{
-    const statut=f.statut!==undefined?f.statut:(f.estVu?'vu':'');
+    const statut=normaliserStatut(f.statut!==undefined?f.statut:(f.estVu?'vu':''));
     const qualites=f.qualites||(f.qualite?[f.qualite]:[]);
     const pays=(f.pays||(f.nationalite?f.nationalite.split(',').map(p=>p.trim()).filter(Boolean):[])).map(p=>tradPays(p));
     // Normaliser la catégorie en minuscules
@@ -1241,20 +1258,23 @@ function sauvegarder(){
 function autoExportJSON(){} // Désactivé
 function savePrefs(){localStorage.setItem(PREFS_KEY,JSON.stringify(prefs));}
 function statutEstVisible(statut){
+  statut=normaliserStatut(statut);
   if(statut==='trouver') return prefs.showTrouver!==false;
   if(statut==='critique') return prefs.showCritique!==false;
   if(statut==='ccdr') return prefs.showCcdr!==false;
   return true;
 }
 function setAfficherStatut(statut,visible){
+  statut=normaliserStatut(statut);
   if(statut==='trouver') prefs.showTrouver=!!visible;
   if(statut==='critique') prefs.showCritique=!!visible;
   if(statut==='ccdr') prefs.showCcdr=!!visible;
   savePrefs();
   renderHome();
   renderCollection();
-  renderSettings();
   requestAnimationFrame(()=>renderHome());
+  const libelles={trouver:'À trouver',critique:'Regarder critiques',ccdr:'À prendre CCDR'};
+  snack((visible?'✓ Affiché : ':'✓ Masqué : ')+(libelles[statut]||statut));
 }
 function nextId(){return films.length>0?Math.max(...films.map(f=>f.id||0))+1:1;}
 
@@ -1393,7 +1413,7 @@ function renderHome(){
   }
 
   // Carousel À trouver
-  const aTrouver=[...films].filter(f=>f.statut==='trouver').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
+  const aTrouver=[...films].filter(f=>normaliserStatut(f.statut)==='trouver').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
   const elTrouver=document.getElementById('carousel-trouver');
   if(aTrouver.length===0){
     elTrouver.innerHTML='<p style="color:var(--text2);font-size:13px;padding:8px 0">Aucun film à trouver</p>';
@@ -1409,7 +1429,7 @@ function renderHome(){
   }
 
   // Carousel Regarder critiques
-  const critiques=[...films].filter(f=>f.statut==='critique').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
+  const critiques=[...films].filter(f=>normaliserStatut(f.statut)==='critique').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
   const elCritique=document.getElementById('carousel-critique');
   if(elCritique){
     elCritique.innerHTML=critiques.length===0
@@ -1425,7 +1445,7 @@ function renderHome(){
   }
 
   // Carousel À prendre CCDR
-  const ccdr=[...films].filter(f=>f.statut==='ccdr').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
+  const ccdr=[...films].filter(f=>normaliserStatut(f.statut)==='ccdr').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
   const elCcdr=document.getElementById('carousel-ccdr');
   if(elCcdr){
     elCcdr.innerHTML=ccdr.length===0
@@ -4366,11 +4386,11 @@ window.addEventListener('popstate', (e)=>{
   },50);
   const vus=filmsVisibles.filter(f=>f.statut==='vu').length;
   const avoir=filmsVisibles.filter(f=>f.statut==='avoir').length;
-  const trouver=films.filter(f=>f.statut==='trouver').length;
+  const trouver=films.filter(f=>normaliserStatut(f.statut)==='trouver').length;
   const cours=films.filter(f=>f.statut==='cours').length;
   const meilleureQualite=films.filter(f=>f.statut==='meilleurequalite').length;
-  const critique=films.filter(f=>f.statut==='critique').length;
-  const ccdr=films.filter(f=>f.statut==='ccdr').length;
+  const critique=films.filter(f=>normaliserStatut(f.statut)==='critique').length;
+  const ccdr=films.filter(f=>normaliserStatut(f.statut)==='ccdr').length;
   const nonPossedes=new Set(['trouver','critique','ccdr']);
   const possedes=films.filter(f=>!nonPossedes.has(f.statut));
   const bycat=['films','series','spectacles','documentaires','theatre','animation'].map(c=>{
