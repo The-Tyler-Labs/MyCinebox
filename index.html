@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.32</title>
+<title>Vidéothèque v1.7.35</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -123,6 +123,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .vu-badge.s-cours{background:rgba(26,60,120,.85);color:#7ab4f5}
 .vu-badge.s-vu{background:rgba(26,92,74,.9);color:#fff}
 .vu-badge.s-critique{background:rgba(120,20,120,.9);color:#f0a0ff}
+.vu-badge.s-ccdr{background:rgba(15,70,115,.92);color:#9bd3ff}
 .vu-badge.s-meilleurequalite{background:rgba(0,78,96,.9);color:#7fe7ff}
 /* Badge catégorie */
 .cat-badge{position:absolute;top:6px;left:6px;border-radius:8px;padding:2px 7px;font-size:10px;font-weight:bold;z-index:2;opacity:.9}
@@ -241,6 +242,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .vu-btn.s-cours{background:#1a3c78;color:#7ab4f5}
 .vu-btn.s-vu{background:var(--green);color:#fff}
 .vu-btn.s-critique{background:#4a1a4a;color:#f0a0ff}
+.vu-btn.s-ccdr{background:#0f4673;color:#9bd3ff}
 .vu-btn.s-meilleurequalite{background:#064c5a;color:#7fe7ff}
 /* Statut buttons dans détail */
 .statut-row{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
@@ -251,6 +253,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .statut-opt.active.s-cours{background:#1a3c78;color:#7ab4f5;border-color:#2a5aaa}
 .statut-opt.active.s-vu{background:var(--green);color:#fff;border-color:var(--green-light)}
 .statut-opt.active.s-critique{background:#4a1a4a;color:#f0a0ff;border-color:#9040a0}
+.statut-opt.active.s-ccdr{background:#0f4673;color:#9bd3ff;border-color:#3c8dcc}
 .statut-opt.active.s-meilleurequalite{background:#064c5a;color:#7fe7ff;border-color:#2da8bd}
 /* Qualité & Versions */
 .qualite-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
@@ -353,7 +356,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.32</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.35</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -415,13 +418,19 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   </div>
   <div class="carousel" id="carousel-plustard"></div>
 
-  <div class="section-header">
+  <div class="section-header" id="section-header-critique">
     <span class="section-title">🎬 Regarder critiques</span>
     <button class="see-all" onclick="goCollectionCatStatut('critique')">Voir tout →</button>
   </div>
   <div class="carousel" id="carousel-critique"></div>
 
-  <div class="section-header">
+  <div class="section-header" id="section-header-ccdr">
+    <span class="section-title">📀 À prendre CCDR</span>
+    <button class="see-all" onclick="goCollectionCatStatut('ccdr')">Voir tout →</button>
+  </div>
+  <div class="carousel" id="carousel-ccdr"></div>
+
+  <div class="section-header" id="section-header-trouver">
     <span class="section-title">🔍 À trouver</span>
     <button class="see-all" onclick="goCollectionCatStatut('trouver')">Voir tout →</button>
   </div>
@@ -486,6 +495,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
           <button class="tag" onclick="setTagFiltre('statut','plustard',this)">⏰ Plus tard</button>
                     <button class="tag" onclick="setTagFiltre('statut','vu',this)">👁 Vus</button>
           <button class="tag" onclick="setTagFiltre('statut','critique',this)">🎬 Regarder critiques</button>
+          <button class="tag" onclick="setTagFiltre('statut','ccdr',this)">📀 À prendre CCDR</button>
           <button class="tag" onclick="setTagFiltre('statut','meilleurequalite',this)">🔎 Trouver meilleure qualité</button>
         </div>
       </div>
@@ -681,6 +691,22 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <div id="settings-stats" style="font-size:14px;line-height:2"></div>
     </div>
     <div class="settings-section">
+      <h3>👁️ Affichage des statuts</h3>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Choisis les listes que tu veux voir dans l’accueil, la collection, les recherches et les sagas.</p>
+      <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #333">
+        <span>🔍 Afficher les films À trouver</span>
+        <input type="checkbox" id="pref-show-trouver" onchange="setAfficherStatut('trouver',this.checked)" style="width:20px;height:20px;accent-color:var(--green)">
+      </label>
+      <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #333">
+        <span>🎬 Afficher Regarder critiques</span>
+        <input type="checkbox" id="pref-show-critique" onchange="setAfficherStatut('critique',this.checked)" style="width:20px;height:20px;accent-color:var(--green)">
+      </label>
+      <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0">
+        <span>📀 Afficher À prendre CCDR</span>
+        <input type="checkbox" id="pref-show-ccdr" onchange="setAfficherStatut('ccdr',this.checked)" style="width:20px;height:20px;accent-color:var(--green)">
+      </label>
+    </div>
+    <div class="settings-section">
       <h3>🎯 Sagas dans la collection</h3>
       <div style="display:flex;gap:8px;margin-bottom:4px">
         <button id="btn-saga-groupe" onclick="setSagaMode('groupe',this)" style="flex:1;padding:10px;border-radius:10px;border:2px solid var(--green-light);background:var(--surface2);color:var(--text);cursor:pointer;font-size:12px">📁 Fiche saga</button>
@@ -713,10 +739,6 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <span style="font-size:16px">L</span>
       </div>
       <p id="home-cols-label" style="font-size:12px;color:var(--text2);text-align:center;margin-bottom:8px">4 colonnes</p>
-    </div>
-    <div class="settings-section">
-      <h3>👁️ Affichage</h3>
-      <label><input type="checkbox" id="show-trouver-toggle" onchange="toggleTrouverVisibility(this.checked)"> Afficher les films À trouver</label>
     </div>
     <div class="settings-section">
       <h3>🖼 Taille des affiches</h3>
@@ -912,6 +934,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <button class="btn" onclick="actionRapide('cours')" style="background:#1a3a1a;color:#6adf6a;text-align:left;padding:10px 14px;font-size:13px">▶ En cours</button>
       <button class="btn" onclick="actionRapide('vu')" style="background:#1a4a2a;color:#2adf8a;text-align:left;padding:10px 14px;font-size:13px">👁 Vu</button>
       <button class="btn" onclick="actionRapide('critique')" style="background:#4a1a4a;color:#f0a0ff;text-align:left;padding:10px 14px;font-size:13px">🎬 Regarder critiques</button>
+      <button class="btn" onclick="actionRapide('ccdr')" style="background:#0f4673;color:#9bd3ff;text-align:left;padding:10px 14px;font-size:13px">📀 À prendre CCDR</button>
       <button class="btn" onclick="actionRapide('meilleurequalite')" style="background:#064c5a;color:#7fe7ff;text-align:left;padding:10px 14px;font-size:13px">🔎 Trouver meilleure qualité</button>
       <button class="btn" onclick="actionRapide('detail')" style="background:var(--surface2);color:var(--text);text-align:left;padding:10px 14px;font-size:13px">📋 Ouvrir la fiche</button>
       <button class="btn" onclick="actionRapide('supprimer')" style="background:#5c1a1a;color:#ff6a6a;text-align:left;padding:10px 14px;font-size:13px">🗑 Supprimer</button>
@@ -1004,10 +1027,6 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>Drive
     <div id="nav-drive-date" style="font-size:10px;color:#fff;margin-top:2px;line-height:1;font-weight:400;opacity:0.7"></div>
   </button>
-
-  <button class="nav-btn" id="nav-add" onclick="ouvrirAjoutDepuisCollection()">
-    <svg viewBox="0 0 24 24"><path d="M19 11H13V5h-2v6H5v2h6v6h2v-6h6z"/></svg>Ajouter
-  </button>
 </nav>
 <button class="fab" id="fab-btn" onclick="toggleFabAjout()" style="display:none !important">+</button>
 
@@ -1017,7 +1036,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.32';
+const APP_VERSION='v1.7.36';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1083,7 +1102,7 @@ const TMDB_API='https://api.themoviedb.org/3';
 const CATS={films:{icon:'🎬',label:'Film'},series:{icon:'📺',label:'Série'},spectacles:{icon:'🎭',label:'Spectacle'},documentaires:{icon:'🎥',label:'Documentaire'},theatre:{icon:'🎪',label:'Théâtre'},animation:{icon:'🎨',label:'Animation'},humour:{icon:'😂',label:'Humour/Sketchs'}};
 
 const DEFAULT_TMDB_API_KEY='1847535cfa0ee0cdcd25f1954cd9614f';
-let films=[],prefs={apiKey:DEFAULT_TMDB_API_KEY,cols:2,suggestedBannerSpeed:38,suggestedBannerCardSeconds:7};
+let films=[],prefs={apiKey:DEFAULT_TMDB_API_KEY,cols:2,suggestedBannerSpeed:38,suggestedBannerCardSeconds:7,showTrouver:true,showCritique:true,showCcdr:true};
 
 // Une ancienne préférence locale ne doit jamais désactiver la recherche TMDB
 // en remplaçant la clé intégrée par une valeur vide.
@@ -1219,6 +1238,21 @@ function sauvegarder(){
 
 function autoExportJSON(){} // Désactivé
 function savePrefs(){localStorage.setItem(PREFS_KEY,JSON.stringify(prefs));}
+function statutEstVisible(statut){
+  if(statut==='trouver') return prefs.showTrouver!==false;
+  if(statut==='critique') return prefs.showCritique!==false;
+  if(statut==='ccdr') return prefs.showCcdr!==false;
+  return true;
+}
+function setAfficherStatut(statut,visible){
+  if(statut==='trouver') prefs.showTrouver=!!visible;
+  if(statut==='critique') prefs.showCritique=!!visible;
+  if(statut==='ccdr') prefs.showCcdr=!!visible;
+  savePrefs();
+  renderHome();
+  renderCollection();
+  renderSettings();
+}
 function nextId(){return films.length>0?Math.max(...films.map(f=>f.id||0))+1:1;}
 
 function nouveauFilm(data){
@@ -1326,14 +1360,15 @@ function goCollectionCat(cat){
 
 // ── HOME ──
 function renderHome(){
-  const total=films.length;
-  const vus=films.filter(f=>f.statut==='vu').length;
-  const avoir=films.filter(f=>f.statut==='avoir').length;
+  const filmsVisibles=films.filter(f=>statutEstVisible(f.statut));
+  const total=filmsVisibles.length;
+  const vus=filmsVisibles.filter(f=>f.statut==='vu').length;
+  const avoir=filmsVisibles.filter(f=>f.statut==='avoir').length;
   document.getElementById('stat-total').textContent=total;
   document.getElementById('stat-vus').textContent=vus;
   document.getElementById('stat-avoir').textContent=avoir;
   ['films','series','spectacles','documentaires','theatre','animation','humour'].forEach(cat=>{
-    const n=films.filter(f=>f.categorie===cat).length;
+    const n=filmsVisibles.filter(f=>f.categorie===cat).length;
     const el=document.getElementById('count-'+cat);
     if(el) el.textContent=n+' élément'+(n>1?'s':'');
   });
@@ -1386,6 +1421,30 @@ function renderHome(){
       }).join('');
   }
 
+  // Carousel À prendre CCDR
+  const ccdr=[...films].filter(f=>f.statut==='ccdr').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
+  const elCcdr=document.getElementById('carousel-ccdr');
+  if(elCcdr){
+    elCcdr.innerHTML=ccdr.length===0
+      ?'<p style="color:var(--text2);font-size:13px;padding:8px 0">Aucun film à prendre CCDR</p>'
+      :ccdr.map(f=>{
+        const cat=CATS[f.categorie]||CATS.films;
+        return '<div class="carousel-card" onclick="ouvrirDetail('+f.id+')">'
+          +'<img src="'+(f.affichePath||'')+'" onerror="this.src=\'\';this.style.background=\'var(--green-dark)\'" alt="">'
+          +'<div class="cc-title">'+esc(f.titre)+'</div>'
+          +'<div class="cc-cat">'+cat.icon+' '+(f.dateSortie||'').slice(0,4)+'</div>'
+          +'</div>';
+      }).join('');
+  }
+
+  // Afficher ou masquer les trois blocs selon les préférences
+  [['trouver',prefs.showTrouver!==false],['critique',prefs.showCritique!==false],['ccdr',prefs.showCcdr!==false]].forEach(([statut,visible])=>{
+    const header=document.getElementById('section-header-'+statut);
+    const carousel=document.getElementById('carousel-'+statut);
+    if(header) header.style.display=visible?'':'none';
+    if(carousel) carousel.style.display=visible?'flex':'none';
+  });
+
   // Carousel Plus tard
   const plusTard=[...films].filter(f=>f.statut==='plustard').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
   const elPlusTard=document.getElementById('carousel-plustard');
@@ -1403,7 +1462,7 @@ function renderHome(){
   }
 
   // Carousel Récemment ajoutés
-  const recents=[...films].sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,12);
+  const recents=[...filmsVisibles].sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,12);
   document.getElementById('carousel-recents').innerHTML=recents.length===0
     ?'<p style="color:var(--text2);font-size:13px;padding:8px 0">Aucun contenu ajouté</p>'
     :recents.map(f=>{
@@ -1595,12 +1654,6 @@ function resetFiltres(){
   renderCollection();
 }
 
-
-const SHOW_TROUVER_KEY="mc_show_trouver";
-function isShowTrouver(){return localStorage.getItem(SHOW_TROUVER_KEY)!=="0";}
-function toggleTrouverVisibility(v){localStorage.setItem(SHOW_TROUVER_KEY,v?"1":"0");renderCollection();}
-document.addEventListener("DOMContentLoaded",()=>{const c=document.getElementById("show-trouver-toggle");if(c)c.checked=isShowTrouver();});
-
 function renderCollection(){
   const collectionQuery=(document.getElementById('collection-search-input')?.value||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   const q=(document.getElementById('search-local').value||'').toLowerCase();
@@ -1615,7 +1668,7 @@ function renderCollection(){
 
   // Mode saga avec filtre actif — afficher les films de la saga
   if(!rechercheGlobale&&catTab==='saga'&&tagFiltres.saga){
-    const filmsS=films.filter(f=>{const fs=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);return fs.includes(tagFiltres.saga);});
+    const filmsS=films.filter(f=>statutEstVisible(f.statut)&&(()=>{const fs=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);return fs.includes(tagFiltres.saga);})());
     const grid=document.getElementById('coll-grid');
     const empty=document.getElementById('coll-empty');
     document.getElementById('coll-count').textContent=filmsS.length+' film(s)';
@@ -1643,7 +1696,7 @@ function renderCollection(){
     empty.style.display='none';
     grid.style.display='grid';
     grid.innerHTML=sagas.map(saga=>{
-      const filmsS=films.filter(f=>{const fs=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);return fs.includes(saga);});
+      const filmsS=films.filter(f=>statutEstVisible(f.statut)&&(()=>{const fs=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);return fs.includes(saga);})());
       const premier=filmsS.find(f=>f.affichePath)||filmsS[0];
       const affiche=premier&&premier.affichePath?premier.affichePath:'';
       return '<div style="background:var(--surface);border-radius:12px;overflow:hidden;cursor:pointer" onclick="voirSaga(this.getAttribute(\'data-saga\'))" data-saga="'+esc(saga)+'">'
@@ -1657,7 +1710,7 @@ function renderCollection(){
   }
 
   let liste=films.filter(f=>{
-    if(!isShowTrouver() && f.statut==='trouver') return false;
+    if(!statutEstVisible(f.statut)) return false;
     // Hors recherche textuelle, les onglets de catégories gardent leur comportement actuel.
     // Pendant une recherche, on ne limite pas au tab affiché : un titre doit pouvoir être
     // retrouvé même s'il est rangé dans « À trouver », « Critiques », une série, etc.
@@ -1671,8 +1724,8 @@ function renderCollection(){
         const estAnimation=f.categorie==='animation'||(f.genres||'').toLowerCase().split(',').map(g=>g.trim()).includes('animation');
         if(!estAnimation) return false;
       } else if(catTab!=='tous'&&f.categorie!==catTab) return false;
-      // Dans l'affichage normal, À trouver et Critiques sont dans leurs onglets dédiés.
-      if(tagFiltres.statut==='tous'&&(f.statut==='trouver'||f.statut==='critique')) return false;
+      // Dans l'affichage normal, les listes hors collection sont accessibles via leurs filtres dédiés.
+      if(tagFiltres.statut==='tous'&&(f.statut==='trouver'||f.statut==='critique'||f.statut==='ccdr')) return false;
     }
     // Un filtre de statut choisi volontairement dans ⚙️ continue de s'appliquer,
     // même en recherche globale.
@@ -1730,7 +1783,7 @@ function renderCollection(){
   }
 
   const actifs=[];
-  const statutLabels={trouver:'🔍 À trouver',avoir:'📋 À voir',plustard:'⏰ Plus tard',cours:'▶️ En cours',vu:'👁 Vus',critique:'🎬 Critiques',meilleurequalite:'🔎 Trouver meilleure qualité'};
+  const statutLabels={trouver:'🔍 À trouver',avoir:'📋 À voir',plustard:'⏰ Plus tard',cours:'▶️ En cours',vu:'👁 Vus',critique:'🎬 Critiques',ccdr:'📀 À prendre CCDR',meilleurequalite:'🔎 Trouver meilleure qualité'};
   if(rechercheGlobale) actifs.push('🔎 Recherche dans toute la médiathèque');
   if(tagFiltres.statut!=='tous') actifs.push(statutLabels[tagFiltres.statut]||tagFiltres.statut);
   if(tagFiltres.decennie&&tagFiltres.decennie.size>0) actifs.push('Décennie: '+[...tagFiltres.decennie].join(', '));
@@ -1747,7 +1800,7 @@ function renderCollection(){
 
   const grid=document.getElementById('coll-grid');
   const empty=document.getElementById('coll-empty');
-  const nbColl=liste.filter(f=>f.statut!=='trouver'&&f.statut!=='critique').length;
+  const nbColl=liste.filter(f=>f.statut!=='trouver'&&f.statut!=='critique'&&f.statut!=='ccdr').length;
   const totalTxt=rechercheGlobale
     ?liste.length+' résultat(s) dans toute la médiathèque'
     :(catTab==='atrouver'||catTab==='acritique'?liste.length+' élément(s)':nbColl+' élément(s)'+(liste.length!==nbColl?' (+'+( liste.length-nbColl)+' hors collection)':''));
@@ -1761,7 +1814,7 @@ function renderCollection(){
 }
 
 function statutInfo(s){
-  const m={trouver:{cls:'s-trouver',label:'🔍 À trouver'},avoir:{cls:'s-avoir',label:'📋 À voir'},plustard:{cls:'s-plustard',label:'⏰ Plus tard'},cours:{cls:'s-cours',label:'▶ En cours'},vu:{cls:'s-vu',label:'👁 Vu'},critique:{cls:'s-critique',label:'🎬 Regarder critiques'},meilleurequalite:{cls:'s-meilleurequalite',label:'🔎 Trouver meilleure qualité'}};
+  const m={trouver:{cls:'s-trouver',label:'🔍 À trouver'},avoir:{cls:'s-avoir',label:'📋 À voir'},plustard:{cls:'s-plustard',label:'⏰ Plus tard'},cours:{cls:'s-cours',label:'▶ En cours'},vu:{cls:'s-vu',label:'👁 Vu'},critique:{cls:'s-critique',label:'🎬 Regarder critiques'},ccdr:{cls:'s-ccdr',label:'📀 À prendre CCDR'},meilleurequalite:{cls:'s-meilleurequalite',label:'🔎 Trouver meilleure qualité'}};
   return m[s]||{cls:'s-vide',label:'—'};
 }
 
@@ -2186,7 +2239,7 @@ function selAction(action){
 }
 
 
-const STATUTS=['','trouver','avoir','plustard','cours','vu','critique','meilleurequalite'];
+const STATUTS=['','trouver','avoir','plustard','cours','vu','critique','ccdr','meilleurequalite'];
 
 // ── TRAILERS TMDB ──
 // Les séries et les films utilisent la même règle : français en priorité,
@@ -4210,12 +4263,14 @@ window.addEventListener('popstate', (e)=>{
     const js=document.getElementById('json-status');
     if(js&&jsonDate) js.textContent='✓ Dernière sauvegarde JSON : '+jsonDate;
   },50);
-  const vus=films.filter(f=>f.statut==='vu').length;
-  const avoir=films.filter(f=>f.statut==='avoir').length;
+  const vus=filmsVisibles.filter(f=>f.statut==='vu').length;
+  const avoir=filmsVisibles.filter(f=>f.statut==='avoir').length;
   const trouver=films.filter(f=>f.statut==='trouver').length;
   const cours=films.filter(f=>f.statut==='cours').length;
   const meilleureQualite=films.filter(f=>f.statut==='meilleurequalite').length;
-  const nonPossedes=new Set(['trouver','critique']);
+  const critique=films.filter(f=>f.statut==='critique').length;
+  const ccdr=films.filter(f=>f.statut==='ccdr').length;
+  const nonPossedes=new Set(['trouver','critique','ccdr']);
   const possedes=films.filter(f=>!nonPossedes.has(f.statut));
   const bycat=['films','series','spectacles','documentaires','theatre','animation'].map(c=>{
     const n=possedes.filter(f=>f.categorie===c).length;
@@ -4230,8 +4285,11 @@ window.addEventListener('popstate', (e)=>{
     '<div style="display:flex;flex-wrap:wrap;gap:10px 24px;align-items:center;margin-bottom:14px">'
     +'<div><strong>Total fiches :</strong> '+films.length+'</div>'
     +'<div><strong>💿 Total possédé :</strong> '+possedes.length+'</div>'
-    +'<div>🔍 À trouver : '+trouver+'</div><div>📋 À voir : '+avoir+'</div><div>▶️ En cours : '+cours+'</div><div>👁 Vus : '+vus+'</div><div>🔎 Trouver meilleure qualité : '+meilleureQualite+'</div>'
+    +'<div>🔍 À trouver : '+trouver+'</div><div>🎬 Regarder critiques : '+critique+'</div><div>📀 À prendre CCDR : '+ccdr+'</div><div>📋 À voir : '+avoir+'</div><div>▶️ En cours : '+cours+'</div><div>👁 Vus : '+vus+'</div><div>🔎 Trouver meilleure qualité : '+meilleureQualite+'</div>'
     +'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px 22px">'+bycat+'</div>'+backupInfo;
+  const prefTrouver=document.getElementById('pref-show-trouver');if(prefTrouver) prefTrouver.checked=prefs.showTrouver!==false;
+  const prefCritique=document.getElementById('pref-show-critique');if(prefCritique) prefCritique.checked=prefs.showCritique!==false;
+  const prefCcdr=document.getElementById('pref-show-ccdr');if(prefCcdr) prefCcdr.checked=prefs.showCcdr!==false;
   const tmdbKey=ensureTmdbApiKey();
   const keyInput=document.getElementById('api-key-input');
   const keyStatus=document.getElementById('api-key-status');
@@ -5881,7 +5939,7 @@ window.rafraichirFicheCourante = rafraichirFicheCourante;
 
 
 
-// v1.7.32 : recherche de collection séparée de l’ajout TMDB
+// v1.7.35 : recherche de collection séparée de l’ajout TMDB
 function clearLocalSearch(){
   const e=document.getElementById('search-local');
   if(e){e.value='';renderCollection();e.focus();}
