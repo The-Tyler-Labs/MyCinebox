@@ -582,24 +582,30 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- RECHERCHE / AJOUT -->
 <div class="page" id="page-search">
   <div style="padding-top:8px">
-    <!-- Tabs film / acteur -->
+    <!-- Recherche unifiée par défaut -->
     <div class="search-tabs" style="flex-wrap:wrap;gap:3px">
-      <button class="search-tab active" id="stab-film" onclick="setSearchTab('film')">🎬 Film</button>
+      <button class="search-tab active" id="stab-tout" onclick="setSearchTab('tout')">🔎 Tout</button>
       <button class="search-tab" id="stab-acteur" onclick="setSearchTab('acteur')">🎭 Acteur</button>
-      <button class="search-tab" id="stab-serie" onclick="setSearchTab('serie')">📺 Série</button>
       <button class="search-tab" id="stab-saga" onclick="setSearchTab('saga')">🎯 Saga</button>
       <button class="search-tab" id="stab-manuel" onclick="setSearchTab('manuel')">✏️ Manuel</button>
     </div>
     <div id="saga-add-context" style="display:none;margin:0 0 14px;padding:11px 13px;border:1px solid #315d7a;background:#142735;border-radius:10px;font-size:13px;color:#cfeeff"></div>
 
-    <!-- Film -->
-    <div id="panel-film">
+    <!-- Recherche TMDB unifiée : films, séries et personnes -->
+    <div id="panel-tout">
       <div class="search-bar">
-        <input type="text" id="tmdb-query" placeholder="Titre du film..." onkeydown="if(event.key==='Enter')searchTmdb('movie')">
-        <button class="btn btn-primary" onclick="searchTmdb('movie')">🔍</button>
+        <input type="text" id="multi-query" placeholder="Film, série, émission, documentaire, acteur..." onkeydown="if(event.key==='Enter')searchTmdbMulti()">
+        <button class="btn btn-primary" onclick="searchTmdbMulti()">🔍</button>
       </div>
-      <div id="search-loader" class="loader" style="display:none"><div class="spinner"></div></div>
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:11px;color:var(--text2)">🔎 Taille :</span><input type="range" min="2" max="6" step="1" value="3" style="width:80px;accent-color:var(--green)" oninput="setSearchCols(this.value)"><span id="search-cols-label" style="font-size:11px;color:var(--text2)">3</span><button class="sort-btn active" id="search-sort-pop" onclick="setSearchSort('pop',this)">⭐ Popularité</button><button class="sort-btn" id="search-sort-date" onclick="setSearchSort('date',this)">📅 Date</button></div><div id="search-results"></div>
+      <div id="multi-loader" class="loader" style="display:none"><div class="spinner"></div></div>
+      <div id="multi-filters" style="display:none;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="sort-btn active" id="multi-filter-all" onclick="setMultiFilter('all',this)">Tout</button>
+        <button class="sort-btn" id="multi-filter-movie" onclick="setMultiFilter('movie',this)">🎬 Films</button>
+        <button class="sort-btn" id="multi-filter-tv" onclick="setMultiFilter('tv',this)">📺 Séries / émissions</button>
+        <button class="sort-btn" id="multi-filter-person" onclick="setMultiFilter('person',this)">🎭 Personnes</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:11px;color:var(--text2)">🔎 Taille :</span><input type="range" min="2" max="6" step="1" value="3" style="width:80px;accent-color:var(--green)" oninput="setSearchCols(this.value)"><span id="search-cols-label" style="font-size:11px;color:var(--text2)">3</span><button class="sort-btn active" id="search-sort-pop" onclick="setSearchSort('pop',this);renderMultiResults()">⭐ Popularité</button><button class="sort-btn" id="search-sort-date" onclick="setSearchSort('date',this);renderMultiResults()">📅 Date</button></div>
+      <div id="multi-results"></div>
     </div>
 
     <!-- Acteur -->
@@ -610,16 +616,6 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       </div>
       <div id="acteur-loader" class="loader" style="display:none"><div class="spinner"></div></div>
       <div id="acteur-results"></div>
-    </div>
-
-    <!-- Série TMDB -->
-    <div id="panel-serie" style="display:none">
-      <div class="search-bar">
-        <input type="text" id="serie-query" placeholder="Titre de la série..." onkeydown="if(event.key==='Enter')searchTmdb('tv')">
-        <button class="btn btn-primary" onclick="searchTmdb('tv')">🔍</button>
-      </div>
-      <div id="serie-loader" class="loader" style="display:none"><div class="spinner"></div></div>
-      <div id="serie-results"></div>
     </div>
 
     <!-- Saga / Collection -->
@@ -1036,7 +1032,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.36';
+const APP_VERSION='v1.7.37';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -3064,8 +3060,8 @@ function actualiserContexteAjoutSaga(){
 }
 function ouvrirAjoutPourSaga(){
   sagaAjoutCourante=tagFiltres.saga||'';
-  goPage('search');setSearchTab('film');actualiserContexteAjoutSaga();
-  setTimeout(()=>{const input=document.getElementById('tmdb-query');if(input) input.focus();},80);
+  goPage('search');setSearchTab('tout');actualiserContexteAjoutSaga();
+  setTimeout(()=>{const input=document.getElementById('multi-query');if(input) input.focus();},80);
 }
 function lierFilmASaga(id){
   const f=films.find(x=>x.id===id);
@@ -3078,19 +3074,112 @@ function lierFilmASaga(id){
 function ouvrirAjoutDepuisCollection(){
   sagaAjoutCourante='';
   goPage('search');
-  setSearchTab('film');
+  setSearchTab('tout');
   actualiserContexteAjoutSaga();
   setTimeout(()=>{
-    const input=document.getElementById('tmdb-query');
+    const input=document.getElementById('multi-query');
     if(input) input.focus();
   },80);
 }
 
 function setSearchTab(tab){
-  ['film','acteur','serie','saga','manuel'].forEach(t=>{
-    document.getElementById('panel-'+t).style.display=t===tab?'block':'none';
-    document.getElementById('stab-'+t).classList.toggle('active',t===tab);
+  ['tout','acteur','saga','manuel'].forEach(t=>{
+    const panel=document.getElementById('panel-'+t);
+    const bouton=document.getElementById('stab-'+t);
+    if(panel) panel.style.display=t===tab?'block':'none';
+    if(bouton) bouton.classList.toggle('active',t===tab);
   });
+  if(tab==='tout') setTimeout(()=>document.getElementById('multi-query')?.focus(),60);
+}
+
+
+// ── RECHERCHE TMDB UNIFIÉE ──
+let multiSearchResults=[];
+let multiSearchFilter='all';
+
+function setMultiFilter(filter,btn){
+  multiSearchFilter=filter;
+  document.querySelectorAll('#multi-filters .sort-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderMultiResults();
+}
+
+function typeLabelTmdb(item){
+  if(item.media_type==='movie') return '🎬 Film';
+  if(item.media_type==='tv') return '📺 Série / émission';
+  if(item.media_type==='person') return '🎭 Personne';
+  return 'Contenu';
+}
+
+function renderMultiResults(){
+  const results=document.getElementById('multi-results');
+  if(!results) return;
+  let found=multiSearchResults.filter(x=>['movie','tv','person'].includes(x.media_type));
+  if(multiSearchFilter!=='all') found=found.filter(x=>x.media_type===multiSearchFilter);
+  if(_searchSort==='date') found=[...found].sort((a,b)=>((b.release_date||b.first_air_date||'').localeCompare(a.release_date||a.first_air_date||'')));
+  else found=[...found].sort((a,b)=>(b.popularity||0)-(a.popularity||0));
+  if(!found.length){
+    results.innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">Aucun résultat dans cette catégorie.</p>';
+    return;
+  }
+  results.innerHTML=found.slice(0,60).map(item=>{
+    const type=item.media_type;
+    const isPerson=type==='person';
+    const titre=item.title||item.name||'';
+    const date=(item.release_date||item.first_air_date||'').slice(0,4);
+    const imgPath=isPerson?item.profile_path:item.poster_path;
+    const img=imgPath?'https://image.tmdb.org/t/p/w500'+imgPath:'';
+    const connu=isPerson?(item.known_for||[]).slice(0,3).map(x=>x.title||x.name).filter(Boolean).join(', '):'';
+    const resume=isPerson?(connu?'Connu pour : '+connu:'Voir la filmographie'):(item.overview||'');
+    if(isPerson){
+      return '<div class="result-item" onclick="ouvrirFilmographie('+item.id+',\''+esc(titre).replace(/'/g,"\\'")+'\')">'
+        +'<img src="'+img+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="">'
+        +'<div class="result-info"><h4>'+esc(titre)+' <span style="font-size:10px;color:var(--green-light);font-weight:normal">'+typeLabelTmdb(item)+'</span></h4>'
+        +'<div class="roverview">'+esc(resume)+'</div></div><span style="font-size:22px;color:var(--green-light)">›</span></div>';
+    }
+    const dejaFilm=films.find(x=>x.tmdbId===item.id && ((x.categorie==='series')===(type==='tv')));
+    const deja=!!dejaFilm;
+    const genres_=(item.genre_ids||[]).slice(0,3).map(id=>TMDB_GENRES[id]).filter(Boolean).join(', ');
+    const addAction=deja?(sagaAjoutCourante&&type==='movie'?'lierFilmASaga('+dejaFilm.id+');this.textContent=\'✓\';this.disabled=true':'ouvrirDetail('+dejaFilm.id+')'):'ajouterTmdb('+item.id+',\''+type+'\',this)';
+    return '<div class="result-item" onclick="ouvrirFicheFilm('+item.id+',\''+type+'\')">'
+      +'<img src="'+img+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="">'
+      +'<div class="result-info"><h4>'+esc(titre)+' <span style="font-size:10px;color:var(--green-light);font-weight:normal">'+typeLabelTmdb(item)+'</span></h4>'
+      +'<div class="rmeta">'+date+(item.vote_average>0?' • ⭐ '+item.vote_average.toFixed(1):'')+(genres_?' • '+esc(genres_):'')+'</div>'
+      +'<div class="roverview">'+esc(resume)+'</div></div>'
+      +'<button class="btn '+(deja?'':'btn-primary')+' add-btn" style="flex-shrink:0;padding:6px 12px;font-size:13px;'+(deja?'background:#483a68;color:#fff':'')+'" onclick="event.stopPropagation();event.preventDefault();'+addAction+'">'
+      +(deja?(sagaAjoutCourante&&type==='movie'?'📎':'💿'):'+')+'</button></div>';
+  }).join('');
+}
+
+async function searchTmdbMulti(){
+  const q=(document.getElementById('multi-query')?.value||'').trim();
+  if(!q) return;
+  const apiKey=ensureTmdbApiKey();
+  if(!apiKey){snack('⚠️ Configure ta clé TMDB dans Paramètres');return;}
+  const loader=document.getElementById('multi-loader');
+  const results=document.getElementById('multi-results');
+  const filters=document.getElementById('multi-filters');
+  const searchId=++tmdbSearchSequence;
+  loader.style.display='block';results.innerHTML='';filters.style.display='none';
+  try{
+    const url=TMDB_API+'/search/multi?api_key='+encodeURIComponent(apiKey)+'&query='+encodeURIComponent(q)+'&language=fr-FR&include_adult=false';
+    const data=await tmdbFetchJson(url,15000);
+    if(searchId!==tmdbSearchSequence) return;
+    multiSearchResults=(data.results||[]).filter(x=>['movie','tv','person'].includes(x.media_type));
+    multiSearchFilter='all';
+    document.querySelectorAll('#multi-filters .sort-btn').forEach(b=>b.classList.remove('active'));
+    document.getElementById('multi-filter-all')?.classList.add('active');
+    filters.style.display='flex';
+    if(!multiSearchResults.length) results.innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">Aucun résultat pour « '+esc(q)+' »</p>';
+    else renderMultiResults();
+  }catch(e){
+    if(searchId!==tmdbSearchSequence) return;
+    const message=tmdbSearchErrorMessage(e);
+    results.innerHTML='<div style="text-align:center;padding:20px;color:var(--text2)"><p>⚠️ '+esc(message)+'</p><button class="btn btn-primary" onclick="searchTmdbMulti()">Réessayer</button></div>';
+    snack('⚠️ '+message);
+  }finally{
+    if(searchId===tmdbSearchSequence) loader.style.display='none';
+  }
 }
 
 // ── TMDB SEARCH (film ou série) ──
