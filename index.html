@@ -359,7 +359,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.45</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.46</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -1041,7 +1041,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.45';
+const APP_VERSION='v1.7.46';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -5565,7 +5565,7 @@ window.addEventListener('load',()=>{
     try{
       _googleClientInstance=google.accounts.oauth2.initTokenClient({
         client_id:GOOGLE_CLIENT_ID,
-        scope:'https://www.googleapis.com/auth/drive.file',
+        scope:'openid email profile https://www.googleapis.com/auth/drive.file',
         prompt:'',
         callback:(resp)=>{
           if(resp.error||!resp.access_token) return;
@@ -5598,48 +5598,92 @@ document.addEventListener('visibilitychange',()=>{
 <script src="https://accounts.google.com/gsi/client" async onerror="console.log('GSI non dispo')"></script>
 <script>
 const GOOGLE_CLIENT_ID='932454913163-aqttulsgsdoq2ekil51dnl7ge7mmredh.apps.googleusercontent.com';
-const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+const DRIVE_SCOPE='openid email profile https://www.googleapis.com/auth/drive.file';
 const DRIVE_FILENAME='videotheque_backup.json';
 const DRIVE_PREFS_FILENAME='videotheque_prefs.json';
 let _googleToken=null;
 let _driveAutoSaveTimer=null;
 
 function googleSignIn(){
-  if(typeof google==='undefined'){snack('⚠️ Connexion Google disponible sur https:// uniquement');return;}
-  if(_googleClientInstance){
-    _googleClientInstance.requestAccessToken({prompt:'select_account'});
+  if(typeof google==='undefined'){
+    snack('⚠️ Service Google non chargé. Recharge la page.');
     return;
   }
-  // Créer une nouvelle instance
-  const client=google.accounts.oauth2.initTokenClient({
-    client_id:GOOGLE_CLIENT_ID,scope:DRIVE_SCOPE,
-    callback:(resp)=>{
-      if(resp.error){snack('⚠️ Erreur connexion');return;}
-      _googleToken=resp.access_token;
-      chargerProfilGoogle();
-    }
-  });
-  client.requestAccessToken({prompt:'select_account'});
+  if(!_googleClientInstance){
+    _googleClientInstance=google.accounts.oauth2.initTokenClient({
+      client_id:GOOGLE_CLIENT_ID,
+      scope:DRIVE_SCOPE,
+      callback:(resp)=>{
+        if(resp&&resp.error){
+          console.error('Erreur OAuth Google',resp);
+          snack('⚠️ Connexion Google refusée : '+resp.error);
+          return;
+        }
+        if(!resp||!resp.access_token){
+          console.error('Aucun jeton Google reçu',resp);
+          snack('⚠️ Aucun jeton Google reçu');
+          return;
+        }
+        _googleToken=resp.access_token;
+        chargerProfilGoogle();
+      }
+    });
+  }
+  _googleClientInstance.requestAccessToken({prompt:'select_account'});
 }
 
 async function chargerProfilGoogle(){
-  try{
-    const r=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+_googleToken}});
-    const u=await r.json();
-    document.getElementById('google-user-info').style.display='flex';
-    document.getElementById('btn-google-signin').style.display='none';
-    document.getElementById('btn-drive-save').style.display='block';
-    document.getElementById('btn-drive-load').style.display='block';
-    document.getElementById('google-name').textContent=u.name||'';
-    document.getElementById('google-email').textContent=u.email||'';
-    if(u.picture) document.getElementById('google-avatar').src=u.picture;
-    localStorage.setItem('google_was_connected','1');
-    snack('✓ Connecté : '+u.name+' — synchronisation Drive...');
-    await mergeAutoDrive();
-      await chargerPrefsDrive(true);
-  }catch(e){snack('Erreur profil Google');}
-}
+  if(!_googleToken){
+    snack('⚠️ Jeton Google manquant');
+    return;
+  }
 
+  // La connexion Drive ne doit pas échouer uniquement parce que le profil
+  // Google n'est pas disponible. On active d'abord les commandes Drive.
+  const info=document.getElementById('google-user-info');
+  const signin=document.getElementById('btn-google-signin');
+  const save=document.getElementById('btn-drive-save');
+  const load=document.getElementById('btn-drive-load');
+  const merge=document.getElementById('btn-drive-merge');
+  if(info) info.style.display='flex';
+  if(signin) signin.style.display='none';
+  if(save) save.style.display='block';
+  if(load) load.style.display='block';
+  if(merge) merge.style.display='block';
+  localStorage.setItem('google_was_connected','1');
+
+  let nom='Compte Google';
+  try{
+    const r=await fetch('https://www.googleapis.com/oauth2/v2/userinfo',{
+      headers:{Authorization:'Bearer '+_googleToken}
+    });
+    if(!r.ok) throw new Error('Profil Google HTTP '+r.status);
+    const u=await r.json();
+    nom=u.name||u.email||nom;
+    const nameEl=document.getElementById('google-name');
+    const emailEl=document.getElementById('google-email');
+    const avatarEl=document.getElementById('google-avatar');
+    if(nameEl) nameEl.textContent=u.name||nom;
+    if(emailEl) emailEl.textContent=u.email||'';
+    if(avatarEl&&u.picture) avatarEl.src=u.picture;
+  }catch(e){
+    console.warn('Profil Google indisponible, Drive reste utilisable',e);
+    const nameEl=document.getElementById('google-name');
+    const emailEl=document.getElementById('google-email');
+    if(nameEl) nameEl.textContent=nom;
+    if(emailEl) emailEl.textContent='Connecté à Google Drive';
+  }
+
+  snack('✓ Connecté à Google — synchronisation Drive...');
+  try{
+    await mergeAutoDrive();
+    await chargerPrefsDrive(true);
+    snack('✓ Google Drive synchronisé');
+  }catch(e){
+    console.error('Erreur synchronisation Drive',e);
+    snack('⚠️ Connecté à Google, mais synchronisation Drive impossible');
+  }
+}
 function googleSignOut(){
   if(typeof google!=='undefined'&&_googleToken) google.accounts.oauth2.revoke(_googleToken,()=>{});
   _googleToken=null;
