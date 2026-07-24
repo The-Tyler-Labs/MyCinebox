@@ -1,5 +1,5 @@
-// MyCinebox service worker — v1.7.44 tri inversable et grille de résultats
-const CACHE_NAME = 'mycinebox-v1.7.44';
+// MyCinebox service worker — v1.7.45 correction connexion Google PC
+const CACHE_NAME = 'mycinebox-v1.7.45';
 const APP_SHELL = [
   '/MyCinebox/',
   '/MyCinebox/index.html',

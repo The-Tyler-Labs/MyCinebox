@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.35</title>
+<title>Vidéothèque v1.7.45</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1041,7 +1041,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.44';
+const APP_VERSION='v1.7.45';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -5562,17 +5562,8 @@ window.addEventListener('load',()=>{
   setTimeout(()=>{
     if(typeof google==='undefined') return;
     try{
-      _googleClientInstance=google.accounts.oauth2.initTokenClient({
-        client_id:GOOGLE_CLIENT_ID,
-        scope:'https://www.googleapis.com/auth/drive.file',
-        prompt:'',
-        callback:(resp)=>{
-          if(resp.error||!resp.access_token) return;
-          _googleToken=resp.access_token;
-          chargerProfilGoogle();
-        }
-      });
-      _googleClientInstance.requestAccessToken({prompt:''});
+      const client=creerClientGoogle();
+      if(client) client.requestAccessToken({prompt:''});
     }catch(e){}
   },2000);
 });
@@ -5597,46 +5588,75 @@ document.addEventListener('visibilitychange',()=>{
 <script src="https://accounts.google.com/gsi/client" async onerror="console.log('GSI non dispo')"></script>
 <script>
 const GOOGLE_CLIENT_ID='932454913163-aqttulsgsdoq2ekil51dnl7ge7mmredh.apps.googleusercontent.com';
-const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+const DRIVE_SCOPE='openid email profile https://www.googleapis.com/auth/drive.file';
 const DRIVE_FILENAME='videotheque_backup.json';
 const DRIVE_PREFS_FILENAME='videotheque_prefs.json';
 let _googleToken=null;
 let _driveAutoSaveTimer=null;
 
-function googleSignIn(){
-  if(typeof google==='undefined'){snack('⚠️ Connexion Google disponible sur https:// uniquement');return;}
-  if(_googleClientInstance){
-    _googleClientInstance.requestAccessToken({prompt:'select_account'});
-    return;
-  }
-  // Créer une nouvelle instance
-  const client=google.accounts.oauth2.initTokenClient({
-    client_id:GOOGLE_CLIENT_ID,scope:DRIVE_SCOPE,
-    callback:(resp)=>{
-      if(resp.error){snack('⚠️ Erreur connexion');return;}
+function creerClientGoogle(){
+  if(typeof google==='undefined'||!google.accounts||!google.accounts.oauth2) return null;
+  _googleClientInstance=google.accounts.oauth2.initTokenClient({
+    client_id:GOOGLE_CLIENT_ID,
+    scope:DRIVE_SCOPE,
+    callback:async(resp)=>{
+      if(resp.error||!resp.access_token){
+        _googleToken=null;
+        snack('⚠️ Connexion Google annulée ou refusée');
+        return;
+      }
       _googleToken=resp.access_token;
-      chargerProfilGoogle();
+      await chargerProfilGoogle(false);
     }
   });
+  return _googleClientInstance;
+}
+
+function googleSignIn(){
+  if(typeof google==='undefined'){
+    snack('⚠️ Connexion Google disponible sur https:// uniquement');
+    return;
+  }
+  const client=_googleClientInstance||creerClientGoogle();
+  if(!client){snack('⚠️ Service Google indisponible');return;}
   client.requestAccessToken({prompt:'select_account'});
 }
 
-async function chargerProfilGoogle(){
+async function chargerProfilGoogle(dejaRetente=false){
   try{
-    const r=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+_googleToken}});
+    if(!_googleToken) throw new Error('missing_token');
+    const r=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{
+      headers:{Authorization:'Bearer '+_googleToken}
+    });
+    if(r.status===401&&!dejaRetente){
+      _googleToken=null;
+      const client=_googleClientInstance||creerClientGoogle();
+      if(client){
+        client.requestAccessToken({prompt:''});
+        return;
+      }
+    }
+    if(!r.ok) throw new Error('userinfo_'+r.status);
     const u=await r.json();
     document.getElementById('google-user-info').style.display='flex';
     document.getElementById('btn-google-signin').style.display='none';
     document.getElementById('btn-drive-save').style.display='block';
     document.getElementById('btn-drive-load').style.display='block';
-    document.getElementById('google-name').textContent=u.name||'';
+    const mergeBtn=document.getElementById('btn-drive-merge');
+    if(mergeBtn) mergeBtn.style.display='block';
+    document.getElementById('google-name').textContent=u.name||'Compte Google';
     document.getElementById('google-email').textContent=u.email||'';
     if(u.picture) document.getElementById('google-avatar').src=u.picture;
     localStorage.setItem('google_was_connected','1');
-    snack('✓ Connecté : '+u.name+' — synchronisation Drive...');
+    snack('✓ Connecté : '+(u.name||u.email||'Google')+' — synchronisation Drive...');
     await mergeAutoDrive();
-      await chargerPrefsDrive(true);
-  }catch(e){snack('Erreur profil Google');}
+    await chargerPrefsDrive(true);
+  }catch(e){
+    console.error('Erreur profil Google',e);
+    _googleToken=null;
+    localStorage.removeItem('google_was_connected');
+    snack('⚠️ Connexion Google impossible. Reconnecte-toi.');
+  }
 }
 
 function googleSignOut(){
