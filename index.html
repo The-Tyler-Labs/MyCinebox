@@ -177,6 +177,9 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .search-bar input{flex:1;background:var(--surface);border:1px solid #333;border-radius:10px;padding:10px 14px;color:var(--text);font-size:14px;outline:none}
 .search-bar input:focus{border-color:var(--green-light)}
 .result-item{display:flex;gap:10px;background:var(--surface);border-radius:10px;padding:10px;margin-bottom:8px;align-items:flex-start;cursor:pointer}
+#multi-results{display:grid;grid-template-columns:repeat(var(--search-cols,2),minmax(0,1fr));gap:8px}
+#multi-results .result-item{margin-bottom:0;min-width:0;height:100%;box-sizing:border-box}
+@media(max-width:700px){#multi-results{grid-template-columns:1fr!important}}
 .result-item img{width:var(--search-img-size,50px);height:calc(var(--search-img-size,50px) * 1.5);object-fit:cover;border-radius:6px;flex-shrink:0;background:var(--green-dark)}
 .result-info{flex:1;min-width:0}
 .result-info h4{font-size:13px;margin-bottom:3px}
@@ -356,7 +359,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.43</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.44</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -610,7 +613,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <button class="sort-btn" id="multi-filter-tv" onclick="setMultiFilter('tv',this)">📺 Séries / émissions</button>
         <button class="sort-btn" id="multi-filter-person" onclick="setMultiFilter('person',this)">🎭 Personnes</button>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:11px;color:var(--text2)">🔎 Taille :</span><input type="range" min="2" max="6" step="1" value="3" style="width:80px;accent-color:var(--green)" oninput="setSearchCols(this.value)"><span id="search-cols-label" style="font-size:11px;color:var(--text2)">3</span><button class="sort-btn active" id="search-sort-pop" onclick="setSearchSort('pop',this);renderMultiResults()">⭐ Popularité</button><button class="sort-btn" id="search-sort-date" onclick="setSearchSort('date',this);renderMultiResults()">📅 Date</button></div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:11px;color:var(--text2)">🔎 Colonnes :</span><input type="range" min="2" max="6" step="1" value="2" style="width:80px;accent-color:var(--green)" oninput="setSearchCols(this.value)"><span id="search-cols-label" style="font-size:11px;color:var(--text2)">2</span><button class="sort-btn active" id="search-sort-pop" onclick="setSearchSort('pop',this);renderMultiResults()">⭐ Popularité ▼</button><button class="sort-btn" id="search-sort-date" onclick="setSearchSort('date',this);renderMultiResults()">📅 Date</button></div>
       <div id="multi-results"></div>
     </div>
 
@@ -1038,7 +1041,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.43';
+const APP_VERSION='v1.7.44';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -2151,18 +2154,38 @@ function assignerGenreSelection(){
 // ── TAILLE RÉSULTATS RECHERCHE ──
 let _searchResultSize=1;
 let _searchSort='pop';
+let _searchSortDirection='desc';
 function setSearchSort(tri,btn){
-  _searchSort=tri;
+  if(_searchSort===tri) _searchSortDirection=_searchSortDirection==='desc'?'asc':'desc';
+  else {
+    _searchSort=tri;
+    _searchSortDirection='desc';
+  }
   document.querySelectorAll('[id^="search-sort-"]').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
+  const pop=document.getElementById('search-sort-pop');
+  const date=document.getElementById('search-sort-date');
+  if(pop) pop.textContent='⭐ Popularité'+(_searchSort==='pop'?(_searchSortDirection==='desc'?' ▼':' ▲'):'');
+  if(date) date.textContent='📅 Date'+(_searchSort==='date'?(_searchSortDirection==='desc'?' ▼':' ▲'):'');
 }
 
 function setSearchCols(val){
-  const n=parseInt(val);
+  const n=Math.max(2,parseInt(val)||2);
   document.documentElement.style.setProperty('--search-cols',n);
+  localStorage.setItem('mycinebox_search_cols',String(n));
   const lbl=document.getElementById('search-cols-label');
   if(lbl) lbl.textContent=n;
 }
+
+function initSearchCols(){
+  const n=Math.max(2,parseInt(localStorage.getItem('mycinebox_search_cols')||'2')||2);
+  document.documentElement.style.setProperty('--search-cols',n);
+  const slider=document.querySelector('#panel-tout input[type="range"][oninput*="setSearchCols"]');
+  if(slider) slider.value=n;
+  const lbl=document.getElementById('search-cols-label');
+  if(lbl) lbl.textContent=n;
+}
+document.addEventListener('DOMContentLoaded',initSearchCols);
 
 function setSearchResultSize(val){
   _searchResultSize=parseInt(val);
@@ -3191,8 +3214,14 @@ function renderMultiResults(){
   if(!results) return;
   let found=multiSearchResults.filter(x=>['movie','tv','person'].includes(x.media_type));
   if(multiSearchFilter!=='all') found=found.filter(x=>x.media_type===multiSearchFilter);
-  if(_searchSort==='date') found=[...found].sort((a,b)=>((b.release_date||b.first_air_date||'').localeCompare(a.release_date||a.first_air_date||'')));
-  else found=[...found].sort((a,b)=>((b._fuzzyScore||0)-(a._fuzzyScore||0))||((b.popularity||0)-(a.popularity||0)));
+  if(_searchSort==='date') found=[...found].sort((a,b)=>{
+    const cmp=(b.release_date||b.first_air_date||'').localeCompare(a.release_date||a.first_air_date||'');
+    return _searchSortDirection==='desc'?cmp:-cmp;
+  });
+  else found=[...found].sort((a,b)=>{
+    const cmp=((b._fuzzyScore||0)-(a._fuzzyScore||0))||((b.popularity||0)-(a.popularity||0));
+    return _searchSortDirection==='desc'?cmp:-cmp;
+  });
   if(!found.length){
     results.innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">Aucun résultat dans cette catégorie.</p>';
     return;
@@ -3347,7 +3376,7 @@ async function searchTmdb(type){
     }
 
     let results_=found.slice(0,50);
-    if(_searchSort==='date') results_.sort((a,b)=>(b.release_date||b.first_air_date||'').localeCompare(a.release_date||a.first_air_date||''));
+    if(_searchSort==='date') results_.sort((a,b)=>{const cmp=(b.release_date||b.first_air_date||'').localeCompare(a.release_date||a.first_air_date||'');return _searchSortDirection==='desc'?cmp:-cmp;});
     results.innerHTML=results_.map(f=>{
       const titre=f.title||f.name||'';
       const date=(f.release_date||f.first_air_date||'').slice(0,4);
@@ -6121,7 +6150,7 @@ async function searchActorMovies(personId, personName) {
 function displaySearchResults(results) {
   const resultsId = 'search-results';
   let results_ = results.slice(0,50);
-  if (_searchSort === 'date') results_.sort((a,b)=>(b.release_date||'').localeCompare(a.release_date||''));
+  if (_searchSort === 'date') results_.sort((a,b)=>{const cmp=(b.release_date||'').localeCompare(a.release_date||'');return _searchSortDirection==='desc'?cmp:-cmp;});
   
   document.getElementById(resultsId).innerHTML = results_.map(f=>{
     const titre = f.title || '';
