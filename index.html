@@ -356,7 +356,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.42</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.43</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -1038,7 +1038,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.42';
+const APP_VERSION='v1.7.43';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1795,8 +1795,9 @@ function renderCollection(){
         const estAnimation=f.categorie==='animation'||(f.genres||'').toLowerCase().split(',').map(g=>g.trim()).includes('animation');
         if(!estAnimation) return false;
       } else if(catTab!=='tous'&&f.categorie!==catTab) return false;
-      // Dans l'affichage normal, les listes hors collection sont accessibles via leurs filtres dédiés.
-      if(tagFiltres.statut==='tous'&&['trouver','critique','ccdr'].includes(normaliserStatut(f.statut))) return false;
+      // Les statuts spéciaux restent visibles dans Collection lorsque leur option
+      // d'affichage est activée dans les Paramètres. Leur masquage est déjà géré
+      // au début du filtre par statutEstVisible(f.statut).
     }
     // Un filtre de statut choisi volontairement dans ⚙️ continue de s'appliquer,
     // même en recherche globale.
