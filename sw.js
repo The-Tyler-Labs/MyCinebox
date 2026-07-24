@@ -1,5 +1,5 @@
-// MyCinebox service worker — v1.7.43 affichage statuts dans Collection
-const CACHE_NAME = 'mycinebox-v1.7.43';
+// MyCinebox service worker — v1.7.45 correction statistiques paramètres
+const CACHE_NAME = 'mycinebox-v1.7.45';
 const APP_SHELL = [
   '/MyCinebox/',
   '/MyCinebox/index.html',
