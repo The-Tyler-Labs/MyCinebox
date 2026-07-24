@@ -1,5 +1,5 @@
-// MyCinebox service worker — v1.7.32 recherche séparée
-const CACHE_NAME = 'mycinebox-v1.7.39';
+// MyCinebox service worker — v1.7.42 recherche souple
+const CACHE_NAME = 'mycinebox-v1.7.42';
 const APP_SHELL = [
   '/MyCinebox/',
   '/MyCinebox/index.html',

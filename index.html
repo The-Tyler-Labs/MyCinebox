@@ -356,7 +356,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.39</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.42</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -1038,7 +1038,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.39';
+const APP_VERSION='v1.7.42';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1257,22 +1257,75 @@ function sauvegarder(){
 
 function autoExportJSON(){} // Désactivé
 function savePrefs(){localStorage.setItem(PREFS_KEY,JSON.stringify(prefs));}
-function statutEstVisible(statut){
-  statut=normaliserStatut(statut);
-  if(statut==='trouver') return prefs.showTrouver!==false;
-  if(statut==='critique') return prefs.showCritique!==false;
-  if(statut==='ccdr') return prefs.showCcdr!==false;
+
+// Affichage des statuts : une seule source de vérité, indépendante des sauvegardes Drive.
+const STATUS_VISIBILITY_KEY='mycinebox_status_visibility_v1741';
+function lireVisibiliteStatuts(){
+  let stored={};
+  try{
+    stored=JSON.parse(localStorage.getItem(STATUS_VISIBILITY_KEY)||'{}')||{};
+    // Migration des réglages utilisés par les versions précédentes.
+    if(!Object.keys(stored).length){
+      stored=JSON.parse(localStorage.getItem('mycinebox_status_visibility_v1740')||'{}')||{};
+    }
+  }catch(e){stored={};}
+  return {
+    trouver: typeof stored.trouver==='boolean' ? stored.trouver : true,
+    critique: typeof stored.critique==='boolean' ? stored.critique : true,
+    ccdr: typeof stored.ccdr==='boolean' ? stored.ccdr : true
+  };
+}
+function ecrireVisibiliteStatuts(vis){
+  const propre={trouver:!!vis.trouver,critique:!!vis.critique,ccdr:!!vis.ccdr};
+  try{localStorage.setItem(STATUS_VISIBILITY_KEY,JSON.stringify(propre));}catch(e){}
+  // Compatibilité avec les anciennes préférences, sans les utiliser comme source principale.
+  prefs.showTrouver=propre.trouver;
+  prefs.showCritique=propre.critique;
+  prefs.showCcdr=propre.ccdr;
+  savePrefs();
+}
+function getFilmStatut(f){
+  if(!f) return '';
+  const candidats=[f.statut,f.status,f.etat,f.statutFilm,f.collectionStatus];
+  for(const valeur of candidats){
+    const n=normaliserStatut(valeur);
+    if(n) return n;
+  }
+  if(f.aTrouver===true||f.estATrouver===true||f.toFind===true) return 'trouver';
+  if(f.regarderCritiques===true||f.critique===true) return 'critique';
+  if(f.aPrendreCcdr===true||f.ccdr===true) return 'ccdr';
+  return '';
+}
+function statutEstVisible(statutOuFilm){
+  const statut=typeof statutOuFilm==='object' ? getFilmStatut(statutOuFilm) : normaliserStatut(statutOuFilm);
+  const vis=lireVisibiliteStatuts();
+  if(statut==='trouver') return vis.trouver;
+  if(statut==='critique') return vis.critique;
+  if(statut==='ccdr') return vis.ccdr;
   return true;
+}
+function appliquerVisibiliteAccueil(){
+  const vis=lireVisibiliteStatuts();
+  for(const statut of ['trouver','critique','ccdr']){
+    const visible=!!vis[statut];
+    const section=document.getElementById('home-section-'+statut);
+    if(!section) continue;
+    section.hidden=!visible;
+    section.setAttribute('aria-hidden',visible?'false':'true');
+    section.style.display=visible?'block':'none';
+  }
 }
 function setAfficherStatut(statut,visible){
   statut=normaliserStatut(statut);
-  if(statut==='trouver') prefs.showTrouver=!!visible;
-  if(statut==='critique') prefs.showCritique=!!visible;
-  if(statut==='ccdr') prefs.showCcdr=!!visible;
-  savePrefs();
+  const vis=lireVisibiliteStatuts();
+  if(Object.prototype.hasOwnProperty.call(vis,statut)) vis[statut]=!!visible;
+  ecrireVisibiliteStatuts(vis);
+  // Mettre immédiatement la case et l'accueil dans le même état.
+  const input=document.getElementById('pref-show-'+statut);
+  if(input) input.checked=!!visible;
   renderHome();
-  renderCollection();
-  requestAnimationFrame(()=>renderHome());
+  appliquerVisibiliteAccueil();
+  if(typeof renderCollection==='function') renderCollection();
   const libelles={trouver:'À trouver',critique:'Regarder critiques',ccdr:'À prendre CCDR'};
   snack((visible?'✓ Affiché : ':'✓ Masqué : ')+(libelles[statut]||statut));
 }
@@ -1343,7 +1396,7 @@ function goPage(p,opts={}){
   if(navEl) navEl.classList.add('active');
   currentPage=p;
   updateFab();
-  if(p==='home'){renderHome();}
+  if(p==='home'){renderHome();requestAnimationFrame(()=>appliquerVisibiliteAccueil());setTimeout(()=>appliquerVisibiliteAccueil(),60);}
   if(p==='collection'){
     if(!opts.keepFilters&&!comingFromDetail){tagFiltres.statut='tous';tagFiltres.catFilter='';}
     buildFiltresDynamiques();renderCollection();
@@ -1383,7 +1436,7 @@ function goCollectionCat(cat){
 
 // ── HOME ──
 function renderHome(){
-  const filmsVisibles=films.filter(f=>statutEstVisible(f.statut));
+  const filmsVisibles=films.filter(f=>statutEstVisible(f));
   const total=filmsVisibles.length;
   const vus=filmsVisibles.filter(f=>f.statut==='vu').length;
   const avoir=filmsVisibles.filter(f=>f.statut==='avoir').length;
@@ -1413,7 +1466,7 @@ function renderHome(){
   }
 
   // Carousel À trouver
-  const aTrouver=[...films].filter(f=>normaliserStatut(f.statut)==='trouver').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
+  const aTrouver=[...films].filter(f=>getFilmStatut(f)==='trouver').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
   const elTrouver=document.getElementById('carousel-trouver');
   if(aTrouver.length===0){
     elTrouver.innerHTML='<p style="color:var(--text2);font-size:13px;padding:8px 0">Aucun film à trouver</p>';
@@ -1429,7 +1482,7 @@ function renderHome(){
   }
 
   // Carousel Regarder critiques
-  const critiques=[...films].filter(f=>normaliserStatut(f.statut)==='critique').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
+  const critiques=[...films].filter(f=>getFilmStatut(f)==='critique').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
   const elCritique=document.getElementById('carousel-critique');
   if(elCritique){
     elCritique.innerHTML=critiques.length===0
@@ -1445,7 +1498,7 @@ function renderHome(){
   }
 
   // Carousel À prendre CCDR
-  const ccdr=[...films].filter(f=>normaliserStatut(f.statut)==='ccdr').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
+  const ccdr=[...films].filter(f=>getFilmStatut(f)==='ccdr').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
   const elCcdr=document.getElementById('carousel-ccdr');
   if(elCcdr){
     elCcdr.innerHTML=ccdr.length===0
@@ -1460,18 +1513,8 @@ function renderHome(){
       }).join('');
   }
 
-  // Afficher ou masquer les trois blocs complets selon les préférences.
-  // Le conteneur entier est piloté afin d'éviter qu'un ancien style « display:none »
-  // reste appliqué au retour sur l'accueil.
-  [['trouver',prefs.showTrouver!==false],['critique',prefs.showCritique!==false],['ccdr',prefs.showCcdr!==false]].forEach(([statut,visible])=>{
-    const section=document.getElementById('home-section-'+statut);
-    const header=document.getElementById('section-header-'+statut);
-    const carousel=document.getElementById('carousel-'+statut);
-    if(section) section.hidden=!visible;
-    if(section) section.style.display=visible?'block':'none';
-    if(header) header.style.display='flex';
-    if(carousel) carousel.style.display='flex';
-  });
+  // Une seule fonction pilote réellement les trois blocs de l'accueil.
+  appliquerVisibiliteAccueil();
 
   // Carousel Plus tard
   const plusTard=[...films].filter(f=>f.statut==='plustard').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
@@ -1743,8 +1786,8 @@ function renderCollection(){
     // Pendant une recherche, on ne limite pas au tab affiché : un titre doit pouvoir être
     // retrouvé même s'il est rangé dans « À trouver », « Critiques », une série, etc.
     if(!rechercheGlobale){
-      if(catTab==='atrouver') return f.statut==='trouver'&&(tagFiltres.catFilter===''||f.categorie===tagFiltres.catFilter);
-      if(catTab==='acritique') return f.statut==='critique'&&(tagFiltres.catFilter===''||f.categorie===tagFiltres.catFilter);
+      if(catTab==='atrouver') return normaliserStatut(f.statut)==='trouver'&&(tagFiltres.catFilter===''||f.categorie===tagFiltres.catFilter);
+      if(catTab==='acritique') return normaliserStatut(f.statut)==='critique'&&(tagFiltres.catFilter===''||f.categorie===tagFiltres.catFilter);
       if(catTab==='avoir') return f.statut==='avoir';
       if(catTab==='plustard') return f.statut==='plustard';
       // Animation : afficher tout ce qui a catégorie animation OU genre Animation
@@ -1753,11 +1796,11 @@ function renderCollection(){
         if(!estAnimation) return false;
       } else if(catTab!=='tous'&&f.categorie!==catTab) return false;
       // Dans l'affichage normal, les listes hors collection sont accessibles via leurs filtres dédiés.
-      if(tagFiltres.statut==='tous'&&(f.statut==='trouver'||f.statut==='critique'||f.statut==='ccdr')) return false;
+      if(tagFiltres.statut==='tous'&&['trouver','critique','ccdr'].includes(normaliserStatut(f.statut))) return false;
     }
     // Un filtre de statut choisi volontairement dans ⚙️ continue de s'appliquer,
     // même en recherche globale.
-    if(tagFiltres.statut!=='tous'&&f.statut!==tagFiltres.statut) return false;
+    if(tagFiltres.statut!=='tous'&&normaliserStatut(f.statut)!==normaliserStatut(tagFiltres.statut)) return false;
     if(tagFiltres.decennie&&tagFiltres.decennie.size>0){const y=parseInt((f.dateSortie||'').slice(0,4));if(isNaN(y)||!tagFiltres.decennie.has(String(Math.floor(y/10)*10))) return false;}
     if(tagFiltres.annee&&(f.dateSortie||'').slice(0,4)!==tagFiltres.annee) return false;
     if(tagFiltres.genre&&!(f.genres||'').toLowerCase().includes(tagFiltres.genre.toLowerCase())) return false;
@@ -1772,9 +1815,8 @@ function renderCollection(){
       // Par défaut, la barre de recherche cherche uniquement dans le titre
       // et le titre alternatif. Les noms d'acteurs ne sont recherchés que
       // dans le filtre Acteur prévu à cet effet.
-      const nq=normaliser(q);
-      const inTitre=normaliser(f.titre).includes(nq)||normaliser(f.titreAlt||'').includes(nq);
-      if(!inTitre) return false;
+      const texteTitre=[f.titre,f.titreAlt].filter(Boolean).join(' ');
+      if(scoreRechercheSouple(q,texteTitre)<0) return false;
     }
     return true;
   });
@@ -3149,7 +3191,7 @@ function renderMultiResults(){
   let found=multiSearchResults.filter(x=>['movie','tv','person'].includes(x.media_type));
   if(multiSearchFilter!=='all') found=found.filter(x=>x.media_type===multiSearchFilter);
   if(_searchSort==='date') found=[...found].sort((a,b)=>((b.release_date||b.first_air_date||'').localeCompare(a.release_date||a.first_air_date||'')));
-  else found=[...found].sort((a,b)=>(b.popularity||0)-(a.popularity||0));
+  else found=[...found].sort((a,b)=>((b._fuzzyScore||0)-(a._fuzzyScore||0))||((b.popularity||0)-(a.popularity||0)));
   if(!found.length){
     results.innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">Aucun résultat dans cette catégorie.</p>';
     return;
@@ -3194,10 +3236,24 @@ async function searchTmdbMulti(){
   const searchId=++tmdbSearchSequence;
   loader.style.display='block';results.innerHTML='';filters.style.display='none';
   try{
-    const url=TMDB_API+'/search/multi?api_key='+encodeURIComponent(apiKey)+'&query='+encodeURIComponent(q)+'&language=fr-FR&include_adult=false';
-    const data=await tmdbFetchJson(url,15000);
+    const variantes=variantesRequeteSouple(q);
+    const reponses=await Promise.all(variantes.map(v=>{
+      const url=TMDB_API+'/search/multi?api_key='+encodeURIComponent(apiKey)+'&query='+encodeURIComponent(v)+'&language=fr-FR&include_adult=false';
+      return tmdbFetchJson(url,15000).catch(()=>({results:[]}));
+    }));
     if(searchId!==tmdbSearchSequence) return;
-    multiSearchResults=(data.results||[]).filter(x=>['movie','tv','person'].includes(x.media_type));
+    const fusion=new Map();
+    reponses.forEach((data,indice)=>(data.results||[]).forEach(item=>{
+      if(!['movie','tv','person'].includes(item.media_type)) return;
+      const cle=item.media_type+':'+item.id;
+      const titre=[item.title,item.name,item.original_title,item.original_name].filter(Boolean).join(' ');
+      const score=scoreRechercheSouple(q,titre)+(item.popularity||0)/100-indice*2;
+      const precedent=fusion.get(cle);
+      if(!precedent||score>precedent._fuzzyScore) fusion.set(cle,Object.assign({},item,{_fuzzyScore:score}));
+    }));
+    multiSearchResults=[...fusion.values()]
+      .filter(x=>x._fuzzyScore>=0)
+      .sort((a,b)=>b._fuzzyScore-a._fuzzyScore);
     multiSearchFilter='all';
     document.querySelectorAll('#multi-filters .sort-btn').forEach(b=>b.classList.remove('active'));
     document.getElementById('multi-filter-all')?.classList.add('active');
@@ -4408,9 +4464,10 @@ window.addEventListener('popstate', (e)=>{
     +'<div><strong>💿 Total possédé :</strong> '+possedes.length+'</div>'
     +'<div>🔍 À trouver : '+trouver+'</div><div>🎬 Regarder critiques : '+critique+'</div><div>📀 À prendre CCDR : '+ccdr+'</div><div>📋 À voir : '+avoir+'</div><div>▶️ En cours : '+cours+'</div><div>👁 Vus : '+vus+'</div><div>🔎 Trouver meilleure qualité : '+meilleureQualite+'</div>'
     +'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px 22px">'+bycat+'</div>'+backupInfo;
-  const prefTrouver=document.getElementById('pref-show-trouver');if(prefTrouver) prefTrouver.checked=prefs.showTrouver!==false;
-  const prefCritique=document.getElementById('pref-show-critique');if(prefCritique) prefCritique.checked=prefs.showCritique!==false;
-  const prefCcdr=document.getElementById('pref-show-ccdr');if(prefCcdr) prefCcdr.checked=prefs.showCcdr!==false;
+  const visStatuts=lireVisibiliteStatuts();
+  const prefTrouver=document.getElementById('pref-show-trouver');if(prefTrouver) prefTrouver.checked=visStatuts.trouver;
+  const prefCritique=document.getElementById('pref-show-critique');if(prefCritique) prefCritique.checked=visStatuts.critique;
+  const prefCcdr=document.getElementById('pref-show-ccdr');if(prefCcdr) prefCcdr.checked=visStatuts.ccdr;
   const tmdbKey=ensureTmdbApiKey();
   const keyInput=document.getElementById('api-key-input');
   const keyStatus=document.getElementById('api-key-status');
@@ -5325,6 +5382,76 @@ function normaliser(s){
   return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 }
 
+// Recherche souple : accents, ponctuation, ordre des mots et petites fautes de frappe.
+function normaliserRecherche(s){
+  return normaliser(s)
+    .replace(/['’`-]/g,' ')
+    .replace(/[^a-z0-9]+/g,' ')
+    .trim()
+    .replace(/\s+/g,' ');
+}
+function distanceLevenshtein(a,b){
+  a=normaliserRecherche(a); b=normaliserRecherche(b);
+  if(a===b) return 0;
+  if(!a.length) return b.length;
+  if(!b.length) return a.length;
+  let prev=Array.from({length:b.length+1},(_,i)=>i), cur=new Array(b.length+1);
+  for(let i=1;i<=a.length;i++){
+    cur[0]=i;
+    for(let j=1;j<=b.length;j++) cur[j]=Math.min(cur[j-1]+1,prev[j]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    [prev,cur]=[cur,prev];
+  }
+  return prev[b.length];
+}
+function motsRecherche(s){
+  const vides=new Set(['le','la','les','un','une','des','de','du','d','l','the','a','an','of','and','et']);
+  return normaliserRecherche(s).split(' ').filter(w=>w&&!vides.has(w));
+}
+function motProche(recherche,mot){
+  if(!recherche||!mot) return false;
+  if(mot.includes(recherche)||recherche.includes(mot)) return true;
+  const max=Math.max(recherche.length,mot.length);
+  const tolerance=max>=8?2:max>=4?1:0;
+  return distanceLevenshtein(recherche,mot)<=tolerance;
+}
+function scoreRechercheSouple(requete,texte){
+  const q=normaliserRecherche(requete), t=normaliserRecherche(texte);
+  if(!q||!t) return -1;
+  if(t===q) return 1000;
+  let score=0;
+  if(t.startsWith(q)) score+=400;
+  else if(t.includes(q)) score+=300;
+  const qm=motsRecherche(q), tm=motsRecherche(t);
+  if(!qm.length) return score||-1;
+  let trouves=0;
+  for(const motQ of qm){
+    let meilleur=0;
+    for(const motT of tm){
+      if(motT===motQ) meilleur=Math.max(meilleur,120);
+      else if(motT.startsWith(motQ)||motQ.startsWith(motT)) meilleur=Math.max(meilleur,90);
+      else if(motProche(motQ,motT)) meilleur=Math.max(meilleur,70);
+    }
+    if(meilleur){trouves++;score+=meilleur;} else score-=120;
+  }
+  if(trouves===qm.length) score+=220;
+  if(trouves===0){
+    const d=distanceLevenshtein(q,t);
+    if(d<=Math.max(1,Math.floor(q.length/5))) score+=80-d*10;
+  }
+  return score>0?score:-1;
+}
+function variantesRequeteSouple(requete){
+  const q=normaliserRecherche(requete), mots=motsRecherche(q);
+  const out=[q];
+  if(mots.length>1) out.push(...mots);
+  // Une lettre en trop est une faute courante : chaque suppression devient une requête de secours.
+  for(const mot of mots){
+    if(mot.length<5) continue;
+    for(let i=1;i<mot.length-1;i++) out.push(mot.slice(0,i)+mot.slice(i+1));
+  }
+  return [...new Set(out.filter(Boolean))].slice(0,12);
+}
+
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function attr(s){return esc(s).replace(/'/g,'&#39;');}
 
@@ -5427,7 +5554,13 @@ if(prefs.sagaMode){setTimeout(()=>setSagaMode(prefs.sagaMode,null),100);}
 document.documentElement.style.fontSize=(prefs.fontSize||16)+'px';
 setSuggestedBannerSpeed(getSuggestedBannerCardSeconds(),false);
 renderHome();
+appliquerVisibiliteAccueil();
 renderSuggestedBanners();
+
+window.addEventListener('pageshow',()=>{renderHome();appliquerVisibiliteAccueil();});
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&currentPage==='home'){renderHome();appliquerVisibiliteAccueil();}
+});
 </script>
 
 <!-- Google Identity Services -->
