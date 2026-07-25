@@ -177,6 +177,9 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .search-bar input{flex:1;background:var(--surface);border:1px solid #333;border-radius:10px;padding:10px 14px;color:var(--text);font-size:14px;outline:none}
 .search-bar input:focus{border-color:var(--green-light)}
 .result-item{display:flex;gap:10px;background:var(--surface);border-radius:10px;padding:10px;margin-bottom:8px;align-items:flex-start;cursor:pointer}
+#multi-results{display:grid;grid-template-columns:repeat(var(--search-cols,2),minmax(0,1fr));gap:8px}
+#multi-results .result-item{margin-bottom:0;min-width:0;height:100%;box-sizing:border-box}
+@media(max-width:700px){#multi-results{grid-template-columns:1fr!important}}
 .result-item img{width:var(--search-img-size,50px);height:calc(var(--search-img-size,50px) * 1.5);object-fit:cover;border-radius:6px;flex-shrink:0;background:var(--green-dark)}
 .result-info{flex:1;min-width:0}
 .result-info h4{font-size:13px;margin-bottom:3px}
@@ -356,7 +359,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.42</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.47 diagnostic</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -610,7 +613,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <button class="sort-btn" id="multi-filter-tv" onclick="setMultiFilter('tv',this)">📺 Séries / émissions</button>
         <button class="sort-btn" id="multi-filter-person" onclick="setMultiFilter('person',this)">🎭 Personnes</button>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:11px;color:var(--text2)">🔎 Taille :</span><input type="range" min="2" max="6" step="1" value="3" style="width:80px;accent-color:var(--green)" oninput="setSearchCols(this.value)"><span id="search-cols-label" style="font-size:11px;color:var(--text2)">3</span><button class="sort-btn active" id="search-sort-pop" onclick="setSearchSort('pop',this);renderMultiResults()">⭐ Popularité</button><button class="sort-btn" id="search-sort-date" onclick="setSearchSort('date',this);renderMultiResults()">📅 Date</button></div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap"><span style="font-size:11px;color:var(--text2)">🔎 Colonnes :</span><input type="range" min="2" max="6" step="1" value="2" style="width:80px;accent-color:var(--green)" oninput="setSearchCols(this.value)"><span id="search-cols-label" style="font-size:11px;color:var(--text2)">2</span><button class="sort-btn active" id="search-sort-pop" onclick="setSearchSort('pop',this);renderMultiResults()">⭐ Popularité ▼</button><button class="sort-btn" id="search-sort-date" onclick="setSearchSort('date',this);renderMultiResults()">📅 Date</button></div>
       <div id="multi-results"></div>
     </div>
 
@@ -1038,7 +1041,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.42';
+const APP_VERSION='v1.7.47 diagnostic';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1795,8 +1798,9 @@ function renderCollection(){
         const estAnimation=f.categorie==='animation'||(f.genres||'').toLowerCase().split(',').map(g=>g.trim()).includes('animation');
         if(!estAnimation) return false;
       } else if(catTab!=='tous'&&f.categorie!==catTab) return false;
-      // Dans l'affichage normal, les listes hors collection sont accessibles via leurs filtres dédiés.
-      if(tagFiltres.statut==='tous'&&['trouver','critique','ccdr'].includes(normaliserStatut(f.statut))) return false;
+      // Les statuts spéciaux restent visibles dans Collection lorsque leur option
+      // d'affichage est activée dans les Paramètres. Leur masquage est déjà géré
+      // au début du filtre par statutEstVisible(f.statut).
     }
     // Un filtre de statut choisi volontairement dans ⚙️ continue de s'appliquer,
     // même en recherche globale.
@@ -2150,18 +2154,38 @@ function assignerGenreSelection(){
 // ── TAILLE RÉSULTATS RECHERCHE ──
 let _searchResultSize=1;
 let _searchSort='pop';
+let _searchSortDirection='desc';
 function setSearchSort(tri,btn){
-  _searchSort=tri;
+  if(_searchSort===tri) _searchSortDirection=_searchSortDirection==='desc'?'asc':'desc';
+  else {
+    _searchSort=tri;
+    _searchSortDirection='desc';
+  }
   document.querySelectorAll('[id^="search-sort-"]').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
+  const pop=document.getElementById('search-sort-pop');
+  const date=document.getElementById('search-sort-date');
+  if(pop) pop.textContent='⭐ Popularité'+(_searchSort==='pop'?(_searchSortDirection==='desc'?' ▼':' ▲'):'');
+  if(date) date.textContent='📅 Date'+(_searchSort==='date'?(_searchSortDirection==='desc'?' ▼':' ▲'):'');
 }
 
 function setSearchCols(val){
-  const n=parseInt(val);
+  const n=Math.max(2,parseInt(val)||2);
   document.documentElement.style.setProperty('--search-cols',n);
+  localStorage.setItem('mycinebox_search_cols',String(n));
   const lbl=document.getElementById('search-cols-label');
   if(lbl) lbl.textContent=n;
 }
+
+function initSearchCols(){
+  const n=Math.max(2,parseInt(localStorage.getItem('mycinebox_search_cols')||'2')||2);
+  document.documentElement.style.setProperty('--search-cols',n);
+  const slider=document.querySelector('#panel-tout input[type="range"][oninput*="setSearchCols"]');
+  if(slider) slider.value=n;
+  const lbl=document.getElementById('search-cols-label');
+  if(lbl) lbl.textContent=n;
+}
+document.addEventListener('DOMContentLoaded',initSearchCols);
 
 function setSearchResultSize(val){
   _searchResultSize=parseInt(val);
@@ -3190,8 +3214,14 @@ function renderMultiResults(){
   if(!results) return;
   let found=multiSearchResults.filter(x=>['movie','tv','person'].includes(x.media_type));
   if(multiSearchFilter!=='all') found=found.filter(x=>x.media_type===multiSearchFilter);
-  if(_searchSort==='date') found=[...found].sort((a,b)=>((b.release_date||b.first_air_date||'').localeCompare(a.release_date||a.first_air_date||'')));
-  else found=[...found].sort((a,b)=>((b._fuzzyScore||0)-(a._fuzzyScore||0))||((b.popularity||0)-(a.popularity||0)));
+  if(_searchSort==='date') found=[...found].sort((a,b)=>{
+    const cmp=(b.release_date||b.first_air_date||'').localeCompare(a.release_date||a.first_air_date||'');
+    return _searchSortDirection==='desc'?cmp:-cmp;
+  });
+  else found=[...found].sort((a,b)=>{
+    const cmp=((b._fuzzyScore||0)-(a._fuzzyScore||0))||((b.popularity||0)-(a.popularity||0));
+    return _searchSortDirection==='desc'?cmp:-cmp;
+  });
   if(!found.length){
     results.innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">Aucun résultat dans cette catégorie.</p>';
     return;
@@ -3346,7 +3376,7 @@ async function searchTmdb(type){
     }
 
     let results_=found.slice(0,50);
-    if(_searchSort==='date') results_.sort((a,b)=>(b.release_date||b.first_air_date||'').localeCompare(a.release_date||a.first_air_date||''));
+    if(_searchSort==='date') results_.sort((a,b)=>{const cmp=(b.release_date||b.first_air_date||'').localeCompare(a.release_date||a.first_air_date||'');return _searchSortDirection==='desc'?cmp:-cmp;});
     results.innerHTML=results_.map(f=>{
       const titre=f.title||f.name||'';
       const date=(f.release_date||f.first_air_date||'').slice(0,4);
@@ -4405,6 +4435,7 @@ function appliquerPolice(val){
 }
 
 function renderSettings(){
+  const filmsVisibles=films.filter(f=>statutEstVisible(f));
   
 // ── GESTION RETOUR NAVIGATEUR (MOBILE) ──
 function pushModalState(modalId){
@@ -5528,6 +5559,7 @@ let _googleClientInstance=null;
 // Reconnexion Google automatique si déjà connecté
 window.addEventListener('load',()=>{
   const wasConnected=localStorage.getItem('google_was_connected');
+  console.log('[MyCinebox Google] Reconnexion automatique au chargement',{wasConnected:!!wasConnected});
   if(!wasConnected) return;
   setTimeout(()=>{
     if(typeof google==='undefined') return;
@@ -5537,10 +5569,12 @@ window.addEventListener('load',()=>{
         scope:'https://www.googleapis.com/auth/drive.file',
         prompt:'',
         callback:(resp)=>{
+          console.log('[MyCinebox Google] Callback reconnexion automatique',{erreur:resp&&resp.error,jetonRecu:!!(resp&&resp.access_token)});
           if(resp.error||!resp.access_token) return;
           _googleToken=resp.access_token;
           chargerProfilGoogle();
-        }
+        },
+        error_callback:(err)=>console.error('[MyCinebox Google] Erreur reconnexion automatique',err)
       });
       _googleClientInstance.requestAccessToken({prompt:''});
     }catch(e){}
@@ -5573,40 +5607,96 @@ const DRIVE_PREFS_FILENAME='videotheque_prefs.json';
 let _googleToken=null;
 let _driveAutoSaveTimer=null;
 
+// Diagnostic Google/Drive v1.7.47 : traces visibles dans la console Firefox.
+const GOOGLE_DEBUG_PREFIX='[MyCinebox Google]';
+function googleDebug(etape,details){
+  const heure=new Date().toLocaleTimeString('fr-FR');
+  if(details instanceof Error){
+    console.error(GOOGLE_DEBUG_PREFIX,heure,etape,details,details.stack||'');
+  }else if(details!==undefined){
+    console.log(GOOGLE_DEBUG_PREFIX,heure,etape,details);
+  }else{
+    console.log(GOOGLE_DEBUG_PREFIX,heure,etape);
+  }
+  const el=document.getElementById('drive-status');
+  if(el) el.textContent='Diagnostic : '+etape;
+}
+async function debugFetch(url,options={},nom='requête'){
+  googleDebug(nom+' — départ',{url,method:options.method||'GET',token:!!_googleToken});
+  try{
+    const r=await fetch(url,options);
+    googleDebug(nom+' — réponse',{status:r.status,statusText:r.statusText,ok:r.ok,url:r.url});
+    return r;
+  }catch(e){
+    googleDebug(nom+' — erreur réseau',e);
+    throw e;
+  }
+}
+
 function googleSignIn(){
-  if(typeof google==='undefined'){snack('⚠️ Connexion Google disponible sur https:// uniquement');return;}
+  googleDebug('1. Clic sur Se connecter',{googleDisponible:typeof google!=='undefined',instanceExistante:!!_googleClientInstance,origine:location.origin});
+  if(typeof google==='undefined'){snack('⚠️ Connexion Google disponible sur https:// uniquement');googleDebug('ARRÊT : bibliothèque Google absente');return;}
   if(_googleClientInstance){
+    googleDebug('2. Demande de jeton avec instance existante');
     _googleClientInstance.requestAccessToken({prompt:'select_account'});
     return;
   }
-  // Créer une nouvelle instance
-  const client=google.accounts.oauth2.initTokenClient({
+  googleDebug('2. Création du client OAuth',{clientId:GOOGLE_CLIENT_ID,scope:DRIVE_SCOPE});
+  _googleClientInstance=google.accounts.oauth2.initTokenClient({
     client_id:GOOGLE_CLIENT_ID,scope:DRIVE_SCOPE,
     callback:(resp)=>{
-      if(resp.error){snack('⚠️ Erreur connexion');return;}
+      googleDebug('3. Callback Google reçu',{
+        erreur:resp&&resp.error,
+        description:resp&&resp.error_description,
+        jetonRecu:!!(resp&&resp.access_token),
+        expiresIn:resp&&resp.expires_in,
+        scope:resp&&resp.scope
+      });
+      if(!resp||resp.error||!resp.access_token){snack('⚠️ Erreur connexion Google');return;}
       _googleToken=resp.access_token;
+      googleDebug('4. Jeton mémorisé',{longueur:_googleToken.length});
       chargerProfilGoogle();
-    }
+    },
+    error_callback:(err)=>googleDebug('Erreur popup OAuth',err)
   });
-  client.requestAccessToken({prompt:'select_account'});
+  googleDebug('2 bis. Ouverture du sélecteur de compte');
+  _googleClientInstance.requestAccessToken({prompt:'select_account'});
 }
 
 async function chargerProfilGoogle(){
+  googleDebug('5. Début chargerProfilGoogle',{jetonPresent:!!_googleToken});
+  // Les commandes Drive deviennent visibles dès que le jeton existe. Le profil
+  // utilisateur est un bonus et ne doit pas bloquer toute la connexion.
+  document.getElementById('btn-google-signin').style.display='none';
+  document.getElementById('btn-drive-save').style.display='block';
+  document.getElementById('btn-drive-load').style.display='block';
+  const mergeBtn=document.getElementById('btn-drive-merge');if(mergeBtn) mergeBtn.style.display='block';
+  localStorage.setItem('google_was_connected','1');
   try{
-    const r=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+_googleToken}});
-    const u=await r.json();
+    const r=await debugFetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+_googleToken}},'6. Profil Google userinfo');
+    const texte=await r.text();
+    googleDebug('6 bis. Corps userinfo',texte.slice(0,500));
+    if(!r.ok) throw new Error('userinfo HTTP '+r.status+' : '+texte.slice(0,180));
+    const u=texte?JSON.parse(texte):{};
     document.getElementById('google-user-info').style.display='flex';
-    document.getElementById('btn-google-signin').style.display='none';
-    document.getElementById('btn-drive-save').style.display='block';
-    document.getElementById('btn-drive-load').style.display='block';
-    document.getElementById('google-name').textContent=u.name||'';
+    document.getElementById('google-name').textContent=u.name||'Compte Google';
     document.getElementById('google-email').textContent=u.email||'';
     if(u.picture) document.getElementById('google-avatar').src=u.picture;
-    localStorage.setItem('google_was_connected','1');
-    snack('✓ Connecté : '+u.name+' — synchronisation Drive...');
+    googleDebug('7. Profil affiché',{nom:u.name,email:u.email});
+  }catch(e){
+    googleDebug('7. Profil indisponible, test Drive poursuivi',e);
+    snack('Connexion Google reçue — test Drive en cours');
+  }
+  try{
+    googleDebug('8. Début synchronisation Drive');
     await mergeAutoDrive();
-      await chargerPrefsDrive(true);
-  }catch(e){snack('Erreur profil Google');}
+    googleDebug('9. mergeAutoDrive terminé');
+    await chargerPrefsDrive(true);
+    googleDebug('10. Connexion et synchronisation terminées');
+  }catch(e){
+    googleDebug('ÉCHEC synchronisation après connexion',e);
+    snack('Connexion reçue — erreur Drive : '+e.message);
+  }
 }
 
 function googleSignOut(){
@@ -5621,9 +5711,11 @@ function googleSignOut(){
 }
 
 async function trouverFichierDrive(){
-  const r=await fetch('https://www.googleapis.com/drive/v3/files?q=name%3D%22'+DRIVE_FILENAME+'%22+and+trashed%3Dfalse&fields=files(id,name,modifiedTime)',
-    {headers:{Authorization:'Bearer '+_googleToken}});
-  const d=await r.json();
+  const r=await debugFetch('https://www.googleapis.com/drive/v3/files?q=name%3D%22'+DRIVE_FILENAME+'%22+and+trashed%3Dfalse&fields=files(id,name,modifiedTime)',
+    {headers:{Authorization:'Bearer '+_googleToken}},'Drive : recherche sauvegarde');
+  const texte=await r.text();
+  if(!r.ok) throw new Error('Drive files.list HTTP '+r.status+' : '+texte.slice(0,220));
+  const d=texte?JSON.parse(texte):{};
   return d.files&&d.files.length>0?d.files[0]:null;
 }
 
@@ -6120,7 +6212,7 @@ async function searchActorMovies(personId, personName) {
 function displaySearchResults(results) {
   const resultsId = 'search-results';
   let results_ = results.slice(0,50);
-  if (_searchSort === 'date') results_.sort((a,b)=>(b.release_date||'').localeCompare(a.release_date||''));
+  if (_searchSort === 'date') results_.sort((a,b)=>{const cmp=(b.release_date||'').localeCompare(a.release_date||'');return _searchSortDirection==='desc'?cmp:-cmp;});
   
   document.getElementById(resultsId).innerHTML = results_.map(f=>{
     const titre = f.title || '';
