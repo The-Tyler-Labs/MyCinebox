@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.35</title>
+<title>Vidéothèque v1.7.49 diagnostic</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -359,7 +359,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.48</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.49 diagnostic</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -1041,7 +1041,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.48';
+const APP_VERSION='v1.7.49-diagnostic';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -4436,6 +4436,7 @@ function appliquerPolice(val){
 
 function renderSettings(){
   const filmsVisibles=films.filter(f=>statutEstVisible(f));
+  console.log('[MyCinebox Google]',new Date().toLocaleTimeString(),'renderSettings',{films:films.length,filmsVisibles:filmsVisibles.length,tokenPresent:!!_googleToken});
   
 // ── GESTION RETOUR NAVIGATEUR (MOBILE) ──
 function pushModalState(modalId){
@@ -5556,38 +5557,40 @@ document.addEventListener('click', function(e){
 
 
 let _googleClientInstance=null;
-let _googleConnexionEnCours=false;
-
-// Récupère un jeton éventuellement renvoyé par la solution de secours OAuth
-// (redirection complète de la page, utile lorsque Firefox ferme la popup GIS).
-function traiterRetourOAuthGoogle(){
-  const hash=new URLSearchParams(location.hash.replace(/^#/,''));
-  const token=hash.get('access_token');
-  const erreur=hash.get('error');
-  if(!token&&!erreur) return false;
-  history.replaceState(null,'',location.pathname+location.search);
-  if(erreur){
-    console.error('[MyCinebox Google] Retour OAuth en erreur :',erreur,hash.get('error_description')||'');
-    setDriveStatus('⚠️ Connexion Google refusée : '+erreur);
-    return true;
-  }
-  _googleToken=token;
-  const expireDans=Math.max(60,parseInt(hash.get('expires_in')||'3600',10));
-  sessionStorage.setItem('google_access_token',token);
-  sessionStorage.setItem('google_token_expiry',String(Date.now()+expireDans*1000));
-  finaliserConnexionGoogle();
-  return true;
+function googleDiag(etape,details){
+  const heure=new Date().toLocaleTimeString('fr-FR');
+  if(details instanceof Error) console.error('[MyCinebox Google]',heure,etape,details);
+  else console.log('[MyCinebox Google]',heure,etape,details===undefined?'':details);
 }
-
-// Reconnexion silencieuse : on réutilise seulement un jeton encore valable.
+// Reconnexion Google automatique si déjà connecté
 window.addEventListener('load',()=>{
-  if(traiterRetourOAuthGoogle()) return;
-  const token=sessionStorage.getItem('google_access_token');
-  const expiry=parseInt(sessionStorage.getItem('google_token_expiry')||'0',10);
-  if(token&&expiry>Date.now()+60000){
-    _googleToken=token;
-    finaliserConnexionGoogle(true);
-  }
+  const wasConnected=localStorage.getItem('google_was_connected');
+  googleDiag('Chargement de la page',{wasConnected:!!wasConnected,googleDisponible:typeof google!=='undefined',origin:location.origin,href:location.href});
+  if(!wasConnected) return;
+  setTimeout(()=>{
+    googleDiag('Tentative de reconnexion automatique',{googleDisponible:typeof google!=='undefined'});
+    if(typeof google==='undefined'){
+      googleDiag('Reconnexion impossible : bibliothèque Google absente');
+      return;
+    }
+    try{
+      _googleClientInstance=google.accounts.oauth2.initTokenClient({
+        client_id:GOOGLE_CLIENT_ID,
+        scope:DRIVE_SCOPE,
+        callback:(resp)=>{
+          googleDiag('Callback reconnexion automatique',resp);
+          if(resp.error||!resp.access_token) return;
+          _googleToken=resp.access_token;
+          googleDiag('Jeton reçu en reconnexion',{longueur:_googleToken.length});
+          chargerProfilGoogle();
+        },
+        error_callback:(err)=>googleDiag('Erreur reconnexion automatique',err)
+      });
+      googleDiag('Client reconnexion créé');
+      _googleClientInstance.requestAccessToken({prompt:''});
+      googleDiag('Demande silencieuse envoyée');
+    }catch(e){googleDiag('Exception reconnexion automatique',e);}
+  },2000);
 });
 const _sagaAffiches=JSON.parse(localStorage.getItem('sagaAffiches')||'{}');
 document.documentElement.style.setProperty('--cols',prefs.cols||2);
@@ -5611,163 +5614,97 @@ document.addEventListener('visibilitychange',()=>{
 <script>
 const GOOGLE_CLIENT_ID='932454913163-aqttulsgsdoq2ekil51dnl7ge7mmredh.apps.googleusercontent.com';
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
-const GOOGLE_SCOPES='openid email profile '+DRIVE_SCOPE;
 const DRIVE_FILENAME='videotheque_backup.json';
 const DRIVE_PREFS_FILENAME='videotheque_prefs.json';
 let _googleToken=null;
 let _driveAutoSaveTimer=null;
 
-function setDriveStatus(message){
-  const el=document.getElementById('drive-status');
-  if(el) el.textContent=message||'';
-}
-
-function afficherEtatGoogleConnecte(profil={}){
-  const info=document.getElementById('google-user-info');
-  const signin=document.getElementById('btn-google-signin');
-  const save=document.getElementById('btn-drive-save');
-  const load=document.getElementById('btn-drive-load');
-  const merge=document.getElementById('btn-drive-merge');
-  if(info) info.style.display='flex';
-  if(signin) signin.style.display='none';
-  if(save) save.style.display='block';
-  if(load) load.style.display='block';
-  if(merge) merge.style.display='block';
-  const nom=document.getElementById('google-name');
-  const email=document.getElementById('google-email');
-  const avatar=document.getElementById('google-avatar');
-  if(nom) nom.textContent=profil.name||'Google Drive';
-  if(email) email.textContent=profil.email||'Connexion active';
-  if(avatar&&profil.picture) avatar.src=profil.picture;
-}
-
-function obtenirClientGoogle(){
-  if(_googleClientInstance) return _googleClientInstance;
-  if(!window.google||!google.accounts||!google.accounts.oauth2) return null;
-  _googleClientInstance=google.accounts.oauth2.initTokenClient({
-    client_id:GOOGLE_CLIENT_ID,
-    scope:GOOGLE_SCOPES,
-    include_granted_scopes:true,
-    callback:()=>{},
-    error_callback:(err)=>gererErreurPopupGoogle(err)
-  });
-  return _googleClientInstance;
-}
-
-function gererErreurPopupGoogle(err){
-  _googleConnexionEnCours=false;
-  console.error('[MyCinebox Google] Erreur popup OAuth',err);
-  const type=err&&err.type?err.type:'erreur_inconnue';
-  if(type==='popup_closed'||type==='popup_failed_to_open'){
-    setDriveStatus('⚠️ Firefox a fermé la fenêtre Google. Nouvelle tentative sans popup…');
-    // Le flux par redirection ne dépend ni des popups ni des cookies tiers.
-    setTimeout(()=>connexionGoogleParRedirection(),150);
-    return;
-  }
-  setDriveStatus('⚠️ Connexion Google impossible : '+type);
-  snack('⚠️ Connexion Google impossible');
-}
-
 function googleSignIn(){
-  if(_googleConnexionEnCours) return;
-  _googleConnexionEnCours=true;
-  setDriveStatus('Connexion à Google…');
-  const client=obtenirClientGoogle();
-  if(!client){
-    _googleConnexionEnCours=false;
-    connexionGoogleParRedirection();
+  googleDiag('Clic sur Se connecter',{googleDisponible:typeof google!=='undefined',instanceExistante:!!_googleClientInstance,origin:location.origin});
+  const status=document.getElementById('drive-status');
+  if(status) status.textContent='Connexion Google en cours…';
+  if(typeof google==='undefined'){
+    googleDiag('Bibliothèque Google indisponible');
+    if(status) status.textContent='Erreur : bibliothèque Google indisponible';
+    snack('⚠️ Connexion Google disponible sur https:// uniquement');
     return;
   }
-  client.callback=(resp)=>{
-    _googleConnexionEnCours=false;
-    if(!resp||resp.error||!resp.access_token){
-      console.error('[MyCinebox Google] Réponse OAuth invalide',resp);
-      setDriveStatus('⚠️ Google n’a pas renvoyé de jeton.');
-      return;
-    }
-    _googleToken=resp.access_token;
-    const expireDans=Math.max(60,parseInt(resp.expires_in||'3600',10));
-    sessionStorage.setItem('google_access_token',_googleToken);
-    sessionStorage.setItem('google_token_expiry',String(Date.now()+expireDans*1000));
-    finaliserConnexionGoogle();
-  };
   try{
-    // consent est plus fiable que select_account sous Firefox avec protection renforcée.
-    client.requestAccessToken({prompt:'consent'});
-  }catch(err){
-    gererErreurPopupGoogle({type:'popup_failed_to_open',cause:err});
-  }
-}
-
-function connexionGoogleParRedirection(){
-  const redirectUri=location.origin+location.pathname;
-  sessionStorage.setItem('google_oauth_return',location.href.split('#')[0]);
-  const params=new URLSearchParams({
-    client_id:GOOGLE_CLIENT_ID,
-    redirect_uri:redirectUri,
-    response_type:'token',
-    scope:GOOGLE_SCOPES,
-    include_granted_scopes:'true',
-    prompt:'consent',
-    state:crypto.randomUUID?crypto.randomUUID():String(Date.now())
-  });
-  location.assign('https://accounts.google.com/o/oauth2/v2/auth?'+params.toString());
-}
-
-async function finaliserConnexionGoogle(silencieux=false){
-  afficherEtatGoogleConnecte();
-  localStorage.setItem('google_was_connected','1');
-  setDriveStatus('✓ Google Drive connecté');
-  try{
-    await chargerProfilGoogle();
-  }catch(err){
-    // Le profil est décoratif : Drive reste utilisable même s’il échoue.
-    console.warn('[MyCinebox Google] Profil non disponible, Drive reste connecté',err);
-  }
-  if(!silencieux){
-    snack('✓ Google Drive connecté — synchronisation…');
-    try{
-      await mergeAutoDrive();
-      await chargerPrefsDrive(true);
-    }catch(err){
-      console.error('[MyCinebox Google] Synchronisation initiale impossible',err);
-      setDriveStatus('✓ Connecté — synchronisation à relancer manuellement');
-    }
+    _googleClientInstance=google.accounts.oauth2.initTokenClient({
+      client_id:GOOGLE_CLIENT_ID,
+      scope:DRIVE_SCOPE,
+      callback:(resp)=>{
+        googleDiag('Callback OAuth reçu',resp);
+        if(resp.error||!resp.access_token){
+          if(status) status.textContent='Connexion refusée : '+(resp.error||'aucun jeton reçu');
+          snack('⚠️ Erreur connexion Google');
+          return;
+        }
+        _googleToken=resp.access_token;
+        googleDiag('Jeton OAuth reçu',{longueur:_googleToken.length,scope:resp.scope,expiresIn:resp.expires_in});
+        if(status) status.textContent='Jeton Google reçu, chargement du profil…';
+        chargerProfilGoogle();
+      },
+      error_callback:(err)=>{
+        googleDiag('Erreur popup OAuth',err);
+        if(status) status.textContent='Connexion interrompue : '+((err&&err.type)||'erreur popup');
+        snack('⚠️ Fenêtre Google interrompue : '+((err&&err.type)||'erreur'));
+      }
+    });
+    googleDiag('Client OAuth créé',{clientId:GOOGLE_CLIENT_ID,scope:DRIVE_SCOPE});
+    googleDiag('Ouverture du sélecteur de compte');
+    _googleClientInstance.requestAccessToken({prompt:'select_account'});
+  }catch(e){
+    googleDiag('Exception dans googleSignIn',e);
+    if(status) status.textContent='Erreur technique de connexion Google';
+    snack('⚠️ Erreur technique Google');
   }
 }
 
 async function chargerProfilGoogle(){
-  if(!_googleToken) return;
-  const r=await fetch('https://openidconnect.googleapis.com/v1/userinfo',{
-    headers:{Authorization:'Bearer '+_googleToken},
-    cache:'no-store'
-  });
-  if(!r.ok) throw new Error('Profil Google HTTP '+r.status);
-  const u=await r.json();
-  afficherEtatGoogleConnecte(u);
+  const status=document.getElementById('drive-status');
+  googleDiag('Début chargerProfilGoogle',{tokenPresent:!!_googleToken});
+  try{
+    const r=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+_googleToken}});
+    googleDiag('Réponse userinfo',{status:r.status,ok:r.ok,statusText:r.statusText});
+    const texte=await r.text();
+    googleDiag('Corps userinfo brut',texte.slice(0,500));
+    if(!r.ok) throw new Error('userinfo HTTP '+r.status+' : '+texte.slice(0,200));
+    const u=texte?JSON.parse(texte):{};
+    googleDiag('Profil Google décodé',{name:u.name,email:u.email,picture:!!u.picture});
+    document.getElementById('google-user-info').style.display='flex';
+    document.getElementById('btn-google-signin').style.display='none';
+    document.getElementById('btn-drive-save').style.display='block';
+    document.getElementById('btn-drive-load').style.display='block';
+    const mergeBtn=document.getElementById('btn-drive-merge');if(mergeBtn) mergeBtn.style.display='block';
+    document.getElementById('google-name').textContent=u.name||'Compte Google';
+    document.getElementById('google-email').textContent=u.email||'';
+    if(u.picture) document.getElementById('google-avatar').src=u.picture;
+    localStorage.setItem('google_was_connected','1');
+    if(status) status.textContent='Connecté à Google, synchronisation Drive…';
+    snack('✓ Connecté : '+(u.name||'Google')+' — synchronisation Drive...');
+    googleDiag('Début mergeAutoDrive');
+    await mergeAutoDrive();
+    googleDiag('Fin mergeAutoDrive');
+    googleDiag('Début chargerPrefsDrive');
+    await chargerPrefsDrive(true);
+    googleDiag('Fin chargerPrefsDrive');
+    if(status) status.textContent='✓ Google Drive connecté';
+  }catch(e){
+    googleDiag('Erreur chargerProfilGoogle',e);
+    if(status) status.textContent='Erreur Google : '+(e&&e.message?e.message:'inconnue');
+    snack('Erreur profil Google');
+  }
 }
 
 function googleSignOut(){
-  const ancienToken=_googleToken;
+  if(typeof google!=='undefined'&&_googleToken) google.accounts.oauth2.revoke(_googleToken,()=>{});
   _googleToken=null;
-  _googleConnexionEnCours=false;
-  sessionStorage.removeItem('google_access_token');
-  sessionStorage.removeItem('google_token_expiry');
   localStorage.removeItem('google_was_connected');
-  if(window.google&&google.accounts&&google.accounts.oauth2&&ancienToken){
-    try{google.accounts.oauth2.revoke(ancienToken,()=>{});}catch(_){ }
-  }
-  const info=document.getElementById('google-user-info');
-  const signin=document.getElementById('btn-google-signin');
-  const save=document.getElementById('btn-drive-save');
-  const load=document.getElementById('btn-drive-load');
-  const merge=document.getElementById('btn-drive-merge');
-  if(info) info.style.display='none';
-  if(signin) signin.style.display='block';
-  if(save) save.style.display='none';
-  if(load) load.style.display='none';
-  if(merge) merge.style.display='none';
-  setDriveStatus('');
+  document.getElementById('google-user-info').style.display='none';
+  document.getElementById('btn-google-signin').style.display='block';
+  document.getElementById('btn-drive-save').style.display='none';
+  document.getElementById('btn-drive-load').style.display='none';
   snack('Déconnecté de Google');
 }
 
