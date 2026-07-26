@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.51 diagnostic</title>
+<title>Vidéothèque v1.7.52 diagnostic</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1041,7 +1041,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.51-diagnostic';
+const APP_VERSION='v1.7.52-diagnostic';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1820,7 +1820,7 @@ function renderCollection(){
       // et le titre alternatif. Les noms d'acteurs ne sont recherchés que
       // dans le filtre Acteur prévu à cet effet.
       const texteTitre=[f.titre,f.titreAlt].filter(Boolean).join(' ');
-      if(scoreRechercheSouple(q,texteTitre)<0) return false;
+      if(!correspondRechercheTitre(q,texteTitre)) return false;
     }
     return true;
   });
@@ -3277,7 +3277,9 @@ async function searchTmdbMulti(){
       if(!['movie','tv','person'].includes(item.media_type)) return;
       const cle=item.media_type+':'+item.id;
       const titre=[item.title,item.name,item.original_title,item.original_name].filter(Boolean).join(' ');
-      const score=scoreRechercheSouple(q,titre)+(item.popularity||0)/100-indice*2;
+      const scoreBase=scoreRechercheSouple(q,titre);
+      if(scoreBase<0) return;
+      const score=scoreBase+(item.popularity||0)/100-indice*2;
       const precedent=fusion.get(cle);
       if(!precedent||score>precedent._fuzzyScore) fusion.set(cle,Object.assign({},item,{_fuzzyScore:score}));
     }));
@@ -5502,6 +5504,43 @@ function scoreRechercheSouple(requete,texte){
   const seuil=qm.length>1?qm.length*95:70;
   return score>=seuil?score:-1;
 }
+
+// Recherche locale de la collection : stricte pour plusieurs mots.
+// Tous les mots saisis doivent exister dans le titre (ou son titre alternatif).
+// La tolérance aux fautes reste disponible uniquement pour une recherche d'un seul mot.
+function correspondRechercheTitre(requete,texte){
+  const q=normaliserRecherche(requete);
+  const t=normaliserRecherche(texte);
+  if(!q||!t) return false;
+  if(t.includes(q)) return true;
+
+  const qm=motsRecherche(q);
+  const tm=motsRecherche(t);
+  if(!qm.length||!tm.length) return false;
+
+  if(qm.length===1){
+    return tm.some(motT=>scoreCorrespondanceMot(qm[0],motT)>0);
+  }
+
+  // Pour plusieurs mots, aucune ressemblance vague : chaque mot doit être
+  // identique ou être un préfixe suffisamment long d'un mot distinct du titre.
+  const utilises=new Set();
+  for(const motQ of qm){
+    let trouve=-1;
+    for(let i=0;i<tm.length;i++){
+      if(utilises.has(i)) continue;
+      const motT=tm[i];
+      const exact=motT===motQ;
+      const prefixe=motQ.length>=3 && motT.startsWith(motQ);
+      const pluriel=(motQ.length>=4 && (motT===motQ+'s' || motQ===motT+'s'));
+      if(exact||prefixe||pluriel){ trouve=i; break; }
+    }
+    if(trouve<0) return false;
+    utilises.add(trouve);
+  }
+  return true;
+}
+
 function variantesRequeteSouple(requete){
   const q=normaliserRecherche(requete), mots=motsRecherche(q);
   const out=[q];
