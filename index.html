@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.49 diagnostic</title>
+<title>Vidéothèque v1.7.51 diagnostic</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -136,7 +136,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .cat-badge.humour{background:#6e4a1a}
 
 /* TABS CATÉGORIE dans la collection */
-.cat-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:12px;padding-bottom:2px}
+.cat-tabs{display:flex;gap:6px;flex-wrap:wrap;overflow-x:visible;scrollbar-width:none;margin-bottom:12px;padding-bottom:2px}
 .cat-tabs::-webkit-scrollbar{display:none}
 .cat-tab{flex-shrink:0;padding:7px 14px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid #333;background:none;color:var(--text2);cursor:pointer;white-space:nowrap}
 .cat-tab.active{color:#fff}
@@ -359,7 +359,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- ACCUEIL -->
 <div class="page active" id="page-home">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-top:8px">
-    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.49 diagnostic</span></h1>
+    <h1 style="font-size:22px;color:var(--green-light);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">🎬 Vidéothèque <span id="app-version-label" style="font-size:13px;color:var(--text2);font-weight:600">v1.7.51 diagnostic</span></h1>
   </div>
 
   <div class="suggested-banner" aria-label="Films suggérés depuis votre collection">
@@ -1041,7 +1041,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.49-diagnostic';
+const APP_VERSION='v1.7.51-diagnostic';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -5446,31 +5446,61 @@ function motProche(recherche,mot){
   const tolerance=max>=8?2:max>=4?1:0;
   return distanceLevenshtein(recherche,mot)<=tolerance;
 }
+function scoreCorrespondanceMot(motQ,motT){
+  if(!motQ||!motT) return 0;
+  if(motT===motQ) return 140;
+  // Préfixe utile pour une saisie incomplète, mais seulement à partir de 3 lettres.
+  if(motQ.length>=3&&motT.length>=3&&(motT.startsWith(motQ)||motQ.startsWith(motT))&&Math.min(motQ.length,motT.length)>=Math.ceil(Math.max(motQ.length,motT.length)*0.6)) return 105;
+  // Les sous-chaînes très courtes créent trop de faux résultats : 4 lettres minimum.
+  if(motQ.length>=4&&motT.length>=4&&(motT.includes(motQ)||motQ.includes(motT))&&Math.min(motQ.length,motT.length)>=Math.ceil(Math.max(motQ.length,motT.length)*0.7)) return 90;
+  const max=Math.max(motQ.length,motT.length);
+  const tolerance=max>=9?2:max>=5?1:0;
+  const distance=distanceLevenshtein(motQ,motT);
+  if(tolerance>0&&motQ[0]===motT[0]&&Math.abs(motQ.length-motT.length)<=tolerance&&distance<=tolerance) return 80-distance*10;
+  return 0;
+}
 function scoreRechercheSouple(requete,texte){
   const q=normaliserRecherche(requete), t=normaliserRecherche(texte);
   if(!q||!t) return -1;
-  if(t===q) return 1000;
-  let score=0;
-  if(t.startsWith(q)) score+=400;
-  else if(t.includes(q)) score+=300;
+  if(t===q) return 2000;
+
   const qm=motsRecherche(q), tm=motsRecherche(t);
-  if(!qm.length) return score||-1;
-  let trouves=0;
+  if(!qm.length||!tm.length) return -1;
+
+  let score=0;
+  if(t.startsWith(q)) score+=700;
+  else if(t.includes(q)) score+=550;
+
+  // Chaque mot recherché doit correspondre à un mot distinct du titre.
+  // Cela évite qu'une recherche comme « beautiful things » fasse remonter
+  // des titres n'ayant qu'un seul mot vaguement proche.
+  const utilises=new Set();
+  const positions=[];
   for(const motQ of qm){
-    let meilleur=0;
-    for(const motT of tm){
-      if(motT===motQ) meilleur=Math.max(meilleur,120);
-      else if(motT.startsWith(motQ)||motQ.startsWith(motT)) meilleur=Math.max(meilleur,90);
-      else if(motProche(motQ,motT)) meilleur=Math.max(meilleur,70);
+    let meilleurScore=0,meilleurIndex=-1;
+    for(let i=0;i<tm.length;i++){
+      if(utilises.has(i)) continue;
+      const s=scoreCorrespondanceMot(motQ,tm[i]);
+      if(s>meilleurScore){meilleurScore=s;meilleurIndex=i;}
     }
-    if(meilleur){trouves++;score+=meilleur;} else score-=120;
+    if(meilleurIndex<0) return -1;
+    utilises.add(meilleurIndex);
+    positions.push(meilleurIndex);
+    score+=meilleurScore;
   }
-  if(trouves===qm.length) score+=220;
-  if(trouves===0){
-    const d=distanceLevenshtein(q,t);
-    if(d<=Math.max(1,Math.floor(q.length/5))) score+=80-d*10;
+
+  // Bonus si les mots apparaissent dans le même ordre et à proximité.
+  const ordreCorrect=positions.every((p,i)=>i===0||p>positions[i-1]);
+  if(ordreCorrect){
+    score+=180;
+    const etendue=positions[positions.length-1]-positions[0]+1;
+    if(etendue<=qm.length+1) score+=120;
   }
-  return score>0?score:-1;
+
+  // Une recherche à plusieurs mots doit être vraiment précise.
+  // Pour un seul mot, on conserve les petites fautes de frappe utiles.
+  const seuil=qm.length>1?qm.length*95:70;
+  return score>=seuil?score:-1;
 }
 function variantesRequeteSouple(requete){
   const q=normaliserRecherche(requete), mots=motsRecherche(q);
