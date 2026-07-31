@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.52 diagnostic</title>
+<title>Vidéothèque v1.7.54</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -125,6 +125,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .vu-badge.s-critique{background:rgba(120,20,120,.9);color:#f0a0ff}
 .vu-badge.s-ccdr{background:rgba(15,70,115,.92);color:#9bd3ff}
 .vu-badge.s-meilleurequalite{background:rgba(0,78,96,.9);color:#7fe7ff}
+.statuts-badges{position:absolute;top:6px;right:6px;z-index:3;display:flex;flex-direction:column;align-items:flex-end;gap:4px;max-width:78%}
+.statuts-badges .vu-badge{position:static;display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 /* Badge catégorie */
 .cat-badge{position:absolute;top:6px;left:6px;border-radius:8px;padding:2px 7px;font-size:10px;font-weight:bold;z-index:2;opacity:.9}
 .cat-badge.films{background:#1a3d6e}
@@ -1041,7 +1043,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.52-diagnostic';
+const APP_VERSION='v1.7.54';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1209,7 +1211,9 @@ function charger(){
           label:String(label||'Version '+(i+1)),
           rawName:'',details:[],languages:[],source:'',emplacement:''
         }));
-    return{...f,categorie,statut,qualite:f.qualite||'',qualites,versions:legacyVersions,editions,pays};
+    const statutsBruts=Array.isArray(f.statuts)?f.statuts:(statut?[statut]:[]);
+    const statuts=[...new Set(statutsBruts.map(normaliserStatut).filter(Boolean))];
+    return{...f,categorie,statut:statuts[0]||'',statuts,qualite:f.qualite||'',qualites,versions:legacyVersions,editions,pays};
   });
   try{prefs={...prefs,...JSON.parse(localStorage.getItem(PREFS_KEY)||'{}') };}catch(e){}
   ensureTmdbApiKey();
@@ -1287,25 +1291,52 @@ function ecrireVisibiliteStatuts(vis){
   prefs.showCcdr=propre.ccdr;
   savePrefs();
 }
-function getFilmStatut(f){
-  if(!f) return '';
-  const candidats=[f.statut,f.status,f.etat,f.statutFilm,f.collectionStatus];
-  for(const valeur of candidats){
-    const n=normaliserStatut(valeur);
-    if(n) return n;
-  }
-  if(f.aTrouver===true||f.estATrouver===true||f.toFind===true) return 'trouver';
-  if(f.regarderCritiques===true||f.critique===true) return 'critique';
-  if(f.aPrendreCcdr===true||f.ccdr===true) return 'ccdr';
-  return '';
+function getFilmStatuts(f){
+  if(!f) return [];
+  const result=[];
+  const ajouter=v=>{const n=normaliserStatut(v);if(n&&!result.includes(n))result.push(n);};
+  if(Array.isArray(f.statuts)) f.statuts.forEach(ajouter);
+  [f.statut,f.status,f.etat,f.statutFilm,f.collectionStatus].forEach(ajouter);
+  if(f.aTrouver===true||f.estATrouver===true||f.toFind===true) ajouter('trouver');
+  if(f.regarderCritiques===true||f.critique===true) ajouter('critique');
+  if(f.aPrendreCcdr===true||f.ccdr===true) ajouter('ccdr');
+  return result;
+}
+function getFilmStatut(f){ return getFilmStatuts(f)[0]||''; }
+function filmAStatut(f,statut){ return getFilmStatuts(f).includes(normaliserStatut(statut)); }
+function synchroniserStatutsFilm(f){
+  f.statuts=[...new Set((Array.isArray(f.statuts)?f.statuts:[]).map(normaliserStatut).filter(Boolean))];
+  f.statut=f.statuts[0]||''; // compatibilité avec les anciennes sauvegardes Android
+  f.estVu=f.statuts.includes('vu');
+}
+function definirStatutFilm(f,statut,actif){
+  const s=normaliserStatut(statut);if(!s)return false;
+  const liste=getFilmStatuts(f);
+  const present=liste.includes(s);
+  const doitEtreActif=actif===undefined?!present:!!actif;
+  f.statuts=doitEtreActif?[...new Set([...liste,s])]:liste.filter(x=>x!==s);
+  synchroniserStatutsFilm(f);
+  return doitEtreActif;
 }
 function statutEstVisible(statutOuFilm){
-  const statut=typeof statutOuFilm==='object' ? getFilmStatut(statutOuFilm) : normaliserStatut(statutOuFilm);
   const vis=lireVisibiliteStatuts();
-  if(statut==='trouver') return vis.trouver;
-  if(statut==='critique') return vis.critique;
-  if(statut==='ccdr') return vis.ccdr;
-  return true;
+  if(typeof statutOuFilm!=='object'){
+    const statut=normaliserStatut(statutOuFilm);
+    if(statut==='trouver') return vis.trouver;
+    if(statut==='critique') return vis.critique;
+    if(statut==='ccdr') return vis.ccdr;
+    return true;
+  }
+  const statuts=getFilmStatuts(statutOuFilm);
+  if(!statuts.length) return true;
+  // Avec des statuts cumulables, une fiche reste visible si au moins un de ses
+  // statuts est affichable. Elle peut donc être « À trouver » et « À voir ».
+  return statuts.some(statut=>{
+    if(statut==='trouver') return vis.trouver;
+    if(statut==='critique') return vis.critique;
+    if(statut==='ccdr') return vis.ccdr;
+    return true;
+  });
 }
 function appliquerVisibiliteAccueil(){
   const vis=lireVisibiliteStatuts();
@@ -1346,7 +1377,7 @@ function nouveauFilm(data){
     nationalite:data.nationalite||'',noteManuelle:data.noteManuelle||'',
     pays:data.pays||[],duree:data.duree||0,emplacement:data.emplacement||'',
     visionnages:data.visionnages||[],episodesVus:data.episodesVus||{},
-    maNote:0,statut:data.statut||'',qualite:data.qualite||'',
+    maNote:0,statut:data.statut||'',statuts:Array.isArray(data.statuts)?data.statuts:(data.statut?[data.statut]:[]),qualite:data.qualite||'',
     qualites:data.qualites||[],versions:data.versions||[],editions:data.editions||[],
     estVu:false, // compatibilité Android
     dateAjout:Date.now()
@@ -1441,8 +1472,8 @@ function goCollectionCat(cat){
 function renderHome(){
   const filmsVisibles=films.filter(f=>statutEstVisible(f));
   const total=filmsVisibles.length;
-  const vus=filmsVisibles.filter(f=>f.statut==='vu').length;
-  const avoir=filmsVisibles.filter(f=>f.statut==='avoir').length;
+  const vus=filmsVisibles.filter(f=>filmAStatut(f,'vu')).length;
+  const avoir=filmsVisibles.filter(f=>filmAStatut(f,'avoir')).length;
   document.getElementById('stat-total').textContent=total;
   document.getElementById('stat-vus').textContent=vus;
   document.getElementById('stat-avoir').textContent=avoir;
@@ -1453,7 +1484,7 @@ function renderHome(){
   });
 
   // Carousel À voir
-  const aVoir=[...films].filter(f=>f.statut==='avoir').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
+  const aVoir=[...films].filter(f=>filmAStatut(f,'avoir')).sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
   const elAvoir=document.getElementById('carousel-avoir');
   if(aVoir.length===0){
     elAvoir.innerHTML='<p style="color:var(--text2);font-size:13px;padding:8px 0">Aucun film à voir</p>';
@@ -1469,7 +1500,7 @@ function renderHome(){
   }
 
   // Carousel À trouver
-  const aTrouver=[...films].filter(f=>getFilmStatut(f)==='trouver').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
+  const aTrouver=[...films].filter(f=>filmAStatut(f,'trouver')).sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
   const elTrouver=document.getElementById('carousel-trouver');
   if(aTrouver.length===0){
     elTrouver.innerHTML='<p style="color:var(--text2);font-size:13px;padding:8px 0">Aucun film à trouver</p>';
@@ -1485,7 +1516,7 @@ function renderHome(){
   }
 
   // Carousel Regarder critiques
-  const critiques=[...films].filter(f=>getFilmStatut(f)==='critique').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
+  const critiques=[...films].filter(f=>filmAStatut(f,'critique')).sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
   const elCritique=document.getElementById('carousel-critique');
   if(elCritique){
     elCritique.innerHTML=critiques.length===0
@@ -1501,7 +1532,7 @@ function renderHome(){
   }
 
   // Carousel À prendre CCDR
-  const ccdr=[...films].filter(f=>getFilmStatut(f)==='ccdr').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
+  const ccdr=[...films].filter(f=>filmAStatut(f,'ccdr')).sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
   const elCcdr=document.getElementById('carousel-ccdr');
   if(elCcdr){
     elCcdr.innerHTML=ccdr.length===0
@@ -1520,7 +1551,7 @@ function renderHome(){
   appliquerVisibiliteAccueil();
 
   // Carousel Plus tard
-  const plusTard=[...films].filter(f=>f.statut==='plustard').sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
+  const plusTard=[...films].filter(f=>filmAStatut(f,'plustard')).sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
   const elPlusTard=document.getElementById('carousel-plustard');
   if(elPlusTard){
     elPlusTard.innerHTML=plusTard.length===0
@@ -1742,7 +1773,7 @@ function renderCollection(){
 
   // Mode saga avec filtre actif — afficher les films de la saga
   if(!rechercheGlobale&&catTab==='saga'&&tagFiltres.saga){
-    const filmsS=films.filter(f=>statutEstVisible(f.statut)&&(()=>{const fs=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);return fs.includes(tagFiltres.saga);})());
+    const filmsS=films.filter(f=>statutEstVisible(f)&&(()=>{const fs=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);return fs.includes(tagFiltres.saga);})());
     const grid=document.getElementById('coll-grid');
     const empty=document.getElementById('coll-empty');
     document.getElementById('coll-count').textContent=filmsS.length+' film(s)';
@@ -1770,7 +1801,7 @@ function renderCollection(){
     empty.style.display='none';
     grid.style.display='grid';
     grid.innerHTML=sagas.map(saga=>{
-      const filmsS=films.filter(f=>statutEstVisible(f.statut)&&(()=>{const fs=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);return fs.includes(saga);})());
+      const filmsS=films.filter(f=>statutEstVisible(f)&&(()=>{const fs=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);return fs.includes(saga);})());
       const premier=filmsS.find(f=>f.affichePath)||filmsS[0];
       const affiche=premier&&premier.affichePath?premier.affichePath:'';
       return '<div style="background:var(--surface);border-radius:12px;overflow:hidden;cursor:pointer" onclick="voirSaga(this.getAttribute(\'data-saga\'))" data-saga="'+esc(saga)+'">'
@@ -1784,15 +1815,15 @@ function renderCollection(){
   }
 
   let liste=films.filter(f=>{
-    if(!statutEstVisible(f.statut)) return false;
+    if(!statutEstVisible(f)) return false;
     // Hors recherche textuelle, les onglets de catégories gardent leur comportement actuel.
     // Pendant une recherche, on ne limite pas au tab affiché : un titre doit pouvoir être
     // retrouvé même s'il est rangé dans « À trouver », « Critiques », une série, etc.
     if(!rechercheGlobale){
-      if(catTab==='atrouver') return normaliserStatut(f.statut)==='trouver'&&(tagFiltres.catFilter===''||f.categorie===tagFiltres.catFilter);
-      if(catTab==='acritique') return normaliserStatut(f.statut)==='critique'&&(tagFiltres.catFilter===''||f.categorie===tagFiltres.catFilter);
-      if(catTab==='avoir') return f.statut==='avoir';
-      if(catTab==='plustard') return f.statut==='plustard';
+      if(catTab==='atrouver') return filmAStatut(f,'trouver')&&(tagFiltres.catFilter===''||f.categorie===tagFiltres.catFilter);
+      if(catTab==='acritique') return filmAStatut(f,'critique')&&(tagFiltres.catFilter===''||f.categorie===tagFiltres.catFilter);
+      if(catTab==='avoir') return filmAStatut(f,'avoir');
+      if(catTab==='plustard') return filmAStatut(f,'plustard');
       // Animation : afficher tout ce qui a catégorie animation OU genre Animation
       if(catTab==='animation'){
         const estAnimation=f.categorie==='animation'||(f.genres||'').toLowerCase().split(',').map(g=>g.trim()).includes('animation');
@@ -1800,11 +1831,11 @@ function renderCollection(){
       } else if(catTab!=='tous'&&f.categorie!==catTab) return false;
       // Les statuts spéciaux restent visibles dans Collection lorsque leur option
       // d'affichage est activée dans les Paramètres. Leur masquage est déjà géré
-      // au début du filtre par statutEstVisible(f.statut).
+      // au début du filtre par statutEstVisible(f).
     }
     // Un filtre de statut choisi volontairement dans ⚙️ continue de s'appliquer,
     // même en recherche globale.
-    if(tagFiltres.statut!=='tous'&&normaliserStatut(f.statut)!==normaliserStatut(tagFiltres.statut)) return false;
+    if(tagFiltres.statut!=='tous'&&!filmAStatut(f,tagFiltres.statut)) return false;
     if(tagFiltres.decennie&&tagFiltres.decennie.size>0){const y=parseInt((f.dateSortie||'').slice(0,4));if(isNaN(y)||!tagFiltres.decennie.has(String(Math.floor(y/10)*10))) return false;}
     if(tagFiltres.annee&&(f.dateSortie||'').slice(0,4)!==tagFiltres.annee) return false;
     if(tagFiltres.genre&&!(f.genres||'').toLowerCase().includes(tagFiltres.genre.toLowerCase())) return false;
@@ -1874,7 +1905,7 @@ function renderCollection(){
 
   const grid=document.getElementById('coll-grid');
   const empty=document.getElementById('coll-empty');
-  const nbColl=liste.filter(f=>f.statut!=='trouver'&&f.statut!=='critique'&&f.statut!=='ccdr').length;
+  const nbColl=liste.filter(f=>!filmAStatut(f,'trouver')&&!filmAStatut(f,'critique')&&!filmAStatut(f,'ccdr')).length;
   const totalTxt=rechercheGlobale
     ?liste.length+' résultat(s) dans toute la médiathèque'
     :(catTab==='atrouver'||catTab==='acritique'?liste.length+' élément(s)':nbColl+' élément(s)'+(liste.length!==nbColl?' (+'+( liste.length-nbColl)+' hors collection)':''));
@@ -1929,10 +1960,10 @@ function actionRapide(action){
     snack('🗑 Supprimé');
     return;
   }
-  f.statut=action;f.estVu=(action==='vu');
+  const actif=definirStatutFilm(f,action);
   sauvegarder();
   renderCollection();renderHome();
-  snack('✓ '+f.titre+' → '+statutInfo(action).label);
+  snack((actif?'✓ Ajouté : ':'✓ Retiré : ')+statutInfo(action).label);
 }
 let _selectionIds=new Set();
 
@@ -1953,7 +1984,8 @@ function itemCard(f){
       +'</div></div>';
   }
   const cat=CATS[f.categorie]||CATS.films;
-  const st=statutInfo(f.statut||'');
+  const statuts=getFilmStatuts(f);
+  const st=statutInfo(statuts[0]||'');
   const hasImg=f.affichePath&&f.affichePath.length>0;
   const selClass=_selectionIds.has(f.id)?' selected':'';
   const clickFn=_modeSelection?'toggleSelection('+f.id+')':'ouvrirDetail('+f.id+')';
@@ -1962,7 +1994,7 @@ function itemCard(f){
     +(hasImg?'<img src="'+f.affichePath+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'" alt="">':'')
     +'<div class="no-img" style="display:'+(hasImg?'none':'flex')+'">'+cat.icon+'</div>'
     +'<span class="cat-badge '+f.categorie+'">'+cat.icon+'</span>'
-    +'<button class="vu-badge '+st.cls+'" onclick="event.stopPropagation();event.preventDefault();cycleStatut('+f.id+')">'+st.label+'</button>'
+    +'<div class="statuts-badges">'+(statuts.length?statuts.map(s=>{const si=statutInfo(s);return '<button class="vu-badge '+si.cls+'" title="Cliquer pour retirer" data-statut="'+s+'" onclick="event.stopPropagation();event.preventDefault();toggleStatutCarte('+f.id+',this.dataset.statut)">'+si.label+'</button>';}).join(''):'<button class="vu-badge s-vide" onclick="event.stopPropagation();event.preventDefault();cycleStatut('+f.id+')">—</button>')+'</div>'
     +'</div>'
     +'<div class="fc-body">'
     +'<div class="fc-title">'+esc(f.titre)+'</div>'
@@ -2270,7 +2302,8 @@ function fusionnerFilms(){
   const tousPays=[...new Set(aFusionner.flatMap(f=>f.pays||[]))];
   // Statut prioritaire : vu > cours > plustard > avoir > trouver > ''
   const prioriteStatut=['vu','cours','plustard','avoir','trouver',''];
-  const meilleurStatut=prioriteStatut.find(s=>aFusionner.some(f=>f.statut===s))||'';
+  const statutsFusionnes=[...new Set(aFusionner.flatMap(getFilmStatuts))];
+  const meilleurStatut=prioriteStatut.find(s=>statutsFusionnes.includes(s))||'';
 
   const fusionnee={
     ...base,
@@ -2283,7 +2316,8 @@ function fusionnerFilms(){
     visionnages:tousVisionnages,
     maNote:meilleureNote,
     statut:meilleurStatut,
-    estVu:meilleurStatut==='vu',
+    statuts:statutsFusionnes,
+    estVu:statutsFusionnes.includes('vu'),
     dateAjout:Math.min(...aFusionner.map(f=>f.dateAjout||Date.now()))
   };
 
@@ -2317,7 +2351,7 @@ function selAction(action){
     sauvegarderSnapshot(ids.length+' film(s) → '+statutInfo(action).label);
     ids.forEach(id=>{
       const f=films.find(f=>f.id===id);
-      if(f){f.statut=action;f.estVu=(action==='vu');}
+      if(f){definirStatutFilm(f,action,true);}
     });
     snack('✓ '+ids.length+' film(s) → '+statutInfo(action).label);
   }
@@ -2398,15 +2432,23 @@ function urlRechercheTrailerYoutube(f){
   const titre=f&&f.titre?f.titre:'';
   return 'https://www.youtube.com/results?search_query='+encodeURIComponent(titre+(annee?' '+annee:'')+' bande-annonce officielle');
 }
+function toggleStatutCarte(id,statut){
+  const f=films.find(f=>f.id===id);if(!f)return;
+  const actif=definirStatutFilm(f,statut);
+  sauvegarder();
+  if(currentPage==='home')renderHome();
+  if(currentPage==='collection')renderCollection();
+  snack((actif?'✓ Ajouté : ':'✓ Retiré : ')+statutInfo(statut).label);
+}
 function cycleStatut(id){
   const f=films.find(f=>f.id===id);if(!f) return;
-  const idx=STATUTS.indexOf(f.statut||'');
-  f.statut=STATUTS[(idx+1)%STATUTS.length];
-  f.estVu=(f.statut==='vu'); // compatibilité
+  // Sur une fiche sans statut, le badge rapide ajoute « À trouver ».
+  // Les autres statuts se choisissent indépendamment dans la fiche détaillée.
+  if(!getFilmStatuts(f).length) definirStatutFilm(f,'trouver',true);
+  else definirStatutFilm(f,getFilmStatuts(f)[0],false);
   sauvegarder();
   if(currentPage==='home') renderHome();
   if(currentPage==='collection') renderCollection();
-  snack(statutInfo(f.statut).label);
 }
 function toggleVu(id){cycleStatut(id);} // alias legacy
 
@@ -2633,7 +2675,7 @@ function afficherDetail(f){
     +Object.entries(CATS).map(([k,v])=>`<button class="qualite-btn${f.categorie===k?' active':''}" onclick="changerCategorie(${f.id},'${k}')">${v.icon} ${v.label}</button>`).join('')
     +'</div>'
     +'<div class="statut-row">'
-    +STATUTS.filter(s=>s!=='').map(s=>{const si=statutInfo(s);const actif=(f.statut||'')=== s?' active':'';return '<button class="statut-opt '+si.cls+actif+'" data-statut="'+s+'" data-fid="'+f.id+'" onclick="event.preventDefault();return setStatutDetailBtn(this)">'+si.label+'</button>';}).join('')
+    +STATUTS.filter(s=>s!=='').map(s=>{const si=statutInfo(s);const actif=filmAStatut(f,s)?' active':'';return '<button class="statut-opt '+si.cls+actif+'" data-statut="'+s+'" data-fid="'+f.id+'" onclick="event.preventDefault();return setStatutDetailBtn(this)">'+si.label+'</button>';}).join('')
     +'</div>'
     +renderEditionsSection(f)
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Qualité</p>'
@@ -2734,30 +2776,19 @@ function changerCategorie(id,cat){
 
 function setStatutDetailBtn(btn){
   const id=parseInt(btn.dataset.fid);
-  const s=btn.dataset.statut;
+  const statut=btn.dataset.statut;
   const f=films.find(f=>f.id===id);if(!f) return false;
-
-  // Un deuxième clic sur le même statut l’enlève réellement.
-  // On vérifie aussi la classe affichée afin que l’interface reste cohérente
-  // même pour une ancienne fiche importée.
-  const estDejaActif=(f.statut===s)||btn.classList.contains('active');
-  const nouveau=estDejaActif?'':s;
-  f.statut=nouveau;
-  f.estVu=(nouveau==='vu');
+  const actif=definirStatutFilm(f,statut);
   sauvegarder();
-
-  const ligne=btn.closest('.statut-row')||btn.parentElement;
-  ligne.querySelectorAll('.statut-opt').forEach(b=>{
-    const actif=b.dataset.statut===nouveau;
-    b.className='statut-opt '+statutInfo(b.dataset.statut).cls+(actif?' active':'');
-    b.setAttribute('aria-pressed',actif?'true':'false');
-  });
-  snack(nouveau?statutInfo(nouveau).label+' ✓':'Statut retiré');
+  btn.className='statut-opt '+statutInfo(statut).cls+(actif?' active':'');
+  btn.setAttribute('aria-pressed',actif?'true':'false');
+  renderHome();
+  snack((actif?'✓ Ajouté : ':'✓ Retiré : ')+statutInfo(statut).label);
   return false;
 }
 function setStatutDetail(id,statut){
   const f=films.find(f=>f.id===id);if(!f) return;
-  f.statut=statut;f.estVu=(statut==='vu');sauvegarder();
+  definirStatutFilm(f,statut,true);sauvegarder();
 }
 function ajouterQualiteCustom(id){
   const f=films.find(f=>f.id===id);if(!f) return;
@@ -3266,26 +3297,29 @@ async function searchTmdbMulti(){
   const searchId=++tmdbSearchSequence;
   loader.style.display='block';results.innerHTML='';filters.style.display='none';
   try{
-    const variantes=variantesRequeteSouple(q);
+    // La recherche d'ajout doit rester une vraie recherche TMDB :
+    // on envoie la phrase complète et on n'élimine jamais un résultat renvoyé par TMDB.
+    // Une seconde requête sans les articles sert uniquement de secours pour certains titres français.
+    const variantes=variantesRequeteTmdb(q);
     const reponses=await Promise.all(variantes.map(v=>{
       const url=TMDB_API+'/search/multi?api_key='+encodeURIComponent(apiKey)+'&query='+encodeURIComponent(v)+'&language=fr-FR&include_adult=false';
       return tmdbFetchJson(url,15000).catch(()=>({results:[]}));
     }));
     if(searchId!==tmdbSearchSequence) return;
     const fusion=new Map();
-    reponses.forEach((data,indice)=>(data.results||[]).forEach(item=>{
+    reponses.forEach((data,indice)=>(data.results||[]).forEach((item,position)=>{
       if(!['movie','tv','person'].includes(item.media_type)) return;
       const cle=item.media_type+':'+item.id;
       const titre=[item.title,item.name,item.original_title,item.original_name].filter(Boolean).join(' ');
-      const scoreBase=scoreRechercheSouple(q,titre);
-      if(scoreBase<0) return;
-      const score=scoreBase+(item.popularity||0)/100-indice*2;
+      const score=scorePertinenceTmdb(q,titre,indice,position,item.popularity||0);
       const precedent=fusion.get(cle);
-      if(!precedent||score>precedent._fuzzyScore) fusion.set(cle,Object.assign({},item,{_fuzzyScore:score}));
+      if(!precedent||score>precedent._fuzzyScore){
+        fusion.set(cle,Object.assign({},item,{_fuzzyScore:score}));
+      }
     }));
-    multiSearchResults=[...fusion.values()]
-      .filter(x=>x._fuzzyScore>=0)
-      .sort((a,b)=>b._fuzzyScore-a._fuzzyScore);
+    multiSearchResults=[...fusion.values()].sort((a,b)=>
+      ((b._fuzzyScore||0)-(a._fuzzyScore||0))||((b.popularity||0)-(a.popularity||0))
+    );
     multiSearchFilter='all';
     document.querySelectorAll('#multi-filters .sort-btn').forEach(b=>b.classList.remove('active'));
     document.getElementById('multi-filter-all')?.classList.add('active');
@@ -4169,7 +4203,7 @@ function nouvellesSuggestion(){
 function afficherSuggestion(liste){
   const f=liste[Math.floor(Math.random()*liste.length)];
   const cat=CATS[f.categorie]||CATS.films;
-  const st=f.statut?statutInfo(f.statut):{cls:'',label:''};
+  const suggestionStatuts=getFilmStatuts(f);
   const genres=f.genres?f.genres.split(',').map(g=>'<span class="genre-tag">'+esc(g.trim())+'</span>').join(''):'';
   const derVis=dernierVisionnage(f);
   const derVisStr=derVis?new Date(derVis).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}):'Jamais vu';
@@ -4186,7 +4220,7 @@ function afficherSuggestion(liste){
     +(f.dateSortie?'📅 '+(f.dateSortie||'').slice(0,4)+'<br>':'')
     +(f.duree>0?'⏱ '+formatDuree(f.duree)+'<br>':'')
     +(f.notesTmdb>0?'⭐ '+f.notesTmdb.toFixed(1)+' / 10<br>':'')
-    +(st.label?'<span class="vu-badge '+st.cls+'" style="position:static;display:inline-block;margin-top:2px">'+st.label+'</span>':'')
+    +(suggestionStatuts.length?'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">'+suggestionStatuts.map(s=>{const si=statutInfo(s);return '<span class="vu-badge '+si.cls+'" style="position:static;display:inline-block">'+si.label+'</span>';}).join('')+'</div>':'')
     +'</div></div></div>'
     +(genres?'<div class="genres-wrap" style="margin-bottom:12px">'+genres+'</div>':'')
     +(f.resume?'<p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px">'+esc(f.resume.slice(0,200))+(f.resume.length>200?'…':'')+'</p>':'')
@@ -4271,9 +4305,9 @@ function suggestionMeta(f){
   const parts=[];
   const y=(f.dateSortie||'').slice(0,4);if(y) parts.push(y);
   const cat=CATS[f.categorie]||CATS.films;if(cat) parts.push(cat.icon+' '+cat.label);
-  if(f.statut==='vu') parts.push('Vu');
-  if(f.statut==='avoir') parts.push('À voir');
-  if(f.statut==='plustard') parts.push('Plus tard');
+  if(filmAStatut(f,'vu')) parts.push('Vu');
+  if(filmAStatut(f,'avoir')) parts.push('À voir');
+  if(filmAStatut(f,'plustard')) parts.push('Plus tard');
   return parts.join(' • ');
 }
 function normalizeBannerStatus(st){
@@ -4284,18 +4318,18 @@ function normalizeBannerStatus(st){
     .trim();
 }
 function isBannerFindOnly(f){
-  const s=normalizeBannerStatus(f&&f.statut);
-  // Les films “À trouver” ne sont pas utiles ici : ils ne sont pas encore dans ta collection réelle.
-  return s==='trouver'||s==='a trouver'||s.includes('trouv');
+  const ss=getFilmStatuts(f);
+  // Exclure seulement les fiches qui sont uniquement « À trouver ».
+  // Une fiche « À trouver » + « À voir » reste une suggestion valable.
+  return ss.length===1&&ss[0]==='trouver';
 }
 function suggestedBannerRank(f){
-  const s=normalizeBannerStatus(f&&f.statut);
   // Priorité demandée : À voir, puis Plus tard, puis le reste.
-  if(s==='avoir'||s==='a voir') return 0;
-  if(s==='plustard'||s.includes('plus')) return 1;
-  if(s==='critique') return 2;
-  if(s==='cours') return 3;
-  if(s==='vu') return 4;
+  if(filmAStatut(f,'avoir')) return 0;
+  if(filmAStatut(f,'plustard')) return 1;
+  if(filmAStatut(f,'critique')) return 2;
+  if(filmAStatut(f,'cours')) return 3;
+  if(filmAStatut(f,'vu')) return 4;
   return 5;
 }
 function shuffleSuggestedGroup(arr){
@@ -4318,7 +4352,7 @@ function getSuggestedBannerBase(){
 function suggestedBannerSignature(base){
   // Signature stable : ouvrir une fiche peut enrichir TMDB, mais ça ne doit pas relancer le bandeau.
   // On relance seulement si la liste disponible ou les statuts changent.
-  return base.map(f=>[f.id,f.statut||''].join('§')).join('|');
+  return base.map(f=>[f.id,getFilmStatuts(f).join(',')].join('§')).join('|');
 }
 function pickSuggestedBannerMovies(base){
   const groups=[[],[],[],[],[],[]];
@@ -4474,15 +4508,15 @@ window.addEventListener('popstate', (e)=>{
     const js=document.getElementById('json-status');
     if(js&&jsonDate) js.textContent='✓ Dernière sauvegarde JSON : '+jsonDate;
   },50);
-  const vus=filmsVisibles.filter(f=>f.statut==='vu').length;
-  const avoir=filmsVisibles.filter(f=>f.statut==='avoir').length;
-  const trouver=films.filter(f=>normaliserStatut(f.statut)==='trouver').length;
-  const cours=films.filter(f=>f.statut==='cours').length;
-  const meilleureQualite=films.filter(f=>f.statut==='meilleurequalite').length;
-  const critique=films.filter(f=>normaliserStatut(f.statut)==='critique').length;
-  const ccdr=films.filter(f=>normaliserStatut(f.statut)==='ccdr').length;
+  const vus=filmsVisibles.filter(f=>filmAStatut(f,'vu')).length;
+  const avoir=filmsVisibles.filter(f=>filmAStatut(f,'avoir')).length;
+  const trouver=films.filter(f=>filmAStatut(f,'trouver')).length;
+  const cours=films.filter(f=>filmAStatut(f,'cours')).length;
+  const meilleureQualite=films.filter(f=>filmAStatut(f,'meilleurequalite')).length;
+  const critique=films.filter(f=>filmAStatut(f,'critique')).length;
+  const ccdr=films.filter(f=>filmAStatut(f,'ccdr')).length;
   const nonPossedes=new Set(['trouver','critique','ccdr']);
-  const possedes=films.filter(f=>!nonPossedes.has(f.statut));
+  const possedes=films.filter(f=>{const ss=getFilmStatuts(f);return ss.length===0||ss.some(st=>!nonPossedes.has(st));});
   const bycat=['films','series','spectacles','documentaires','theatre','animation'].map(c=>{
     const n=possedes.filter(f=>f.categorie===c).length;
     const cat=CATS[c];
@@ -5381,7 +5415,7 @@ function ajouterVisionnage(id){
   if(!date){snack('⚠️ Choisissez une date');return;}
   const support=_supportSelectionne[id]||'';
   f.visionnages.push({date,support,note:''});
-  if(f.statut!=='vu'){ f.statut='vu'; f.estVu=true; }
+  if(!filmAStatut(f,'vu')) definirStatutFilm(f,'vu',true);
   sauvegarder();
   document.getElementById('visionnages-'+id).innerHTML=renderVisionnages(f);
   document.querySelectorAll('.statut-opt').forEach(b=>{
@@ -5539,6 +5573,40 @@ function correspondRechercheTitre(requete,texte){
     utilises.add(trouve);
   }
   return true;
+}
+
+function variantesRequeteTmdb(requete){
+  const brut=String(requete||'').trim();
+  const q=normaliserRecherche(brut);
+  if(!q) return [];
+  const sansArticles=motsRecherche(q).join(' ');
+  const out=[brut];
+  // On garde toujours la phrase entière. La variante sans articles peut aider
+  // TMDB avec certains titres traduits, sans lancer une recherche mot par mot.
+  if(sansArticles&&sansArticles!==q) out.push(sansArticles);
+  return [...new Set(out.map(v=>String(v||'').trim()).filter(Boolean))].slice(0,2);
+}
+
+function scorePertinenceTmdb(requete,titre,indiceRequete,positionTmdb,popularite){
+  const q=normaliserRecherche(requete);
+  const t=normaliserRecherche(titre);
+  if(!q||!t) return 0;
+  let score=0;
+  if(t===q) score+=10000;
+  else if(t.startsWith(q)) score+=8000;
+  else if(t.includes(q)) score+=6500;
+
+  const qm=motsRecherche(q);
+  const tm=motsRecherche(t);
+  const presents=qm.filter(m=>tm.includes(m)).length;
+  score+=presents*700;
+  if(qm.length&&presents===qm.length) score+=2200;
+
+  // La première requête est la saisie exacte ; TMDB reste l'autorité de classement.
+  score-=indiceRequete*250;
+  score-=positionTmdb*2;
+  score+=Math.min(Number(popularite)||0,500)/10;
+  return score;
 }
 
 function variantesRequeteSouple(requete){

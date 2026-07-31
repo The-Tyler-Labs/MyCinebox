@@ -1,5 +1,5 @@
-// MyCinebox service worker — v1.7.52-diagnostic tri inversable et grille de résultats
-const CACHE_NAME = 'mycinebox-v1.7.52-diagnostic';
+// MyCinebox service worker — v1.7.54 tri inversable et grille de résultats
+const CACHE_NAME = 'mycinebox-v1.7.54';
 const APP_SHELL = [
   '/MyCinebox/',
   '/MyCinebox/index.html',
