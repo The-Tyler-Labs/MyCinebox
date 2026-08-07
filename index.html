@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.57</title>
+<title>Vidéothèque v1.7.58</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1051,7 +1051,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.57';
+const APP_VERSION='v1.7.58';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1221,7 +1221,7 @@ function charger(){
         }));
     const statutsBruts=Array.isArray(f.statuts)?f.statuts:(statut?[statut]:[]);
     const statuts=[...new Set(statutsBruts.map(normaliserStatut).filter(Boolean))];
-    return{...f,categorie,statut:statuts[0]||'',statuts,qualite:f.qualite||'',qualites,versions:legacyVersions,editions,pays};
+    return{...f,categorie,statut:statuts[0]||'',statuts,releaseNote:String(f.releaseNote||''),qualite:f.qualite||'',qualites,versions:legacyVersions,editions,pays};
   });
   try{prefs={...prefs,...JSON.parse(localStorage.getItem(PREFS_KEY)||'{}') };}catch(e){}
   ensureTmdbApiKey();
@@ -1382,7 +1382,7 @@ function nouveauFilm(data){
     genres:data.genres||'',sousGenres:data.sousGenres||'',casting:data.casting||'',
     realisateur:data.realisateur||'',producteur:data.producteur||'',
     scenariste:data.scenariste||'',createur:data.createur||'',
-    nationalite:data.nationalite||'',noteManuelle:data.noteManuelle||'',
+    nationalite:data.nationalite||'',noteManuelle:data.noteManuelle||'',releaseNote:data.releaseNote||'',
     pays:data.pays||[],duree:data.duree||0,emplacement:data.emplacement||'',
     visionnages:data.visionnages||[],episodesVus:data.episodesVus||{},
     maNote:0,statut:data.statut||'',statuts:Array.isArray(data.statuts)?data.statuts:(data.statut?[data.statut]:[]),qualite:data.qualite||'',
@@ -2700,6 +2700,15 @@ function afficherDetail(f){
       :'<a href="'+urlRechercheTrailerYoutube(f)+'" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:10px;background:#333;color:#fff;border:1px solid #555;border-radius:10px;padding:12px;margin-bottom:16px;text-decoration:none;font-weight:bold;font-size:14px">🔎 Chercher la bande-annonce sur YouTube</a>'
     )
     +(f.noteManuelle?'<p style="font-size:13px;color:var(--text2);background:var(--surface2);padding:10px;border-radius:8px;margin-bottom:16px">📝 '+esc(f.noteManuelle)+'</p>':'')
+    +'<div style="margin:0 0 16px;background:var(--surface2);border:1px solid #333;border-radius:12px;padding:12px">'
+    +'<p style="font-size:11px;color:var(--text2);margin:0 0 7px;text-transform:uppercase;letter-spacing:.5px">📄 Note de release</p>'
+    +'<textarea id="release-note-'+f.id+'" placeholder="Colle ici la note de release…" oninput="programmerSauvegardeReleaseNote('+f.id+',this.value)" style="width:100%;min-height:170px;resize:vertical;background:#111;border:1px solid #444;border-radius:9px;padding:10px;color:var(--text);font-family:monospace;font-size:12px;line-height:1.45;outline:none;white-space:pre-wrap">'+esc(f.releaseNote||'')+'</textarea>'
+    +'<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">'
+    +'<button class="btn btn-primary btn-sm" onclick="sauvegarderReleaseNote('+f.id+')">💾 Enregistrer</button>'
+    +'<button class="btn btn-sm" style="background:var(--surface);color:var(--text);border:1px solid #444" onclick="copierReleaseNote('+f.id+')">📋 Copier</button>'
+    +'<button class="btn btn-sm" style="background:#4a1a1a;color:#ff9a9a;border:1px solid #6a2a2a" onclick="effacerReleaseNote('+f.id+')">🗑 Effacer</button>'
+    +'<span id="release-note-status-'+f.id+'" style="align-self:center;font-size:11px;color:var(--text2)"></span>'
+    +'</div></div>'
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Catégorie</p>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">'
     +Object.entries(CATS).map(([k,v])=>`<button class="qualite-btn${f.categorie===k?' active':''}" onclick="changerCategorie(${f.id},'${k}')">${v.icon} ${v.label}</button>`).join('')
@@ -5715,6 +5724,61 @@ function variantesRequeteSouple(requete){
     for(let i=1;i<mot.length-1;i++) out.push(mot.slice(0,i)+mot.slice(i+1));
   }
   return [...new Set(out.filter(Boolean))].slice(0,12);
+}
+
+
+// ── NOTE DE RELEASE ──
+const _releaseNoteTimers=new Map();
+function programmerSauvegardeReleaseNote(id,valeur){
+  const f=films.find(x=>x.id===id);if(!f) return;
+  f.releaseNote=String(valeur||'');
+  const status=document.getElementById('release-note-status-'+id);
+  if(status) status.textContent='Modification…';
+  clearTimeout(_releaseNoteTimers.get(id));
+  _releaseNoteTimers.set(id,setTimeout(()=>{
+    sauvegarder();
+    if(status) status.textContent='✓ Enregistré';
+    setTimeout(()=>{if(status&&status.textContent==='✓ Enregistré') status.textContent='';},1600);
+    _releaseNoteTimers.delete(id);
+  },700));
+}
+function sauvegarderReleaseNote(id){
+  const f=films.find(x=>x.id===id);if(!f) return;
+  const zone=document.getElementById('release-note-'+id);
+  if(zone) f.releaseNote=zone.value;
+  clearTimeout(_releaseNoteTimers.get(id));_releaseNoteTimers.delete(id);
+  sauvegarder();
+  const status=document.getElementById('release-note-status-'+id);
+  if(status) status.textContent='✓ Enregistré';
+  snack('✓ Note de release enregistrée');
+}
+async function copierReleaseNote(id){
+  const f=films.find(x=>x.id===id);if(!f) return;
+  const zone=document.getElementById('release-note-'+id);
+  const texte=zone?zone.value:String(f.releaseNote||'');
+  if(!texte){snack('Aucune note de release à copier');return;}
+  try{
+    await navigator.clipboard.writeText(texte);
+  }catch(e){
+    if(!zone){snack('⚠️ Copie impossible');return;}
+    zone.focus();zone.select();
+    try{document.execCommand('copy');}catch(_){snack('⚠️ Copie impossible');return;}
+    window.getSelection()?.removeAllRanges();
+  }
+  snack('📋 Note de release copiée');
+}
+function effacerReleaseNote(id){
+  const f=films.find(x=>x.id===id);if(!f) return;
+  const zone=document.getElementById('release-note-'+id);
+  const texte=zone?zone.value:String(f.releaseNote||'');
+  if(!texte) return;
+  if(!confirm('Effacer la note de release de « '+f.titre+' » ?')) return;
+  clearTimeout(_releaseNoteTimers.get(id));_releaseNoteTimers.delete(id);
+  f.releaseNote='';if(zone) zone.value='';
+  sauvegarder();
+  const status=document.getElementById('release-note-status-'+id);
+  if(status) status.textContent='';
+  snack('🗑 Note de release effacée');
 }
 
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
