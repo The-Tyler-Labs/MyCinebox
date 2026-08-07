@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.54</title>
+<title>Vidéothèque v1.7.56</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -213,6 +213,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .cast-card .cast-name{font-size:11px;font-weight:bold;padding:5px 4px 2px;line-height:1.3}
 .cast-card .cast-role{font-size:10px;color:var(--text2);padding:0 4px}
 .filmo-grid{display:grid;grid-template-columns:repeat(var(--search-cols,4),1fr);gap:6px}
+#modal-filmo .filmo-grid{grid-template-columns:repeat(var(--filmo-cols,8),minmax(0,1fr))}
 .filmo-card{background:var(--surface2);border-radius:10px;overflow:hidden;cursor:pointer;position:relative}
 .filmo-card img{width:100%;aspect-ratio:2/3;object-fit:cover;display:block;background:var(--green-dark)}
 .filmo-card .filmo-info{padding:6px 8px 8px}
@@ -991,7 +992,11 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <button class="modal-close" onclick="closeFilmographie()">←</button>
       <h3 id="modal-filmo-titre">Filmographie</h3>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 16px 4px"><span style="font-size:11px;color:var(--text2)">Taille :</span><input type="range" min="2" max="8" step="1" value="4" style="flex:1;accent-color:var(--green)" oninput="setSearchCols(this.value)"></div><div class="modal-body" id="modal-filmo-body"></div>
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 16px 4px;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--text2)">Affiches par ligne :</span>
+      <input id="filmo-cols-slider" type="range" min="4" max="20" step="1" value="8" style="flex:1;min-width:180px;accent-color:var(--green)" oninput="setFilmoCols(this.value)">
+      <span id="filmo-cols-label" style="font-size:11px;color:var(--green-light);min-width:70px;text-align:right">8 colonnes</span>
+    </div><div class="modal-body" id="modal-filmo-body"></div>
   </div>
 </div>
 
@@ -1001,7 +1006,10 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   <div style="padding-top:8px">
     <h2 style="font-size:16px;font-weight:bold;margin-bottom:10px">👁 Historique de visionnages</h2>
     <input type="search" id="vis-search" placeholder="🔍 Rechercher un titre..." style="width:100%;background:var(--surface);border:1px solid #333;border-radius:10px;padding:10px 14px;color:var(--text);font-size:14px;outline:none;margin-bottom:8px;box-sizing:border-box" oninput="renderVisionnagesGlobal()">
-    <div style="display:flex;gap:6px;margin-bottom:12px">
+    <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+      <button class="btn btn-primary btn-sm" onclick="ajouterVisionnageDepuisHistorique()">＋ Ajouter un visionnage</button>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
       <button class="sort-btn active" id="vis-sort-desc" onclick="setVisSort('desc',this)">📅 + récent</button>
       <button class="sort-btn" id="vis-sort-asc" onclick="setVisSort('asc',this)">📅 + ancien</button>
       <button class="sort-btn" id="vis-sort-az" onclick="setVisSort('az',this)">🔤 A→Z</button>
@@ -1043,7 +1051,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.54';
+const APP_VERSION='v1.7.56';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -2218,6 +2226,22 @@ function initSearchCols(){
   if(lbl) lbl.textContent=n;
 }
 document.addEventListener('DOMContentLoaded',initSearchCols);
+
+// Réglage indépendant réservé aux filmographies d'acteurs et d'actrices.
+function setFilmoCols(val){
+  const n=Math.max(4,Math.min(20,parseInt(val,10)||8));
+  document.documentElement.style.setProperty('--filmo-cols',n);
+  localStorage.setItem('mycinebox_filmo_cols',String(n));
+  const slider=document.getElementById('filmo-cols-slider');
+  if(slider&&String(slider.value)!==String(n)) slider.value=n;
+  const label=document.getElementById('filmo-cols-label');
+  if(label) label.textContent=n+' colonne'+(n>1?'s':'');
+}
+function initFilmoCols(){
+  const n=Math.max(4,Math.min(20,parseInt(localStorage.getItem('mycinebox_filmo_cols')||'8',10)||8));
+  setFilmoCols(n);
+}
+document.addEventListener('DOMContentLoaded',initFilmoCols);
 
 function setSearchResultSize(val){
   _searchResultSize=parseInt(val);
@@ -3852,7 +3876,7 @@ function renderVisionnagesGlobal(){
   const tous=[];
   films.forEach(f=>{
     const visionnages=f.visionnages||[];
-    visionnages.forEach(v=>{
+    visionnages.forEach((v,visionnageIndex)=>{
       let date='', support='', note=0;
       if(typeof v==='object'){
         date=v.date||v.dateVu||'';
@@ -3866,14 +3890,16 @@ function renderVisionnagesGlobal(){
         date, support, note,
         titre:f.titre, categorie:f.categorie,
         affiche:f.affichePath||'',
-        filmId:f.id,
+        filmId:f.id, visionnageIndex, typeVisionnage:'film',
+        termine: typeof v==='object' ? v.termine!==false : true,
+        sessions: typeof v==='object' && Array.isArray(v.sessions) ? v.sessions : [],
         qualites:(f.qualites||[]).join(', ')
       });
     });
     // Inclure aussi les visionnages d'épisodes
     if(f.episodesVus){
       Object.entries(f.episodesVus).forEach(([key,visEp])=>{
-        (visEp||[]).forEach(v=>{
+        (visEp||[]).forEach((v,visionnageIndex)=>{
           const date=typeof v==='object'?v.date:v;
           const support=typeof v==='object'?(v.support||''):'';
           if(!date) return;
@@ -3883,7 +3909,8 @@ function renderVisionnagesGlobal(){
             titre:f.titre+' ('+epInfo+')',
             categorie:f.categorie,
             affiche:f.affichePath||'',
-            filmId:f.id,
+            filmId:f.id, visionnageIndex, typeVisionnage:'episode', episodeKey:key,
+            termine:true, sessions:[],
             qualites:(f.qualites||[]).join(', ')
           });
         });
@@ -3936,11 +3963,74 @@ function renderVisionnagesGlobal(){
           +(v.note>0?' · ⭐'+v.note:'')
           +'</div>'
           +'</div>'
-          +'<span style="font-size:10px;color:var(--text2)">'+cat.icon+'</span>'
-          +'</div>';
+          +'<div style="display:flex;align-items:center;gap:5px;flex-shrink:0" onclick="event.stopPropagation()">'
+          +(v.typeVisionnage==='film'?'<button title="Ajouter une session" onclick="ajouterSessionVisionnage('+v.filmId+','+v.visionnageIndex+')" style="background:var(--surface2);border:1px solid #444;color:var(--green-light);border-radius:7px;padding:5px 7px;cursor:pointer">＋ session</button>':'')
+          +(v.typeVisionnage==='film'?'<button title="Basculer En cours / Terminé" onclick="basculerVisionnageTermine('+v.filmId+','+v.visionnageIndex+')" style="background:'+(v.termine?'rgba(26,92,74,.25)':'rgba(190,130,30,.2)')+';border:1px solid #444;color:'+(v.termine?'var(--green-light)':'#e0ad55')+';border-radius:7px;padding:5px 7px;cursor:pointer">'+(v.termine?'✓ Terminé':'▶ En cours')+'</button>':'')
+          +'<button title="Supprimer ce visionnage" onclick="supprimerVisionnageGlobal('+v.filmId+','+v.visionnageIndex+',\''+v.typeVisionnage+'\','+(v.episodeKey?'\''+v.episodeKey+'\'':'null')+')" style="background:rgba(180,50,50,.12);border:1px solid #633;color:#e27777;border-radius:7px;padding:5px 8px;cursor:pointer">🗑</button>'
+          +'</div>'
+          +'</div>'
+          +(v.typeVisionnage==='film'&&v.sessions&&v.sessions.length?'<div style="margin:-3px 0 7px 46px;font-size:10px;color:var(--text2)">↳ '+v.sessions.length+' session'+(v.sessions.length>1?'s':'')+' : '+v.sessions.map(x=>esc((x.date||'')+(x.progression?' · '+x.progression:'')+(x.note?' · '+x.note:''))).join(' | ')+'</div>':'');
       }).join('')
       +'</div>'
     ).join('');
+}
+
+
+function ajouterVisionnageDepuisHistorique(){
+  if(!films||!films.length){snack('Aucun film dans la collection');return;}
+  const q=prompt('Titre du film ou de la série :');
+  if(!q) return;
+  const nq=normaliserRecherche?q=>normaliserRecherche(q):q=>String(q).toLowerCase();
+  const query=nq(q);
+  let candidats=films.filter(f=>nq(f.titre||'').includes(query));
+  if(!candidats.length){snack('Aucune fiche correspondante');return;}
+  let f=candidats[0];
+  if(candidats.length>1){
+    const liste=candidats.slice(0,10).map((x,i)=>(i+1)+'. '+x.titre).join('\n');
+    const choix=parseInt(prompt('Plusieurs fiches correspondent. Choisis un numéro :\n\n'+liste)||'1',10)-1;
+    if(choix<0||choix>=Math.min(candidats.length,10)) return;
+    f=candidats[choix];
+  }
+  const date=prompt('Date du visionnage (AAAA-MM-JJ) :',dateLocale());
+  if(!date) return;
+  const support=prompt('Support (facultatif) :','')||'';
+  const termine=confirm('Le visionnage est-il terminé ?\nOK = Terminé · Annuler = En cours');
+  if(!f.visionnages) f.visionnages=[];
+  f.visionnages.push({date,support,note:'',termine,sessions:[]});
+  if(termine&&!filmAStatut(f,'vu')) definirStatutFilm(f,'vu',true);
+  sauvegarder(); renderVisionnagesGlobal();
+  snack('✓ Visionnage ajouté — '+f.titre);
+}
+
+function supprimerVisionnageGlobal(filmId,idx,typeVisionnage,episodeKey){
+  if(!confirm('Supprimer ce visionnage ?\n\nLa fiche restera dans la collection.')) return;
+  const f=films.find(x=>x.id===filmId); if(!f) return;
+  if(typeVisionnage==='episode'&&episodeKey){
+    if(f.episodesVus&&Array.isArray(f.episodesVus[episodeKey])) f.episodesVus[episodeKey].splice(idx,1);
+  }else if(Array.isArray(f.visionnages)) f.visionnages.splice(idx,1);
+  sauvegarder(); renderVisionnagesGlobal(); snack('Visionnage supprimé');
+}
+
+function ajouterSessionVisionnage(filmId,idx){
+  const f=films.find(x=>x.id===filmId); if(!f||!f.visionnages||!f.visionnages[idx]) return;
+  let v=f.visionnages[idx];
+  if(typeof v!=='object') { v={date:v,support:'',note:'',termine:true,sessions:[]}; f.visionnages[idx]=v; }
+  if(!Array.isArray(v.sessions)) v.sessions=[];
+  const date=prompt('Date de cette session (AAAA-MM-JJ) :',dateLocale()); if(!date) return;
+  const progression=prompt('Où t’es-tu arrêté ? (facultatif : 1h12, épisode 4, etc.) :','')||'';
+  const note=prompt('Note sur cette session (facultatif) :','')||'';
+  v.sessions.push({date,progression,note});
+  v.termine=false;
+  sauvegarder(); renderVisionnagesGlobal(); snack('✓ Session ajoutée');
+}
+
+function basculerVisionnageTermine(filmId,idx){
+  const f=films.find(x=>x.id===filmId); if(!f||!f.visionnages||!f.visionnages[idx]) return;
+  let v=f.visionnages[idx];
+  if(typeof v!=='object') {v={date:v,support:'',note:'',termine:true,sessions:[]};f.visionnages[idx]=v;}
+  v.termine=v.termine===false;
+  if(v.termine&&!filmAStatut(f,'vu')) definirStatutFilm(f,'vu',true);
+  sauvegarder(); renderVisionnagesGlobal(); snack(v.termine?'✓ Visionnage terminé':'▶ Visionnage en cours');
 }
 
 function rechercheTmdbActeur(nom){
@@ -6073,6 +6163,10 @@ window.modifierTitre = modifierTitre;
 window.modifierTitreAlt = modifierTitreAlt;
 window.modifierEmplacement = modifierEmplacement;
 window.sauvegarderEmplacement = sauvegarderEmplacement;
+window.ajouterVisionnageDepuisHistorique = ajouterVisionnageDepuisHistorique;
+window.supprimerVisionnageGlobal = supprimerVisionnageGlobal;
+window.ajouterSessionVisionnage = ajouterSessionVisionnage;
+window.basculerVisionnageTermine = basculerVisionnageTermine;
 window.ajouterVisionnage = ajouterVisionnage;
 window.ajouterVisionnageEpisode = ajouterVisionnageEpisode;
 window.ajouterVisionnageEpisodeSelectionne = ajouterVisionnageEpisodeSelectionne;
