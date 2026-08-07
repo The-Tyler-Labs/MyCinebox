@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.56</title>
+<title>Vidéothèque v1.7.57</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1051,7 +1051,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.56';
+const APP_VERSION='v1.7.57';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -2442,7 +2442,7 @@ function actualiserTrailer(f){
       if(!cle) return null;
       f.trailerKey=cle;
       sauvegarder();
-      if(currentPage==='detail') afficherDetail(f);
+      if(currentPage==='detail' && _detailActifId===f.id) afficherDetail(f);
       return cle;
     })
     .finally(()=>_trailersEnCours.delete(identifiant));
@@ -2477,8 +2477,12 @@ function cycleStatut(id){
 function toggleVu(id){cycleStatut(id);} // alias legacy
 
 // ── DETAIL ──
+// Identifiant de la fiche réellement ouverte. Empêche une ancienne requête TMDB
+// ou de bande-annonce terminée en retard de remplacer la fiche affichée.
+let _detailActifId=null;
 function ouvrirDetail(id){
   const f=films.find(f=>f.id===id);if(!f) return;
+  _detailActifId=f.id;
   if(currentPage!=='detail'){
     editionsOpenState[id]=false;
     rememberPageScroll(currentPage);prevPage=currentPage;
@@ -2496,8 +2500,10 @@ function ouvrirDetail(id){
     const endpoint=f.categorie==='series'?'/tv/':'/movie/';
     tmdbFetchJson(TMDB_API+endpoint+f.tmdbId+'?api_key='+encodeURIComponent(ensureTmdbApiKey())+'&language=fr-FR&append_to_response=season/1,season/2,season/3,season/4,season/5,videos,credits',15000)
       .then(d=>{
-        // Vérifier qu'on est encore sur cette fiche
-        if(currentPage!=='detail') return;
+        // Vérifier qu'on est encore EXACTEMENT sur cette fiche.
+        // Sans ce contrôle, une requête lancée depuis la fiche précédente pouvait
+        // finir plus tard et remplacer la fiche sur laquelle l'utilisateur venait de cliquer.
+        if(currentPage!=='detail' || _detailActifId!==f.id) return;
         const duree=d.runtime||((d.episode_run_time&&d.episode_run_time[0])||0);
         if(duree>0) f.duree=duree;
         // Trailer FR en priorité, pour films comme pour séries.
