@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.58</title>
+<title>Vidéothèque v1.7.59</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1051,7 +1051,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.58';
+const APP_VERSION='v1.7.59';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -2010,7 +2010,6 @@ function itemCard(f){
     +'<span class="fc-stars">'+(f.maNote>0?'★'.repeat(Math.min(f.maNote,10)):'')+'</span></div>'
     +(f.saga?'<div style="font-size:10px;color:#90d0ff;padding:0 8px 2px">🎯 '+esc(f.saga)+'</div>':'')
     +(f.emplacement?'<div style="font-size:10px;color:var(--green-light);padding:0 8px 6px">📍 '+esc(f.emplacement)+'</div>':'')
-    +(()=>{const es=(f.editions||[]);if(!es.length)return '';const label=es.length===1?(es[0].label||'1 édition'):(es.length+' éditions');return '<div style="font-size:10px;color:#cbb8ff;padding:0 8px 6px">💿 '+esc(label)+'</div>';})()
     +'</div></div>';
 }
 
