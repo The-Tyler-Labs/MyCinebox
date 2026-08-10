@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.59</title>
+<title>Vidéothèque v1.7.61</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1051,7 +1051,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.59';
+const APP_VERSION='v1.7.61';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1855,11 +1855,17 @@ function renderCollection(){
     if(producteurFiltre&&!normaliser(f.producteur).includes(normaliser(producteurFiltre))) return false;
     if(scenaristeFiltre&&!normaliser([f.scenariste,f.createur].filter(Boolean).join(', ')).includes(normaliser(scenaristeFiltre))) return false;
     if(q){
-      // Par défaut, la barre de recherche cherche uniquement dans le titre
-      // et le titre alternatif. Les noms d'acteurs ne sont recherchés que
-      // dans le filtre Acteur prévu à cet effet.
+      // Recherche directe : titre/titre alternatif OU genres/sous-genres.
+      // Les métadonnées de genre sont cherchées par mots exacts normalisés :
+      // ex. "comédie", "comédie troupière", "action nanard".
       const texteTitre=[f.titre,f.titreAlt].filter(Boolean).join(' ');
-      if(!correspondRechercheTitre(q,texteTitre)) return false;
+      const rechercheTitre=correspondRechercheTitre(q,texteTitre);
+      const nq=normaliser(q).trim();
+      const mots=nq.split(/\s+/).filter(Boolean);
+      const metaGenres=normaliser([f.genres,f.sousGenres].filter(Boolean).join(' '));
+      const motsMeta=metaGenres.split(/[^a-z0-9]+/).filter(Boolean);
+      const rechercheGenre=mots.length>0 && mots.every(m=>motsMeta.includes(m));
+      if(!rechercheTitre&&!rechercheGenre) return false;
     }
     return true;
   });
@@ -2698,16 +2704,18 @@ function afficherDetail(f){
         +'▶ Voir le trailer</a>'
       :'<a href="'+urlRechercheTrailerYoutube(f)+'" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:10px;background:#333;color:#fff;border:1px solid #555;border-radius:10px;padding:12px;margin-bottom:16px;text-decoration:none;font-weight:bold;font-size:14px">🔎 Chercher la bande-annonce sur YouTube</a>'
     )
+    +renderEditionsSection(f)
     +(f.noteManuelle?'<p style="font-size:13px;color:var(--text2);background:var(--surface2);padding:10px;border-radius:8px;margin-bottom:16px">📝 '+esc(f.noteManuelle)+'</p>':'')
-    +'<div style="margin:0 0 16px;background:var(--surface2);border:1px solid #333;border-radius:12px;padding:12px">'
-    +'<p style="font-size:11px;color:var(--text2);margin:0 0 7px;text-transform:uppercase;letter-spacing:.5px">📄 Note de release</p>'
+    +'<details style="margin:0 0 16px;background:var(--surface2);border:1px solid #333;border-radius:12px;overflow:hidden">'
+    +'<summary style="padding:12px;cursor:pointer;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;font-weight:600;user-select:none">📄 Note de release'+(f.releaseNote?' • renseignée':'')+'</summary>'
+    +'<div style="padding:0 12px 12px">'
     +'<textarea id="release-note-'+f.id+'" placeholder="Colle ici la note de release…" oninput="programmerSauvegardeReleaseNote('+f.id+',this.value)" style="width:100%;min-height:170px;resize:vertical;background:#111;border:1px solid #444;border-radius:9px;padding:10px;color:var(--text);font-family:monospace;font-size:12px;line-height:1.45;outline:none;white-space:pre-wrap">'+esc(f.releaseNote||'')+'</textarea>'
     +'<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">'
     +'<button class="btn btn-primary btn-sm" onclick="sauvegarderReleaseNote('+f.id+')">💾 Enregistrer</button>'
     +'<button class="btn btn-sm" style="background:var(--surface);color:var(--text);border:1px solid #444" onclick="copierReleaseNote('+f.id+')">📋 Copier</button>'
     +'<button class="btn btn-sm" style="background:#4a1a1a;color:#ff9a9a;border:1px solid #6a2a2a" onclick="effacerReleaseNote('+f.id+')">🗑 Effacer</button>'
     +'<span id="release-note-status-'+f.id+'" style="align-self:center;font-size:11px;color:var(--text2)"></span>'
-    +'</div></div>'
+    +'</div></div></details>'
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Catégorie</p>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">'
     +Object.entries(CATS).map(([k,v])=>`<button class="qualite-btn${f.categorie===k?' active':''}" onclick="changerCategorie(${f.id},'${k}')">${v.icon} ${v.label}</button>`).join('')
@@ -2715,11 +2723,10 @@ function afficherDetail(f){
     +'<div class="statut-row">'
     +STATUTS.filter(s=>s!=='').map(s=>{const si=statutInfo(s);const actif=filmAStatut(f,s)?' active':'';return '<button class="statut-opt '+si.cls+actif+'" data-statut="'+s+'" data-fid="'+f.id+'" onclick="event.preventDefault();return setStatutDetailBtn(this)">'+si.label+'</button>';}).join('')
     +'</div>'
-    +renderEditionsSection(f)
     +'<p style="font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Qualité</p>'
     +'<div class="qualite-row" id="qualite-row-'+f.id+'">'
     +(()=>{
-      const standard=['DVD','DVDRip','BDRip','720p','1080p','4K Light','HDTV','WEBRip','BluRay','H264','H265','Remastered'];
+      const standard=['DVD','DVDRip','TvRip','BDRip','720p','1080p','4K Light','HDTV','WEBRip','BluRay','H264','H265','Remastered'];
       const actives=(f.qualites||[]);
       const custom=actives.filter(q=>!standard.includes(q));
       // Actives d'abord, puis inactives
@@ -5284,7 +5291,7 @@ function showQualiteCustomSugg(id){
   if(!input||!box) return;
   const val=(input.value||'').toLowerCase();
   const f=films.find(f=>f.id===id);
-  const standard=['DVD','DVDRip','BDRip','720p','1080p','4K Light','HDTV','WEBRip','BluRay','H264','H265','Remastered'];
+  const standard=['DVD','DVDRip','TvRip','BDRip','720p','1080p','4K Light','HDTV','WEBRip','BluRay','H264','H265','Remastered'];
   // Récupérer toutes les qualités custom utilisées
   const toutesCustom=[...new Set(films.flatMap(x=>(x.qualites||[]).filter(q=>!standard.includes(q))))].sort();
   const filtres=val?toutesCustom.filter(q=>q.toLowerCase().startsWith(val)):toutesCustom;
