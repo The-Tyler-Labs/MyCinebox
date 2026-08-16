@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.65</title>
+<title>Vidéothèque v1.7.62</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -160,12 +160,6 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .tag{flex-shrink:0;padding:5px 12px;border-radius:16px;font-size:12px;border:1px solid #333;background:none;color:var(--text2);cursor:pointer;white-space:nowrap}
 .tag.active{background:var(--green);color:#fff;border-color:var(--green)}
 .tag.active-decade{background:#1a3d6e;color:#7ab4f5;border-color:#1a3d6e}
-/* GENRES RAPIDES — collection */
-.quick-genres{display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 12px;padding-bottom:2px}
-.quick-genre-btn{flex-shrink:0;padding:5px 11px;border-radius:16px;font-size:11px;border:1px solid #333;background:var(--surface);color:var(--text2);cursor:pointer;white-space:nowrap}
-.quick-genre-btn:hover{border-color:var(--green-light);color:var(--text)}
-.quick-genre-btn.active{background:var(--green);border-color:var(--green);color:#fff;font-weight:600}
-.quick-genre-more{color:#9fc8ff;border-color:#38506a}
 .filtre-input{width:100%;background:var(--surface2);border:1px solid #333;border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;outline:none}
 .filtre-input:focus{border-color:var(--green-light)}
 
@@ -499,9 +493,6 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <button class="cat-tab" id="ctab-atrouver" onclick="setCatTab('atrouver')" style="background:var(--surface);border:1px solid #333;color:#f5a623">🔍 À trouver</button>
       <button class="cat-tab" id="ctab-acritique" onclick="setCatTab('acritique')" style="background:var(--surface);border:1px solid #333;color:#f0a0ff">🎬 Critiques</button>
     </div>
-
-    <!-- Genres rapides : les plus présents, liste complète à la demande -->
-    <div class="quick-genres" id="quick-genres"></div>
 
   </div><!-- /sticky -->
   <div style="padding:0">
@@ -1060,7 +1051,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.65';
+const APP_VERSION='v1.7.62';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1165,7 +1156,6 @@ let triActuel='date',prevPage='collection',currentPage='home';
 let pageScrollPositions={home:0,collection:0,search:0,visionnages:0,notes:0,settings:0};
 let _listeFiltreCourante=[];
 let catTab='tous';
-let quickGenresTous=false;
 let tagFiltres={statut:'tous',decennie:new Set(),annee:'',genre:'',nationalite:'',qualite:'',saga:'',catFilter:''};
 let manuelType='films';
 let ficheFilmCourante=null;
@@ -1630,8 +1620,6 @@ function setCatTab(cat){
   else document.getElementById('ctab-tous')?.classList.add('active');
   const sagaBtn=document.getElementById('ctab-saga');
   if(sagaBtn){sagaBtn.style.background=cat==='saga'?'#1a3a5c':'var(--surface)';sagaBtn.style.color=cat==='saga'?'#90d0ff':'var(--text2)';}
-  quickGenresTous=false;
-  buildFiltresDynamiques();
   renderCollection();
 }
 
@@ -1734,61 +1722,7 @@ function setTagFiltre(groupe,valeur,btn){
       btn.classList.add('active');
     }
   }
-  if(groupe==='genre') renderQuickGenres();
   renderCollection();
-}
-
-function setQuickGenre(genre){
-  tagFiltres.genre=(tagFiltres.genre===genre)?'':genre;
-  // Synchroniser aussi le panneau ⚙️ Filtres.
-  document.querySelectorAll('#tags-genres .tag').forEach(b=>{
-    const txt=normaliser(b.textContent||'').trim();
-    const cible=normaliser(tagFiltres.genre||'').trim();
-    b.classList.toggle('active',(!cible&&/^(tous|toutes)$/.test(txt))||(cible&&txt===cible));
-  });
-  renderQuickGenres();
-  renderCollection();
-}
-
-function toggleQuickGenres(){
-  quickGenresTous=!quickGenresTous;
-  renderQuickGenres();
-}
-
-function renderQuickGenres(){
-  const box=document.getElementById('quick-genres');
-  if(!box) return;
-  // Les genres rapides suivent la catégorie choisie (Films, Séries, etc.).
-  // Pour les onglets de statut/saga, on part de toute la médiathèque visible.
-  const catsNormales=['films','series','spectacles','documentaires','theatre','animation','humour'];
-  const src=catsNormales.includes(catTab)?films.filter(f=>f.categorie===catTab):films;
-  const compteur=new Map();
-  src.filter(f=>statutEstVisible(f)).forEach(f=>{
-    const vals=[...(f.genres||'').split(','),...(f.sousGenres||'').split(',')]
-      .map(g=>g.trim()).filter(Boolean);
-    const vus=new Set();
-    vals.forEach(g=>{
-      const cle=normaliser(g).trim();
-      if(!cle||vus.has(cle)) return;
-      vus.add(cle);
-      const ancien=compteur.get(cle);
-      compteur.set(cle,{label:ancien?ancien.label:g,count:(ancien?ancien.count:0)+1});
-    });
-  });
-  const tous=[...compteur.values()].sort((a,b)=>b.count-a.count||a.label.localeCompare(b.label,'fr'));
-  const principaux=tous.slice(0,14);
-  const affiches=quickGenresTous?tous:principaux;
-  const actif=normaliser(tagFiltres.genre||'').trim();
-  let html='<button class="quick-genre-btn '+(!actif?'active':'')+'" onclick="setQuickGenre(\'\')">Tous genres</button>';
-  html+=affiches.map(x=>{
-    const enc=encodeURIComponent(x.label);
-    const active=normaliser(x.label).trim()===actif?' active':'';
-    return '<button class="quick-genre-btn'+active+'" onclick="setQuickGenre(decodeURIComponent(\''+enc+'\'))" title="'+x.count+' élément(s)">'+esc(x.label)+'</button>';
-  }).join('');
-  if(tous.length>principaux.length){
-    html+='<button class="quick-genre-btn quick-genre-more" onclick="toggleQuickGenres()">'+(quickGenresTous?'− Réduire':'+ Tous les genres')+'</button>';
-  }
-  box.innerHTML=html;
 }
 
 function buildFiltresDynamiques(){
@@ -1822,7 +1756,6 @@ function buildFiltresDynamiques(){
     ?'<span style="font-size:12px;color:var(--text2)">Aucune saga</span>'
     :'<button class="tag active" onclick="setTagFiltre(\'saga\',\'\',this)">Toutes</button>'
     +toutesSagas.map(s=>'<button class="tag" onclick="setTagFiltre(\'saga\',\''+esc(s)+'\',this)">🏷 '+esc(s)+'</button>').join('');
-  renderQuickGenres();
 }
 
 function resetFiltres(){
@@ -1832,7 +1765,6 @@ function resetFiltres(){
   });
   buildFiltresDynamiques();
   renderCollection();
-  renderQuickGenres();
 }
 
 function renderCollection(){
@@ -1914,7 +1846,7 @@ function renderCollection(){
     if(tagFiltres.statut!=='tous'&&!filmAStatut(f,tagFiltres.statut)) return false;
     if(tagFiltres.decennie&&tagFiltres.decennie.size>0){const y=parseInt((f.dateSortie||'').slice(0,4));if(isNaN(y)||!tagFiltres.decennie.has(String(Math.floor(y/10)*10))) return false;}
     if(tagFiltres.annee&&(f.dateSortie||'').slice(0,4)!==tagFiltres.annee) return false;
-    if(tagFiltres.genre&&!normaliser([f.genres,f.sousGenres].filter(Boolean).join(' ')).includes(normaliser(tagFiltres.genre))) return false;
+    if(tagFiltres.genre&&!(f.genres||'').toLowerCase().includes(tagFiltres.genre.toLowerCase())) return false;
     if(tagFiltres.nationalite&&!(f.pays||[]).includes(tagFiltres.nationalite)) return false;
     if(tagFiltres.qualite&&!(f.qualites||[]).includes(tagFiltres.qualite)) return false;
     if(!rechercheGlobale&&tagFiltres.saga){const fSagas=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);if(!fSagas.includes(tagFiltres.saga)) return false;}
@@ -6080,42 +6012,20 @@ function googleSignOut(){
   snack('Déconnecté de Google');
 }
 
-function choisirFichierDriveLePlusRecent(files){
-  if(!Array.isArray(files)||files.length===0) return null;
-  return [...files].sort((a,b)=>{
-    const da=Date.parse(a.modifiedTime||'')||0;
-    const db=Date.parse(b.modifiedTime||'')||0;
-    return db-da;
-  })[0]||null;
-}
-
-function memoriserDateSauvegardeDrive(fichier){
-  if(!fichier||!fichier.modifiedTime) return;
-  const ts=Date.parse(fichier.modifiedTime);
-  if(!Number.isFinite(ts)) return;
-  localStorage.setItem('drive_last_save_time',String(ts));
-  updateDriveLastSaveTime();
-}
-
 async function trouverFichierDrive(){
-  const q=encodeURIComponent('name="'+DRIVE_FILENAME+'" and trashed=false');
-  const r=await fetch('https://www.googleapis.com/drive/v3/files?q='+q+'&orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime)&pageSize=100',
+  const r=await fetch('https://www.googleapis.com/drive/v3/files?q=name%3D%22'+DRIVE_FILENAME+'%22+and+trashed%3Dfalse&fields=files(id,name,modifiedTime)',
     {headers:{Authorization:'Bearer '+_googleToken}});
-  if(!r.ok) throw new Error('Drive liste HTTP '+r.status);
   const d=await r.json();
-  const fichier=choisirFichierDriveLePlusRecent(d.files);
-  if(fichier) memoriserDateSauvegardeDrive(fichier);
-  return fichier;
+  return d.files&&d.files.length>0?d.files[0]:null;
 }
 
 
 async function trouverFichierDriveNom(nom){
   const q=encodeURIComponent('name="'+nom+'" and trashed=false');
-  const r=await fetch('https://www.googleapis.com/drive/v3/files?q='+q+'&orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime)&pageSize=100',
+  const r=await fetch('https://www.googleapis.com/drive/v3/files?q='+q+'&fields=files(id,name,modifiedTime)',
     {headers:{Authorization:'Bearer '+_googleToken}});
-  if(!r.ok) throw new Error('Drive liste HTTP '+r.status);
   const d=await r.json();
-  return choisirFichierDriveLePlusRecent(d.files);
+  return d.files&&d.files.length>0?d.files[0]:null;
 }
 
 async function sauvegarderPrefsDrive(silencieux=true){
@@ -6159,54 +6069,31 @@ async function sauvegarderDrive(silencieux=false){
   if(!_googleToken) return;
   const btn=document.getElementById('btn-drive-save');
   if(!silencieux&&btn){btn.textContent='⏳...';btn.disabled=true;}
-  const statusEl=document.getElementById('drive-status');
   try{
     const json=JSON.stringify(films,null,2);
     const fichier=await trouverFichierDrive();
-    let reponse;
     if(fichier){
-      reponse=await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fichier.id+'?uploadType=media&fields=id,name,modifiedTime',
+      await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fichier.id+'?uploadType=media',
         {method:'PATCH',headers:{Authorization:'Bearer '+_googleToken,'Content-Type':'application/json'},body:json});
     } else {
       const meta=JSON.stringify({name:DRIVE_FILENAME,mimeType:'application/json'});
       const form=new FormData();
       form.append('metadata',new Blob([meta],{type:'application/json'}));
       form.append('file',new Blob([json],{type:'application/json'}));
-      reponse=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime',
+      await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
         {method:'POST',headers:{Authorization:'Bearer '+_googleToken},body:form});
     }
-
-    // Ne jamais annoncer une sauvegarde si Google Drive a refusé l'écriture.
-    if(!reponse.ok){
-      let detail='';
-      try{ detail=await reponse.text(); }catch(_){}
-      throw new Error('Drive écriture HTTP '+reponse.status+(detail?' — '+detail.slice(0,180):''));
-    }
-
-    // La réponse de l'upload est la source la plus fiable : elle concerne exactement
-    // le fichier qui vient d'être écrit, pas une ancienne copie portant le même nom.
-    let fichierSauvegarde=null;
-    try{ fichierSauvegarde=await reponse.json(); }catch(_){}
-    if(fichierSauvegarde&&fichierSauvegarde.modifiedTime){
-      memoriserDateSauvegardeDrive(fichierSauvegarde);
-    }else{
-      // Secours : relire le fichier et sa date uniquement après une écriture confirmée.
-      const fichierApresSauvegarde=await trouverFichierDrive();
-      if(fichierApresSauvegarde) memoriserDateSauvegardeDrive(fichierApresSauvegarde);
-    }
-
     const now=new Date().toLocaleString('fr-FR');
-    if(statusEl) statusEl.textContent='✓ Drive sauvegardé : '+now;
+    const statusEl=document.getElementById('drive-status');
+    if(statusEl) statusEl.textContent='✓ Drive : '+now;
     localStorage.setItem('drive_save_date', now);
+    localStorage.setItem('drive_last_save_time', Date.now());
+    updateDriveLastSaveTime();
     const totEl=document.getElementById('drive-total');
     if(totEl) totEl.textContent='📊 '+films.length+' titre(s)';
     await sauvegarderPrefsDrive(true);
     if(!silencieux) snack('✓ Sauvegardé sur Google Drive !');
-  }catch(e){
-    console.error('[MyCinebox Drive] Sauvegarde échouée',e);
-    if(statusEl) statusEl.textContent='⚠️ Sauvegarde Drive échouée : '+(e&&e.message?e.message:'erreur inconnue');
-    if(!silencieux) snack('⚠️ Échec sauvegarde Drive');
-  }
+  }catch(e){if(!silencieux) snack('⚠️ Erreur sauvegarde Drive');}
   if(!silencieux&&btn){btn.textContent='☁️ Sauvegarder sur Drive';btn.disabled=false;}
 }
 
@@ -6294,7 +6181,6 @@ async function chargerDrive(auto=false){
       {headers:{Authorization:'Bearer '+_googleToken}});
     const data=await r.json();
     if(!Array.isArray(data)){if(!auto) snack('⚠️ Format invalide');return;}
-    memoriserDateSauvegardeDrive(fichier);
     // En mode auto : charger seulement si Drive est plus récent ou collection locale vide
     if(auto&&films.length>0){
       // Comparer : si Drive a plus de films, proposer
@@ -6651,10 +6537,20 @@ function displaySearchResults(results) {
 // Auto-save notes on change
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM chargé - initialisation');
-  // Afficher uniquement une vraie date de sauvegarde connue.
-  // Aucune date fictive n'est créée quand l'information manque.
+  // Afficher la date de dernière sauvegarde Drive au chargement
   setTimeout(() => {
-    if (typeof updateDriveLastSaveTime === 'function') updateDriveLastSaveTime();
+    console.log('Initialisation date Drive...');
+    // Si pas de date Drive existante, on peut en mettre une pour test
+    if (!localStorage.getItem('drive_last_save_time')) {
+      console.log('Pas de date Drive, création d une date de test');
+      localStorage.setItem('drive_last_save_time', Date.now() - 3600000); // Il y a 1h
+    }
+    if (typeof updateDriveLastSaveTime === 'function') {
+      updateDriveLastSaveTime();
+      console.log('updateDriveLastSaveTime appelée');
+    } else {
+      console.error('updateDriveLastSaveTime n existe pas !');
+    }
   }, 500);
 });
 
