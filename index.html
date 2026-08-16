@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.64</title>
+<title>Vidéothèque v1.7.65</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1060,7 +1060,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.64';
+const APP_VERSION='v1.7.65';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -6159,36 +6159,54 @@ async function sauvegarderDrive(silencieux=false){
   if(!_googleToken) return;
   const btn=document.getElementById('btn-drive-save');
   if(!silencieux&&btn){btn.textContent='⏳...';btn.disabled=true;}
+  const statusEl=document.getElementById('drive-status');
   try{
     const json=JSON.stringify(films,null,2);
     const fichier=await trouverFichierDrive();
+    let reponse;
     if(fichier){
-      await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fichier.id+'?uploadType=media',
+      reponse=await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fichier.id+'?uploadType=media&fields=id,name,modifiedTime',
         {method:'PATCH',headers:{Authorization:'Bearer '+_googleToken,'Content-Type':'application/json'},body:json});
     } else {
       const meta=JSON.stringify({name:DRIVE_FILENAME,mimeType:'application/json'});
       const form=new FormData();
       form.append('metadata',new Blob([meta],{type:'application/json'}));
       form.append('file',new Blob([json],{type:'application/json'}));
-      await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+      reponse=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime',
         {method:'POST',headers:{Authorization:'Bearer '+_googleToken},body:form});
     }
-    const now=new Date().toLocaleString('fr-FR');
-    const statusEl=document.getElementById('drive-status');
-    if(statusEl) statusEl.textContent='✓ Drive : '+now;
-    localStorage.setItem('drive_save_date', now);
-    // Reprendre la vraie date de modification fournie par Google Drive.
-    // Cela évite d'afficher une heure locale approximative ou une ancienne copie.
-    const fichierApresSauvegarde=await trouverFichierDrive();
-    if(!fichierApresSauvegarde){
-      localStorage.setItem('drive_last_save_time',String(Date.now()));
-      updateDriveLastSaveTime();
+
+    // Ne jamais annoncer une sauvegarde si Google Drive a refusé l'écriture.
+    if(!reponse.ok){
+      let detail='';
+      try{ detail=await reponse.text(); }catch(_){}
+      throw new Error('Drive écriture HTTP '+reponse.status+(detail?' — '+detail.slice(0,180):''));
     }
+
+    // La réponse de l'upload est la source la plus fiable : elle concerne exactement
+    // le fichier qui vient d'être écrit, pas une ancienne copie portant le même nom.
+    let fichierSauvegarde=null;
+    try{ fichierSauvegarde=await reponse.json(); }catch(_){}
+    if(fichierSauvegarde&&fichierSauvegarde.modifiedTime){
+      memoriserDateSauvegardeDrive(fichierSauvegarde);
+    }else{
+      // Secours : relire le fichier et sa date uniquement après une écriture confirmée.
+      const fichierApresSauvegarde=await trouverFichierDrive();
+      if(fichierApresSauvegarde) memoriserDateSauvegardeDrive(fichierApresSauvegarde);
+    }
+
+    const now=new Date().toLocaleString('fr-FR');
+    if(statusEl) statusEl.textContent='✓ Drive sauvegardé : '+now;
+    localStorage.setItem('drive_save_date', now);
     const totEl=document.getElementById('drive-total');
     if(totEl) totEl.textContent='📊 '+films.length+' titre(s)';
     await sauvegarderPrefsDrive(true);
     if(!silencieux) snack('✓ Sauvegardé sur Google Drive !');
-  }catch(e){if(!silencieux) snack('⚠️ Erreur sauvegarde Drive');}
+  }catch(e){
+    console.error('[MyCinebox Drive] Sauvegarde échouée',e);
+    if(statusEl) statusEl.textContent='⚠️ Sauvegarde Drive échouée : '+(e&&e.message?e.message:'erreur inconnue');
+    if(!silencieux) snack('⚠️ Échec sauvegarde Drive');
+  }
   if(!silencieux&&btn){btn.textContent='☁️ Sauvegarder sur Drive';btn.disabled=false;}
 }
 
