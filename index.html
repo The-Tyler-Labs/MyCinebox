@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.63</title>
+<title>Vidéothèque v1.7.64</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1060,7 +1060,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.63';
+const APP_VERSION='v1.7.64';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -6080,20 +6080,42 @@ function googleSignOut(){
   snack('Déconnecté de Google');
 }
 
+function choisirFichierDriveLePlusRecent(files){
+  if(!Array.isArray(files)||files.length===0) return null;
+  return [...files].sort((a,b)=>{
+    const da=Date.parse(a.modifiedTime||'')||0;
+    const db=Date.parse(b.modifiedTime||'')||0;
+    return db-da;
+  })[0]||null;
+}
+
+function memoriserDateSauvegardeDrive(fichier){
+  if(!fichier||!fichier.modifiedTime) return;
+  const ts=Date.parse(fichier.modifiedTime);
+  if(!Number.isFinite(ts)) return;
+  localStorage.setItem('drive_last_save_time',String(ts));
+  updateDriveLastSaveTime();
+}
+
 async function trouverFichierDrive(){
-  const r=await fetch('https://www.googleapis.com/drive/v3/files?q=name%3D%22'+DRIVE_FILENAME+'%22+and+trashed%3Dfalse&fields=files(id,name,modifiedTime)',
+  const q=encodeURIComponent('name="'+DRIVE_FILENAME+'" and trashed=false');
+  const r=await fetch('https://www.googleapis.com/drive/v3/files?q='+q+'&orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime)&pageSize=100',
     {headers:{Authorization:'Bearer '+_googleToken}});
+  if(!r.ok) throw new Error('Drive liste HTTP '+r.status);
   const d=await r.json();
-  return d.files&&d.files.length>0?d.files[0]:null;
+  const fichier=choisirFichierDriveLePlusRecent(d.files);
+  if(fichier) memoriserDateSauvegardeDrive(fichier);
+  return fichier;
 }
 
 
 async function trouverFichierDriveNom(nom){
   const q=encodeURIComponent('name="'+nom+'" and trashed=false');
-  const r=await fetch('https://www.googleapis.com/drive/v3/files?q='+q+'&fields=files(id,name,modifiedTime)',
+  const r=await fetch('https://www.googleapis.com/drive/v3/files?q='+q+'&orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime)&pageSize=100',
     {headers:{Authorization:'Bearer '+_googleToken}});
+  if(!r.ok) throw new Error('Drive liste HTTP '+r.status);
   const d=await r.json();
-  return d.files&&d.files.length>0?d.files[0]:null;
+  return choisirFichierDriveLePlusRecent(d.files);
 }
 
 async function sauvegarderPrefsDrive(silencieux=true){
@@ -6155,8 +6177,13 @@ async function sauvegarderDrive(silencieux=false){
     const statusEl=document.getElementById('drive-status');
     if(statusEl) statusEl.textContent='✓ Drive : '+now;
     localStorage.setItem('drive_save_date', now);
-    localStorage.setItem('drive_last_save_time', Date.now());
-    updateDriveLastSaveTime();
+    // Reprendre la vraie date de modification fournie par Google Drive.
+    // Cela évite d'afficher une heure locale approximative ou une ancienne copie.
+    const fichierApresSauvegarde=await trouverFichierDrive();
+    if(!fichierApresSauvegarde){
+      localStorage.setItem('drive_last_save_time',String(Date.now()));
+      updateDriveLastSaveTime();
+    }
     const totEl=document.getElementById('drive-total');
     if(totEl) totEl.textContent='📊 '+films.length+' titre(s)';
     await sauvegarderPrefsDrive(true);
@@ -6249,6 +6276,7 @@ async function chargerDrive(auto=false){
       {headers:{Authorization:'Bearer '+_googleToken}});
     const data=await r.json();
     if(!Array.isArray(data)){if(!auto) snack('⚠️ Format invalide');return;}
+    memoriserDateSauvegardeDrive(fichier);
     // En mode auto : charger seulement si Drive est plus récent ou collection locale vide
     if(auto&&films.length>0){
       // Comparer : si Drive a plus de films, proposer
@@ -6605,20 +6633,10 @@ function displaySearchResults(results) {
 // Auto-save notes on change
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM chargé - initialisation');
-  // Afficher la date de dernière sauvegarde Drive au chargement
+  // Afficher uniquement une vraie date de sauvegarde connue.
+  // Aucune date fictive n'est créée quand l'information manque.
   setTimeout(() => {
-    console.log('Initialisation date Drive...');
-    // Si pas de date Drive existante, on peut en mettre une pour test
-    if (!localStorage.getItem('drive_last_save_time')) {
-      console.log('Pas de date Drive, création d une date de test');
-      localStorage.setItem('drive_last_save_time', Date.now() - 3600000); // Il y a 1h
-    }
-    if (typeof updateDriveLastSaveTime === 'function') {
-      updateDriveLastSaveTime();
-      console.log('updateDriveLastSaveTime appelée');
-    } else {
-      console.error('updateDriveLastSaveTime n existe pas !');
-    }
+    if (typeof updateDriveLastSaveTime === 'function') updateDriveLastSaveTime();
   }, 500);
 });
 
