@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.62</title>
+<title>Vidéothèque v1.7.65</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -160,6 +160,12 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .tag{flex-shrink:0;padding:5px 12px;border-radius:16px;font-size:12px;border:1px solid #333;background:none;color:var(--text2);cursor:pointer;white-space:nowrap}
 .tag.active{background:var(--green);color:#fff;border-color:var(--green)}
 .tag.active-decade{background:#1a3d6e;color:#7ab4f5;border-color:#1a3d6e}
+/* GENRES RAPIDES — collection */
+.quick-genres{display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 12px;padding-bottom:2px}
+.quick-genre-btn{flex-shrink:0;padding:5px 11px;border-radius:16px;font-size:11px;border:1px solid #333;background:var(--surface);color:var(--text2);cursor:pointer;white-space:nowrap}
+.quick-genre-btn:hover{border-color:var(--green-light);color:var(--text)}
+.quick-genre-btn.active{background:var(--green);border-color:var(--green);color:#fff;font-weight:600}
+.quick-genre-more{color:#9fc8ff;border-color:#38506a}
 .filtre-input{width:100%;background:var(--surface2);border:1px solid #333;border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;outline:none}
 .filtre-input:focus{border-color:var(--green-light)}
 
@@ -494,6 +500,9 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <button class="cat-tab" id="ctab-acritique" onclick="setCatTab('acritique')" style="background:var(--surface);border:1px solid #333;color:#f0a0ff">🎬 Critiques</button>
     </div>
 
+    <!-- Genres rapides : les plus présents, liste complète à la demande -->
+    <div class="quick-genres" id="quick-genres"></div>
+
   </div><!-- /sticky -->
   <div style="padding:0">
     <!-- Panel filtres -->
@@ -784,6 +793,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     <div class="settings-section">
       <h3>☁️ Google Drive</h3>
       <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Sauvegardez votre collection dans votre Google Drive.</p>
+      <div style="font-size:11px;color:var(--text2);background:var(--surface2);border:1px solid #333;border-radius:8px;padding:9px 10px;margin-bottom:10px;line-height:1.5">🛡️ Protection fermeture active : la collection est enregistrée localement avant la fermeture. Si des changements ne sont pas encore confirmés sur Drive, le navigateur demandera confirmation avant de quitter.</div>
       <div id="google-user-info" style="display:none;align-items:center;gap:10px;margin-bottom:12px;background:var(--surface2);padding:10px;border-radius:10px">
         <img id="google-avatar" src="" style="width:36px;height:36px;border-radius:50%">
         <div><div id="google-name" style="font-size:13px;font-weight:bold"></div><div id="google-email" style="font-size:11px;color:var(--text2)"></div></div>
@@ -1051,7 +1061,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.62';
+const APP_VERSION='v1.7.66';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1156,6 +1166,7 @@ let triActuel='date',prevPage='collection',currentPage='home';
 let pageScrollPositions={home:0,collection:0,search:0,visionnages:0,notes:0,settings:0};
 let _listeFiltreCourante=[];
 let catTab='tous';
+let quickGenresTous=false;
 let tagFiltres={statut:'tous',decennie:new Set(),annee:'',genre:'',nationalite:'',qualite:'',saga:'',catFilter:''};
 let manuelType='films';
 let ficheFilmCourante=null;
@@ -1263,6 +1274,8 @@ function sauvegarder(){
   }
 
   _saveCount++;
+  marquerDriveNonSauvegarde();
+  planifierSnapshotRecovery();
   // Sauvegarde auto Drive si connecté (avec délai pour éviter trop d'appels)
   if(_googleToken){
     clearTimeout(_driveAutoSaveTimer);
@@ -1620,6 +1633,8 @@ function setCatTab(cat){
   else document.getElementById('ctab-tous')?.classList.add('active');
   const sagaBtn=document.getElementById('ctab-saga');
   if(sagaBtn){sagaBtn.style.background=cat==='saga'?'#1a3a5c':'var(--surface)';sagaBtn.style.color=cat==='saga'?'#90d0ff':'var(--text2)';}
+  quickGenresTous=false;
+  buildFiltresDynamiques();
   renderCollection();
 }
 
@@ -1722,7 +1737,61 @@ function setTagFiltre(groupe,valeur,btn){
       btn.classList.add('active');
     }
   }
+  if(groupe==='genre') renderQuickGenres();
   renderCollection();
+}
+
+function setQuickGenre(genre){
+  tagFiltres.genre=(tagFiltres.genre===genre)?'':genre;
+  // Synchroniser aussi le panneau ⚙️ Filtres.
+  document.querySelectorAll('#tags-genres .tag').forEach(b=>{
+    const txt=normaliser(b.textContent||'').trim();
+    const cible=normaliser(tagFiltres.genre||'').trim();
+    b.classList.toggle('active',(!cible&&/^(tous|toutes)$/.test(txt))||(cible&&txt===cible));
+  });
+  renderQuickGenres();
+  renderCollection();
+}
+
+function toggleQuickGenres(){
+  quickGenresTous=!quickGenresTous;
+  renderQuickGenres();
+}
+
+function renderQuickGenres(){
+  const box=document.getElementById('quick-genres');
+  if(!box) return;
+  // Les genres rapides suivent la catégorie choisie (Films, Séries, etc.).
+  // Pour les onglets de statut/saga, on part de toute la médiathèque visible.
+  const catsNormales=['films','series','spectacles','documentaires','theatre','animation','humour'];
+  const src=catsNormales.includes(catTab)?films.filter(f=>f.categorie===catTab):films;
+  const compteur=new Map();
+  src.filter(f=>statutEstVisible(f)).forEach(f=>{
+    const vals=[...(f.genres||'').split(','),...(f.sousGenres||'').split(',')]
+      .map(g=>g.trim()).filter(Boolean);
+    const vus=new Set();
+    vals.forEach(g=>{
+      const cle=normaliser(g).trim();
+      if(!cle||vus.has(cle)) return;
+      vus.add(cle);
+      const ancien=compteur.get(cle);
+      compteur.set(cle,{label:ancien?ancien.label:g,count:(ancien?ancien.count:0)+1});
+    });
+  });
+  const tous=[...compteur.values()].sort((a,b)=>b.count-a.count||a.label.localeCompare(b.label,'fr'));
+  const principaux=tous.slice(0,14);
+  const affiches=quickGenresTous?tous:principaux;
+  const actif=normaliser(tagFiltres.genre||'').trim();
+  let html='<button class="quick-genre-btn '+(!actif?'active':'')+'" onclick="setQuickGenre(\'\')">Tous genres</button>';
+  html+=affiches.map(x=>{
+    const enc=encodeURIComponent(x.label);
+    const active=normaliser(x.label).trim()===actif?' active':'';
+    return '<button class="quick-genre-btn'+active+'" onclick="setQuickGenre(decodeURIComponent(\''+enc+'\'))" title="'+x.count+' élément(s)">'+esc(x.label)+'</button>';
+  }).join('');
+  if(tous.length>principaux.length){
+    html+='<button class="quick-genre-btn quick-genre-more" onclick="toggleQuickGenres()">'+(quickGenresTous?'− Réduire':'+ Tous les genres')+'</button>';
+  }
+  box.innerHTML=html;
 }
 
 function buildFiltresDynamiques(){
@@ -1756,6 +1825,7 @@ function buildFiltresDynamiques(){
     ?'<span style="font-size:12px;color:var(--text2)">Aucune saga</span>'
     :'<button class="tag active" onclick="setTagFiltre(\'saga\',\'\',this)">Toutes</button>'
     +toutesSagas.map(s=>'<button class="tag" onclick="setTagFiltre(\'saga\',\''+esc(s)+'\',this)">🏷 '+esc(s)+'</button>').join('');
+  renderQuickGenres();
 }
 
 function resetFiltres(){
@@ -1765,6 +1835,7 @@ function resetFiltres(){
   });
   buildFiltresDynamiques();
   renderCollection();
+  renderQuickGenres();
 }
 
 function renderCollection(){
@@ -1846,7 +1917,7 @@ function renderCollection(){
     if(tagFiltres.statut!=='tous'&&!filmAStatut(f,tagFiltres.statut)) return false;
     if(tagFiltres.decennie&&tagFiltres.decennie.size>0){const y=parseInt((f.dateSortie||'').slice(0,4));if(isNaN(y)||!tagFiltres.decennie.has(String(Math.floor(y/10)*10))) return false;}
     if(tagFiltres.annee&&(f.dateSortie||'').slice(0,4)!==tagFiltres.annee) return false;
-    if(tagFiltres.genre&&!(f.genres||'').toLowerCase().includes(tagFiltres.genre.toLowerCase())) return false;
+    if(tagFiltres.genre&&!normaliser([f.genres,f.sousGenres].filter(Boolean).join(' ')).includes(normaliser(tagFiltres.genre))) return false;
     if(tagFiltres.nationalite&&!(f.pays||[]).includes(tagFiltres.nationalite)) return false;
     if(tagFiltres.qualite&&!(f.qualites||[]).includes(tagFiltres.qualite)) return false;
     if(!rechercheGlobale&&tagFiltres.saga){const fSagas=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);if(!fSagas.includes(tagFiltres.saga)) return false;}
@@ -5923,6 +5994,107 @@ const DRIVE_PREFS_FILENAME='videotheque_prefs.json';
 let _googleToken=null;
 let _driveAutoSaveTimer=null;
 
+// ── PROTECTION SAUVEGARDE / FERMETURE ──
+// Le navigateur n'autorise pas un message personnalisé au moment de fermer un onglet.
+// On sauvegarde donc toujours localement de façon synchrone et, si Drive n'est pas à jour,
+// on déclenche la boîte de confirmation native du navigateur.
+const DRIVE_DIRTY_KEY='mycinebox_drive_dirty';
+const RECOVERY_DB_NAME='mycinebox_recovery';
+const RECOVERY_STORE='snapshots';
+const RECOVERY_MAX=5;
+let _driveDirty=localStorage.getItem(DRIVE_DIRTY_KEY)==='1';
+let _driveSaveInProgress=false;
+
+function marquerDriveNonSauvegarde(){
+  _driveDirty=true;
+  try{localStorage.setItem(DRIVE_DIRTY_KEY,'1');}catch(_){}
+}
+function marquerDriveSauvegarde(){
+  _driveDirty=false;
+  try{localStorage.setItem(DRIVE_DIRTY_KEY,'0');}catch(_){}
+}
+function sauvegardeLocaleSecurisee(){
+  try{
+    localStorage.setItem(DB_KEY,JSON.stringify(films));
+    localStorage.setItem('mycinebox_local_save_time',String(Date.now()));
+    return true;
+  }catch(e){
+    console.error('[MyCinebox] Sauvegarde locale avant fermeture impossible',e);
+    return false;
+  }
+}
+function ouvrirRecoveryDB(){
+  return new Promise((resolve,reject)=>{
+    if(!('indexedDB' in window)){reject(new Error('IndexedDB indisponible'));return;}
+    const req=indexedDB.open(RECOVERY_DB_NAME,1);
+    req.onupgradeneeded=()=>{
+      const db=req.result;
+      if(!db.objectStoreNames.contains(RECOVERY_STORE)){
+        db.createObjectStore(RECOVERY_STORE,{keyPath:'id',autoIncrement:true});
+      }
+    };
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error||new Error('Ouverture IndexedDB impossible'));
+  });
+}
+async function archiverSnapshotRecovery(raison='auto',jsonBrut=null){
+  try{
+    const contenu=jsonBrut!=null?String(jsonBrut):JSON.stringify(films);
+    if(!contenu||contenu==='[]') return;
+    const db=await ouvrirRecoveryDB();
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction(RECOVERY_STORE,'readwrite');
+      const store=tx.objectStore(RECOVERY_STORE);
+      store.add({date:Date.now(),raison,contenu});
+      tx.oncomplete=resolve;
+      tx.onerror=()=>reject(tx.error);
+      tx.onabort=()=>reject(tx.error||new Error('Snapshot annulé'));
+    });
+    // Garder seulement les 5 dernières copies de récupération.
+    const snapshots=await new Promise((resolve,reject)=>{
+      const tx=db.transaction(RECOVERY_STORE,'readonly');
+      const req=tx.objectStore(RECOVERY_STORE).getAll();
+      req.onsuccess=()=>resolve(req.result||[]);
+      req.onerror=()=>reject(req.error);
+    });
+    if(snapshots.length>RECOVERY_MAX){
+      snapshots.sort((a,b)=>(a.date||0)-(b.date||0));
+      const aSupprimer=snapshots.slice(0,snapshots.length-RECOVERY_MAX);
+      await new Promise((resolve,reject)=>{
+        const tx=db.transaction(RECOVERY_STORE,'readwrite');
+        const store=tx.objectStore(RECOVERY_STORE);
+        aSupprimer.forEach(x=>store.delete(x.id));
+        tx.oncomplete=resolve;
+        tx.onerror=()=>reject(tx.error);
+      });
+    }
+    db.close();
+  }catch(e){
+    console.warn('[MyCinebox] Snapshot de récupération non créé',e);
+  }
+}
+function planifierSnapshotRecovery(){
+  const maintenant=Date.now();
+  const dernier=Number(localStorage.getItem('mycinebox_recovery_last')||0);
+  if(maintenant-dernier<15*60*1000) return;
+  try{localStorage.setItem('mycinebox_recovery_last',String(maintenant));}catch(_){}
+  archiverSnapshotRecovery('sauvegarde locale');
+}
+
+window.addEventListener('beforeunload',event=>{
+  sauvegardeLocaleSecurisee();
+  if(_driveDirty||_driveSaveInProgress){
+    // Les navigateurs modernes ignorent le texte personnalisé et affichent leur propre message.
+    event.preventDefault();
+    event.returnValue='';
+    return '';
+  }
+});
+window.addEventListener('pagehide',()=>{ sauvegardeLocaleSecurisee(); });
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden) sauvegardeLocaleSecurisee();
+});
+
 function googleSignIn(){
   googleDiag('Clic sur Se connecter',{googleDisponible:typeof google!=='undefined',instanceExistante:!!_googleClientInstance,origin:location.origin});
   const status=document.getElementById('drive-status');
@@ -6012,20 +6184,42 @@ function googleSignOut(){
   snack('Déconnecté de Google');
 }
 
+function choisirFichierDriveLePlusRecent(files){
+  if(!Array.isArray(files)||files.length===0) return null;
+  return [...files].sort((a,b)=>{
+    const da=Date.parse(a.modifiedTime||'')||0;
+    const db=Date.parse(b.modifiedTime||'')||0;
+    return db-da;
+  })[0]||null;
+}
+
+function memoriserDateSauvegardeDrive(fichier){
+  if(!fichier||!fichier.modifiedTime) return;
+  const ts=Date.parse(fichier.modifiedTime);
+  if(!Number.isFinite(ts)) return;
+  localStorage.setItem('drive_last_save_time',String(ts));
+  updateDriveLastSaveTime();
+}
+
 async function trouverFichierDrive(){
-  const r=await fetch('https://www.googleapis.com/drive/v3/files?q=name%3D%22'+DRIVE_FILENAME+'%22+and+trashed%3Dfalse&fields=files(id,name,modifiedTime)',
+  const q=encodeURIComponent('name="'+DRIVE_FILENAME+'" and trashed=false');
+  const r=await fetch('https://www.googleapis.com/drive/v3/files?q='+q+'&orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime)&pageSize=100',
     {headers:{Authorization:'Bearer '+_googleToken}});
+  if(!r.ok) throw new Error('Drive liste HTTP '+r.status);
   const d=await r.json();
-  return d.files&&d.files.length>0?d.files[0]:null;
+  const fichier=choisirFichierDriveLePlusRecent(d.files);
+  if(fichier) memoriserDateSauvegardeDrive(fichier);
+  return fichier;
 }
 
 
 async function trouverFichierDriveNom(nom){
   const q=encodeURIComponent('name="'+nom+'" and trashed=false');
-  const r=await fetch('https://www.googleapis.com/drive/v3/files?q='+q+'&fields=files(id,name,modifiedTime)',
+  const r=await fetch('https://www.googleapis.com/drive/v3/files?q='+q+'&orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime)&pageSize=100',
     {headers:{Authorization:'Bearer '+_googleToken}});
+  if(!r.ok) throw new Error('Drive liste HTTP '+r.status);
   const d=await r.json();
-  return d.files&&d.files.length>0?d.files[0]:null;
+  return choisirFichierDriveLePlusRecent(d.files);
 }
 
 async function sauvegarderPrefsDrive(silencieux=true){
@@ -6067,33 +6261,59 @@ async function chargerPrefsDrive(silencieux=true){
 
 async function sauvegarderDrive(silencieux=false){
   if(!_googleToken) return;
+  _driveSaveInProgress=true;
   const btn=document.getElementById('btn-drive-save');
   if(!silencieux&&btn){btn.textContent='⏳...';btn.disabled=true;}
+  const statusEl=document.getElementById('drive-status');
   try{
     const json=JSON.stringify(films,null,2);
     const fichier=await trouverFichierDrive();
+    let reponse;
     if(fichier){
-      await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fichier.id+'?uploadType=media',
+      reponse=await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fichier.id+'?uploadType=media&fields=id,name,modifiedTime',
         {method:'PATCH',headers:{Authorization:'Bearer '+_googleToken,'Content-Type':'application/json'},body:json});
     } else {
       const meta=JSON.stringify({name:DRIVE_FILENAME,mimeType:'application/json'});
       const form=new FormData();
       form.append('metadata',new Blob([meta],{type:'application/json'}));
       form.append('file',new Blob([json],{type:'application/json'}));
-      await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+      reponse=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime',
         {method:'POST',headers:{Authorization:'Bearer '+_googleToken},body:form});
     }
+
+    // Ne jamais annoncer une sauvegarde si Google Drive a refusé l'écriture.
+    if(!reponse.ok){
+      let detail='';
+      try{ detail=await reponse.text(); }catch(_){}
+      throw new Error('Drive écriture HTTP '+reponse.status+(detail?' — '+detail.slice(0,180):''));
+    }
+
+    // La réponse de l'upload est la source la plus fiable : elle concerne exactement
+    // le fichier qui vient d'être écrit, pas une ancienne copie portant le même nom.
+    let fichierSauvegarde=null;
+    try{ fichierSauvegarde=await reponse.json(); }catch(_){}
+    if(fichierSauvegarde&&fichierSauvegarde.modifiedTime){
+      memoriserDateSauvegardeDrive(fichierSauvegarde);
+    }else{
+      // Secours : relire le fichier et sa date uniquement après une écriture confirmée.
+      const fichierApresSauvegarde=await trouverFichierDrive();
+      if(fichierApresSauvegarde) memoriserDateSauvegardeDrive(fichierApresSauvegarde);
+    }
+
+    marquerDriveSauvegarde();
     const now=new Date().toLocaleString('fr-FR');
-    const statusEl=document.getElementById('drive-status');
-    if(statusEl) statusEl.textContent='✓ Drive : '+now;
+    if(statusEl) statusEl.textContent='✓ Drive sauvegardé : '+now;
     localStorage.setItem('drive_save_date', now);
-    localStorage.setItem('drive_last_save_time', Date.now());
-    updateDriveLastSaveTime();
     const totEl=document.getElementById('drive-total');
     if(totEl) totEl.textContent='📊 '+films.length+' titre(s)';
     await sauvegarderPrefsDrive(true);
     if(!silencieux) snack('✓ Sauvegardé sur Google Drive !');
-  }catch(e){if(!silencieux) snack('⚠️ Erreur sauvegarde Drive');}
+  }catch(e){
+    console.error('[MyCinebox Drive] Sauvegarde échouée',e);
+    if(statusEl) statusEl.textContent='⚠️ Sauvegarde Drive échouée : '+(e&&e.message?e.message:'erreur inconnue');
+    if(!silencieux) snack('⚠️ Échec sauvegarde Drive');
+  }
+  _driveSaveInProgress=false;
   if(!silencieux&&btn){btn.textContent='☁️ Sauvegarder sur Drive';btn.disabled=false;}
 }
 
@@ -6181,6 +6401,7 @@ async function chargerDrive(auto=false){
       {headers:{Authorization:'Bearer '+_googleToken}});
     const data=await r.json();
     if(!Array.isArray(data)){if(!auto) snack('⚠️ Format invalide');return;}
+    memoriserDateSauvegardeDrive(fichier);
     // En mode auto : charger seulement si Drive est plus récent ou collection locale vide
     if(auto&&films.length>0){
       // Comparer : si Drive a plus de films, proposer
@@ -6194,10 +6415,13 @@ async function chargerDrive(auto=false){
         return;
       }
     }
+    // Avant tout remplacement depuis Drive, conserver une copie locale de récupération.
+    // Ainsi une vieille sauvegarde Drive ne peut plus effacer définitivement la collection courante.
+    await archiverSnapshotRecovery('avant chargement Drive',JSON.stringify(films));
     films=data.map(f=>({...f,categorie:(f.categorie||'films').toLowerCase()}));
     // Sauvegarder localement sans re-déclencher Drive
     localStorage.setItem(DB_KEY,JSON.stringify(films));
-    localStorage.setItem(DB_KEY+'_backup',JSON.stringify(films));
+    marquerDriveSauvegarde();
     renderHome();renderCollection();
     await chargerPrefsDrive(true);
     snack('✓ '+films.length+' films chargés depuis Drive !');
@@ -6537,20 +6761,10 @@ function displaySearchResults(results) {
 // Auto-save notes on change
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM chargé - initialisation');
-  // Afficher la date de dernière sauvegarde Drive au chargement
+  // Afficher uniquement une vraie date de sauvegarde connue.
+  // Aucune date fictive n'est créée quand l'information manque.
   setTimeout(() => {
-    console.log('Initialisation date Drive...');
-    // Si pas de date Drive existante, on peut en mettre une pour test
-    if (!localStorage.getItem('drive_last_save_time')) {
-      console.log('Pas de date Drive, création d une date de test');
-      localStorage.setItem('drive_last_save_time', Date.now() - 3600000); // Il y a 1h
-    }
-    if (typeof updateDriveLastSaveTime === 'function') {
-      updateDriveLastSaveTime();
-      console.log('updateDriveLastSaveTime appelée');
-    } else {
-      console.error('updateDriveLastSaveTime n existe pas !');
-    }
+    if (typeof updateDriveLastSaveTime === 'function') updateDriveLastSaveTime();
   }, 500);
 });
 
