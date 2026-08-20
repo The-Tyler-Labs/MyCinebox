@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.67</title>
+<title>Vidéothèque v1.7.69</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1064,7 +1064,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.68';
+const APP_VERSION='v1.7.69';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1240,40 +1240,111 @@ function charger(){
   try{prefs={...prefs,...JSON.parse(localStorage.getItem(PREFS_KEY)||'{}') };}catch(e){}
   ensureTmdbApiKey();
 }
+// ── STOCKAGE PRINCIPAL DE LA COLLECTION (IndexedDB) ──
+// localStorage est trop petit pour les grosses collections. La collection complète
+// est désormais conservée dans IndexedDB ; localStorage ne sert plus que de secours
+// tant que le JSON reste suffisamment petit.
+const DATA_DB_NAME='mycinebox_data';
+const DATA_DB_STORE='kv';
+const DATA_DB_KEY='films';
+const LOCALSTORAGE_SAFE_LIMIT=3000000;
+let _dataDbReady=null;
+
+function ouvrirDataDB(){
+  if(_dataDbReady) return _dataDbReady;
+  _dataDbReady=new Promise((resolve,reject)=>{
+    if(!('indexedDB' in window)){reject(new Error('IndexedDB indisponible'));return;}
+    const req=indexedDB.open(DATA_DB_NAME,1);
+    req.onupgradeneeded=()=>{
+      const db=req.result;
+      if(!db.objectStoreNames.contains(DATA_DB_STORE)) db.createObjectStore(DATA_DB_STORE);
+    };
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error||new Error('Ouverture IndexedDB impossible'));
+  });
+  return _dataDbReady;
+}
+
+async function sauvegarderCollectionIndexedDB(jsonBrut=null){
+  const contenu=jsonBrut!=null?String(jsonBrut):JSON.stringify(films);
+  const db=await ouvrirDataDB();
+  await new Promise((resolve,reject)=>{
+    const tx=db.transaction(DATA_DB_STORE,'readwrite');
+    tx.objectStore(DATA_DB_STORE).put({contenu,date:Date.now()},DATA_DB_KEY);
+    tx.oncomplete=resolve;
+    tx.onerror=()=>reject(tx.error||new Error('Écriture IndexedDB impossible'));
+    tx.onabort=()=>reject(tx.error||new Error('Écriture IndexedDB annulée'));
+  });
+  try{localStorage.setItem('mycinebox_idb_save_time',String(Date.now()));}catch(_){ }
+  return true;
+}
+
+async function lireCollectionIndexedDB(){
+  try{
+    const db=await ouvrirDataDB();
+    const valeur=await new Promise((resolve,reject)=>{
+      const tx=db.transaction(DATA_DB_STORE,'readonly');
+      const req=tx.objectStore(DATA_DB_STORE).get(DATA_DB_KEY);
+      req.onsuccess=()=>resolve(req.result||null);
+      req.onerror=()=>reject(req.error);
+    });
+    if(!valeur||!valeur.contenu) return null;
+    const data=JSON.parse(valeur.contenu);
+    return Array.isArray(data)?data:null;
+  }catch(e){
+    console.warn('[MyCinebox] Lecture IndexedDB impossible',e);
+    return null;
+  }
+}
+
+async function initialiserCollectionIndexedDB(){
+  const depuisIdb=await lireCollectionIndexedDB();
+  if(depuisIdb&&depuisIdb.length){
+    films=depuisIdb;
+    // Réutiliser la normalisation déjà prévue par charger() en mémoire.
+    films=films.map(f=>{
+      const statut=normaliserStatut(f.statut!==undefined?f.statut:(f.estVu?'vu':''));
+      const statutsBruts=Array.isArray(f.statuts)?f.statuts:(statut?[statut]:[]);
+      const statuts=[...new Set(statutsBruts.map(normaliserStatut).filter(Boolean))];
+      const legacyVersions=Array.isArray(f.versions)?f.versions:[];
+      const editions=Array.isArray(f.editions)?f.editions:legacyVersions.map((label,i)=>({id:'ed-'+(f.id||'x')+'-'+i,label:String(label||'Version '+(i+1)),rawName:'',details:[],languages:[],source:'',emplacement:''}));
+      if(f.saga&&!f.sagas) f.sagas=[f.saga]; else if(!f.sagas) f.sagas=[];
+      const pays=(f.pays||(f.nationalite?String(f.nationalite).split(',').map(p=>p.trim()).filter(Boolean):[])).map(p=>tradPays(p));
+      return {...f,categorie:(f.categorie||'films').toLowerCase(),statut:statuts[0]||'',statuts,releaseNote:String(f.releaseNote||''),qualite:f.qualite||'',qualites:f.qualites||(f.qualite?[f.qualite]:[]),versions:legacyVersions,editions,pays};
+    });
+    renderHome();
+    if(currentPage==='collection') { buildFiltresDynamiques(); renderCollection(); }
+    if(currentPage==='settings') renderSettings();
+    console.log('[MyCinebox] Collection chargée depuis IndexedDB :',films.length,'fiches');
+    return;
+  }
+  // Première migration : copier la collection encore présente dans localStorage vers IndexedDB.
+  if(films.length){
+    try{await sauvegarderCollectionIndexedDB(JSON.stringify(films));console.log('[MyCinebox] Collection migrée vers IndexedDB :',films.length,'fiches');}
+    catch(e){console.error('[MyCinebox] Migration IndexedDB impossible',e);}
+  }
+}
+
 let _saveCount=0;
 function sauvegarder(){
-  // Garder deux copies complètes de la collection dans localStorage consommait
-  // inutilement beaucoup de place et empêchait l'import d'images normales.
   const contenu=JSON.stringify(films);
-  const backupKey=DB_KEY+'_backup';
-  const backupDateKey=DB_KEY+'_backup_date';
-  const ancienBackup=localStorage.getItem(backupKey);
-  const ancienneDate=localStorage.getItem(backupDateKey);
 
+  // IndexedDB est la sauvegarde locale principale. Une erreur localStorage ne doit
+  // plus empêcher une modification de fiche d'être enregistrée.
+  sauvegarderCollectionIndexedDB(contenu).catch(e=>{
+    console.error('[MyCinebox] Sauvegarde IndexedDB échouée',e);
+    const el=document.getElementById('drive-status');
+    if(el) el.textContent='⚠️ Sauvegarde locale IndexedDB échouée';
+  });
+
+  // Compatibilité avec les anciennes versions : ne garder une copie localStorage
+  // que si elle tient largement sous le quota du navigateur.
   try{
-    // On libère d'abord la copie de secours : le stockage navigateur est limité.
-    localStorage.removeItem(backupKey);
-    localStorage.removeItem(backupDateKey);
-    localStorage.setItem(DB_KEY,contenu);
-
-    // Une deuxième copie locale reste utile pour les petites collections, sans
-    // bloquer les collections plus grandes ou avec des photos personnalisées.
-    if(contenu.length<=1500000){
-      try{
-        localStorage.setItem(backupKey,contenu);
-        localStorage.setItem(backupDateKey,new Date().toISOString());
-      }catch(_){
-        localStorage.removeItem(backupKey);
-        localStorage.removeItem(backupDateKey);
-      }
-    }
+    localStorage.removeItem(DB_KEY+'_backup');
+    localStorage.removeItem(DB_KEY+'_backup_date');
+    if(contenu.length<=LOCALSTORAGE_SAFE_LIMIT) localStorage.setItem(DB_KEY,contenu);
   }catch(e){
-    // On tente de restaurer l'ancien secours si l'écriture principale échoue.
-    try{
-      if(ancienBackup!==null) localStorage.setItem(backupKey,ancienBackup);
-      if(ancienneDate!==null) localStorage.setItem(backupDateKey,ancienneDate);
-    }catch(_){}
-    throw e;
+    console.warn('[MyCinebox] localStorage plein : IndexedDB reste la source principale',e);
   }
 
   _saveCount++;
@@ -5912,6 +5983,9 @@ setTimeout(()=>{
 const _savedJsonDate=localStorage.getItem('videotheque_json_date');
 if(_savedJsonDate){const el=document.getElementById('json-status');if(el)el.textContent='✓ Dernière sauvegarde : '+_savedJsonDate;}
 charger();
+// IndexedDB devient la source principale. Le chargement est asynchrone mais remplace
+// immédiatement la copie localStorage dès qu'il est disponible.
+initialiserCollectionIndexedDB();
 
 // Délégation d'événements pour les boutons version rapide
 document.addEventListener('click', function(e){
@@ -6022,11 +6096,13 @@ function marquerDriveSauvegarde(){
 }
 function sauvegardeLocaleSecurisee(){
   try{
-    localStorage.setItem(DB_KEY,JSON.stringify(films));
+    // La collection est déjà envoyée vers IndexedDB à chaque modification.
+    // Ici on ne force plus une grosse écriture localStorage qui peut dépasser le quota.
     localStorage.setItem('mycinebox_local_save_time',String(Date.now()));
+    sauvegarderCollectionIndexedDB(JSON.stringify(films)).catch(()=>{});
     return true;
   }catch(e){
-    console.error('[MyCinebox] Sauvegarde locale avant fermeture impossible',e);
+    console.error('[MyCinebox] Dernier marqueur local impossible',e);
     return false;
   }
 }
@@ -6117,6 +6193,32 @@ document.addEventListener('visibilitychange',()=>{
   }
 });
 
+function afficherEtatGoogleDeconnecte(message='Reconnexion Google nécessaire'){
+  const status=document.getElementById('drive-status');
+  if(status) status.textContent='⚠️ '+message;
+  const signin=document.getElementById('btn-google-signin'); if(signin) signin.style.display='block';
+  const user=document.getElementById('google-user-info'); if(user) user.style.display='none';
+  const save=document.getElementById('btn-drive-save'); if(save) save.style.display='none';
+  const load=document.getElementById('btn-drive-load'); if(load) load.style.display='none';
+  const merge=document.getElementById('btn-drive-merge'); if(merge) merge.style.display='none';
+}
+function gererDrive401(contexte='Drive'){
+  console.warn('[MyCinebox Drive] Jeton expiré / non autorisé :',contexte);
+  _googleToken=null;
+  clearTimeout(_driveAutoSaveTimer);
+  afficherEtatGoogleDeconnecte('Reconnexion Google nécessaire — jeton expiré');
+  // On conserve google_was_connected pour permettre une reconnexion à la prochaine ouverture,
+  // mais aucune nouvelle tentative Drive automatique n'est faite sans nouveau jeton.
+  snack('⚠️ Google Drive : reconnecte-toi');
+}
+async function verifierReponseDrive(reponse,contexte){
+  if(reponse&&reponse.status===401){
+    gererDrive401(contexte);
+    throw new Error(contexte+' HTTP 401 — reconnexion Google nécessaire');
+  }
+  return reponse;
+}
+
 function googleSignIn(){
   googleDiag('Clic sur Se connecter',{googleDisponible:typeof google!=='undefined',instanceExistante:!!_googleClientInstance,origin:location.origin});
   const status=document.getElementById('drive-status');
@@ -6165,6 +6267,7 @@ async function chargerProfilGoogle(){
   try{
     const r=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+_googleToken}});
     googleDiag('Réponse userinfo',{status:r.status,ok:r.ok,statusText:r.statusText});
+    if(r.status===401){gererDrive401('Profil Google');return;}
     const texte=await r.text();
     googleDiag('Corps userinfo brut',texte.slice(0,500));
     if(!r.ok) throw new Error('userinfo HTTP '+r.status+' : '+texte.slice(0,200));
@@ -6181,13 +6284,13 @@ async function chargerProfilGoogle(){
     localStorage.setItem('google_was_connected','1');
     if(status) status.textContent='Connecté à Google, synchronisation Drive…';
     snack('✓ Connecté : '+(u.name||'Google')+' — synchronisation Drive...');
-    googleDiag('Début mergeAutoDrive');
-    await mergeAutoDrive();
-    googleDiag('Fin mergeAutoDrive');
+    // Sécurité : une connexion Google ne charge plus automatiquement une vieille
+    // sauvegarde Drive par-dessus la collection locale. Le chargement reste manuel.
     googleDiag('Début chargerPrefsDrive');
     await chargerPrefsDrive(true);
     googleDiag('Fin chargerPrefsDrive');
     if(status) status.textContent='✓ Google Drive connecté';
+    if(_driveDirty) planifierSauvegardeDriveAuto();
   }catch(e){
     googleDiag('Erreur chargerProfilGoogle',e);
     if(status) status.textContent='Erreur Google : '+(e&&e.message?e.message:'inconnue');
@@ -6227,6 +6330,7 @@ async function trouverFichierDrive(){
   const q=encodeURIComponent('name="'+DRIVE_FILENAME+'" and trashed=false');
   const r=await fetch('https://www.googleapis.com/drive/v3/files?q='+q+'&orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime)&pageSize=100',
     {headers:{Authorization:'Bearer '+_googleToken}});
+  await verifierReponseDrive(r,'Drive liste');
   if(!r.ok) throw new Error('Drive liste HTTP '+r.status);
   const d=await r.json();
   const fichier=choisirFichierDriveLePlusRecent(d.files);
@@ -6239,6 +6343,7 @@ async function trouverFichierDriveNom(nom){
   const q=encodeURIComponent('name="'+nom+'" and trashed=false');
   const r=await fetch('https://www.googleapis.com/drive/v3/files?q='+q+'&orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime)&pageSize=100',
     {headers:{Authorization:'Bearer '+_googleToken}});
+  await verifierReponseDrive(r,'Drive liste');
   if(!r.ok) throw new Error('Drive liste HTTP '+r.status);
   const d=await r.json();
   return choisirFichierDriveLePlusRecent(d.files);
@@ -6270,6 +6375,8 @@ async function chargerPrefsDrive(silencieux=true){
     if(!fichier) return;
     const r=await fetch('https://www.googleapis.com/drive/v3/files/'+fichier.id+'?alt=media',
       {headers:{Authorization:'Bearer '+_googleToken}});
+    await verifierReponseDrive(r,'Drive chargement');
+    if(!r.ok) throw new Error('Drive chargement HTTP '+r.status);
     const data=await r.json();
     if(data&&data.prefs){
       prefs={...prefs,...data.prefs};
@@ -6309,6 +6416,7 @@ async function sauvegarderDrive(silencieux=false){
         {method:'POST',headers:{Authorization:'Bearer '+_googleToken},body:form});
     }
 
+    await verifierReponseDrive(reponse,'Drive écriture');
     if(!reponse.ok){
       let detail='';
       try{ detail=await reponse.text(); }catch(_){}
@@ -6343,8 +6451,12 @@ async function sauvegarderDrive(silencieux=false){
   }catch(e){
     console.error('[MyCinebox Drive] Sauvegarde échouée',e);
     marquerDriveNonSauvegarde();
-    if(statusEl) statusEl.textContent='⚠️ Drive non sauvegardé — nouvelle tentative automatique';
-    if(!silencieux) snack('⚠️ Échec sauvegarde Drive');
+    if(_googleToken){
+      if(statusEl) statusEl.textContent='⚠️ Drive non sauvegardé — nouvelle tentative automatique';
+      if(!silencieux) snack('⚠️ Échec sauvegarde Drive');
+    }else{
+      if(statusEl) statusEl.textContent='⚠️ Reconnexion Google nécessaire — sauvegarde locale conservée';
+    }
   }finally{
     _driveSaveInProgress=false;
     if(!silencieux&&btn){btn.textContent='☁️ Sauvegarder sur Drive';btn.disabled=false;}
@@ -6363,6 +6475,8 @@ async function chargerDriveAvecMerge(){
     if(!fichier){snack('\u26a0\ufe0f Aucune sauvegarde Drive');return;}
     const r=await fetch('https://www.googleapis.com/drive/v3/files/'+fichier.id+'?alt=media',
       {headers:{Authorization:'Bearer '+_googleToken}});
+    await verifierReponseDrive(r,'Drive merge');
+    if(!r.ok) throw new Error('Drive merge HTTP '+r.status);
     const driveFilms=await r.json();
     if(!Array.isArray(driveFilms)){snack('\u26a0\ufe0f Format invalide');return;}
     const localIds=new Set(films.map(f=>String(f.tmdbId||'')+f.titre));
@@ -6389,6 +6503,8 @@ async function mergeAutoDrive(){
       return;
     }
     const r=await fetch('https://www.googleapis.com/drive/v3/files/'+fichier.id+'?alt=media',{headers:{Authorization:'Bearer '+_googleToken}});
+    await verifierReponseDrive(r,'Drive synchronisation');
+    if(!r.ok) throw new Error('Drive synchronisation HTTP '+r.status);
     const driveFilms=await r.json();
     if(!Array.isArray(driveFilms)){snack('⚠️ Format Drive invalide');return;}
 
@@ -6436,6 +6552,8 @@ async function chargerDrive(auto=false){
     }
     const r=await fetch('https://www.googleapis.com/drive/v3/files/'+fichier.id+'?alt=media',
       {headers:{Authorization:'Bearer '+_googleToken}});
+    await verifierReponseDrive(r,'Drive chargement');
+    if(!r.ok) throw new Error('Drive chargement HTTP '+r.status);
     const data=await r.json();
     if(!Array.isArray(data)){if(!auto) snack('⚠️ Format invalide');return;}
     memoriserDateSauvegardeDrive(fichier);
@@ -6456,8 +6574,9 @@ async function chargerDrive(auto=false){
     // Ainsi une vieille sauvegarde Drive ne peut plus effacer définitivement la collection courante.
     await archiverSnapshotRecovery('avant chargement Drive',JSON.stringify(films));
     films=data.map(f=>({...f,categorie:(f.categorie||'films').toLowerCase()}));
-    // Sauvegarder localement sans re-déclencher Drive
-    localStorage.setItem(DB_KEY,JSON.stringify(films));
+    // Sauvegarder localement dans IndexedDB sans re-déclencher Drive.
+    await sauvegarderCollectionIndexedDB(JSON.stringify(films));
+    try{ if(JSON.stringify(films).length<=LOCALSTORAGE_SAFE_LIMIT) localStorage.setItem(DB_KEY,JSON.stringify(films)); }catch(_){ }
     marquerDriveSauvegarde();
     renderHome();renderCollection();
     await chargerPrefsDrive(true);
