@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.70</title>
+<title>Vidéothèque v1.7.71</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1064,9 +1064,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.70';
-const APP_BUILD='firefox-force-20260826-1722';
-
+const APP_VERSION='v1.7.71';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -6125,7 +6123,7 @@ function demarrerOAuthGoogleParRedirection(){
       client_id:GOOGLE_CLIENT_ID,
       redirect_uri:redirectUri,
       response_type:'token',
-      scope:'openid email profile '+DRIVE_SCOPE,
+      scope:DRIVE_SCOPE,
       include_granted_scopes:'true',
       prompt:'select_account',
       state
@@ -6371,8 +6369,30 @@ function googleSignIn(){
 
 async function chargerProfilGoogle(){
   const status=document.getElementById('drive-status');
-  googleDiag('Début chargerProfilGoogle',{tokenPresent:!!_googleToken});
+  googleDiag('Début chargerProfilGoogle',{tokenPresent:!!_googleToken,firefox:estFirefox()});
   try{
+    // Firefox : le jeton obtenu par redirection suffit pour Google Drive.
+    // On évite l'appel userinfo, qui peut être bloqué par les protections Firefox
+    // et n'est pas nécessaire pour lire/écrire la sauvegarde Drive.
+    if(estFirefox()){
+      const info=document.getElementById('google-user-info');
+      if(info) info.style.display='flex';
+      const sign=document.getElementById('btn-google-signin');if(sign) sign.style.display='none';
+      const save=document.getElementById('btn-drive-save');if(save) save.style.display='block';
+      const load=document.getElementById('btn-drive-load');if(load) load.style.display='block';
+      const merge=document.getElementById('btn-drive-merge');if(merge) merge.style.display='block';
+      const name=document.getElementById('google-name');if(name) name.textContent='Compte Google';
+      const email=document.getElementById('google-email');if(email) email.textContent='';
+      const avatar=document.getElementById('google-avatar');if(avatar) avatar.removeAttribute('src');
+      localStorage.setItem('google_was_connected','1');
+      if(status) status.textContent='Connecté à Google Drive…';
+      googleDiag('Firefox : userinfo ignoré, test direct de Google Drive');
+      await chargerPrefsDrive(true);
+      googleDiag('Firefox : accès Drive confirmé');
+      if(status) status.textContent='✓ Google Drive connecté';
+      if(_driveDirty) planifierSauvegardeDriveAuto();
+      return;
+    }
     const r=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+_googleToken}});
     googleDiag('Réponse userinfo',{status:r.status,ok:r.ok,statusText:r.statusText});
     if(r.status===401){gererDrive401('Profil Google');return;}
@@ -7078,7 +7098,7 @@ function clearLocalSearch(){
   if(e){e.value='';renderCollection();e.focus();}
 }
 
-// Affichage long appui tactile des images de fiche redeploiement
+// Affichage long appui tactile des images de fiche
 (function(){
  let timer=null;
  function bindLongPress(el){
