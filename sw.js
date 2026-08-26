@@ -1,5 +1,5 @@
-// MyCinebox service worker — v1.7.67 tri inversable et grille de résultats
-const CACHE_NAME = 'mycinebox-v1.7.69';
+// MyCinebox service worker — v1.7.70
+const CACHE_NAME = 'mycinebox-v1.7.70';
 const APP_SHELL = [
   '/MyCinebox/',
   '/MyCinebox/index.html',
@@ -34,26 +34,20 @@ self.addEventListener('fetch', event => {
 
   const url = new URL(request.url);
 
-  // TMDB ne doit pas passer par le cache du service worker :
-  // la requête reste directement contrôlée par l'écran de recherche.
-  if (url.hostname === 'api.themoviedb.org') return;
+  // IMPORTANT : ne jamais intercepter les ressources externes (TMDB, Google APIs,
+  // Google Identity, images, etc.). Firefox signale sinon des erreurs du service worker.
+  if (url.origin !== self.location.origin) return;
 
-  // Fichiers de l'application : réseau d'abord, cache en secours.
-  if (url.origin === self.location.origin) {
-    event.respondWith(
-      fetch(request)
-        .then(response => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
-          return response;
-        })
-        .catch(() => caches.match(request).then(cached => cached || caches.match('/MyCinebox/')))
-    );
-    return;
-  }
-
-  // Ressources externes : on ne bloque jamais l'application si elles échouent.
+  // Fichiers MyCinebox : réseau d'abord, cache en secours.
   event.respondWith(
-    fetch(request).catch(() => caches.match(request))
+    fetch(request)
+      .then(response => {
+        if (response && response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(request, copy)).catch(()=>{});
+        }
+        return response;
+      })
+      .catch(() => caches.match(request).then(cached => cached || caches.match('/MyCinebox/')))
   );
 });

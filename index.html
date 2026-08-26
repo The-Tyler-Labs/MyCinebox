@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.69</title>
+<title>Vidéothèque v1.7.70</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1064,7 +1064,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.69';
+const APP_VERSION='v1.7.70';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -6013,17 +6013,26 @@ function googleDiag(etape,details){
   if(details instanceof Error) console.error('[MyCinebox Google]',heure,etape,details);
   else console.log('[MyCinebox Google]',heure,etape,details===undefined?'':details);
 }
-// Reconnexion Google automatique si déjà connecté
+// Reconnexion Google : réutiliser d'abord le jeton de la session.
+// Sur Firefox on ne lance plus de popup silencieuse au chargement : elle est souvent bloquée.
 window.addEventListener('load',()=>{
   const wasConnected=localStorage.getItem('google_was_connected');
-  googleDiag('Chargement de la page',{wasConnected:!!wasConnected,googleDisponible:typeof google!=='undefined',origin:location.origin,href:location.href});
+  googleDiag('Chargement de la page',{wasConnected:!!wasConnected,googleDisponible:typeof google!=='undefined',firefox:estFirefox(),origin:location.origin,href:location.href});
+  if(restaurerJetonGoogleSession()){
+    googleDiag('Jeton Google restauré depuis la session');
+    chargerProfilGoogle();
+    return;
+  }
   if(!wasConnected) return;
+  if(estFirefox()){
+    const status=document.getElementById('drive-status');
+    if(status) status.textContent='Google Drive : reconnexion manuelle nécessaire sur Firefox';
+    googleDiag('Firefox : reconnexion automatique désactivée pour éviter popup_closed');
+    return;
+  }
   setTimeout(()=>{
     googleDiag('Tentative de reconnexion automatique',{googleDisponible:typeof google!=='undefined'});
-    if(typeof google==='undefined'){
-      googleDiag('Reconnexion impossible : bibliothèque Google absente');
-      return;
-    }
+    if(typeof google==='undefined'){ googleDiag('Reconnexion impossible : bibliothèque Google absente'); return; }
     try{
       _googleClientInstance=google.accounts.oauth2.initTokenClient({
         client_id:GOOGLE_CLIENT_ID,
@@ -6031,7 +6040,7 @@ window.addEventListener('load',()=>{
         callback:(resp)=>{
           googleDiag('Callback reconnexion automatique',resp);
           if(resp.error||!resp.access_token) return;
-          _googleToken=resp.access_token;
+          memoriserJetonGoogle(resp.access_token,resp.expires_in);
           googleDiag('Jeton reçu en reconnexion',{longueur:_googleToken.length});
           chargerProfilGoogle();
         },
@@ -6069,6 +6078,90 @@ const DRIVE_FILENAME='videotheque_backup.json';
 const DRIVE_PREFS_FILENAME='videotheque_prefs.json';
 let _googleToken=null;
 let _driveAutoSaveTimer=null;
+
+// ── OAUTH FIREFOX : redirection en secours ──
+// Firefox peut fermer la popup GIS avant le retour du jeton (popup_closed).
+// Sur Firefox, MyCinebox utilise donc un flux OAuth par redirection dans l'onglet courant.
+const GOOGLE_SESSION_TOKEN_KEY='mycinebox_google_access_token';
+const GOOGLE_SESSION_TOKEN_EXP_KEY='mycinebox_google_access_token_exp';
+const GOOGLE_OAUTH_STATE_KEY='mycinebox_google_oauth_state';
+function estFirefox(){
+  return /firefox\//i.test(navigator.userAgent||'');
+}
+function memoriserJetonGoogle(token,expiresIn){
+  _googleToken=token||null;
+  try{
+    if(_googleToken){
+      sessionStorage.setItem(GOOGLE_SESSION_TOKEN_KEY,_googleToken);
+      const exp=Date.now()+Math.max(60,Number(expiresIn)||3600)*1000-60000;
+      sessionStorage.setItem(GOOGLE_SESSION_TOKEN_EXP_KEY,String(exp));
+    }else{
+      sessionStorage.removeItem(GOOGLE_SESSION_TOKEN_KEY);
+      sessionStorage.removeItem(GOOGLE_SESSION_TOKEN_EXP_KEY);
+    }
+  }catch(_){ }
+}
+function restaurerJetonGoogleSession(){
+  try{
+    const token=sessionStorage.getItem(GOOGLE_SESSION_TOKEN_KEY)||'';
+    const exp=Number(sessionStorage.getItem(GOOGLE_SESSION_TOKEN_EXP_KEY)||0);
+    if(token&&exp>Date.now()){ _googleToken=token; return true; }
+    sessionStorage.removeItem(GOOGLE_SESSION_TOKEN_KEY);
+    sessionStorage.removeItem(GOOGLE_SESSION_TOKEN_EXP_KEY);
+  }catch(_){ }
+  return false;
+}
+function demarrerOAuthGoogleParRedirection(){
+  const status=document.getElementById('drive-status');
+  try{
+    const redirectUri=location.origin+location.pathname;
+    const state=(crypto&&crypto.getRandomValues)
+      ? Array.from(crypto.getRandomValues(new Uint32Array(4))).map(x=>x.toString(16)).join('')
+      : String(Date.now())+Math.random().toString(16).slice(2);
+    sessionStorage.setItem(GOOGLE_OAUTH_STATE_KEY,state);
+    const params=new URLSearchParams({
+      client_id:GOOGLE_CLIENT_ID,
+      redirect_uri:redirectUri,
+      response_type:'token',
+      scope:'openid email profile '+DRIVE_SCOPE,
+      include_granted_scopes:'true',
+      prompt:'select_account',
+      state
+    });
+    if(status) status.textContent='Redirection vers Google…';
+    googleDiag('Firefox : connexion OAuth par redirection',{redirectUri});
+    location.assign('https://accounts.google.com/o/oauth2/v2/auth?'+params.toString());
+  }catch(e){
+    googleDiag('Erreur démarrage redirection OAuth',e);
+    if(status) status.textContent='Erreur de redirection Google';
+    snack('⚠️ Impossible d’ouvrir la connexion Google');
+  }
+}
+function traiterRetourOAuthGoogle(){
+  if(!location.hash||location.hash.length<2) return false;
+  const hash=new URLSearchParams(location.hash.slice(1));
+  const accessToken=hash.get('access_token');
+  const oauthError=hash.get('error');
+  if(!accessToken&&!oauthError) return false;
+  const attendu=sessionStorage.getItem(GOOGLE_OAUTH_STATE_KEY)||'';
+  const recu=hash.get('state')||'';
+  try{history.replaceState(null,document.title,location.pathname+location.search);}catch(_){ }
+  sessionStorage.removeItem(GOOGLE_OAUTH_STATE_KEY);
+  if(oauthError){
+    googleDiag('Retour OAuth redirection en erreur',{error:oauthError,description:hash.get('error_description')});
+    setTimeout(()=>{const st=document.getElementById('drive-status');if(st)st.textContent='Connexion Google refusée : '+oauthError;},0);
+    return true;
+  }
+  if(!attendu||!recu||attendu!==recu){
+    googleDiag('Retour OAuth refusé : state invalide',{attendu:!!attendu,recu:!!recu});
+    setTimeout(()=>{const st=document.getElementById('drive-status');if(st)st.textContent='Connexion Google annulée (vérification de sécurité)';},0);
+    return true;
+  }
+  memoriserJetonGoogle(accessToken,hash.get('expires_in'));
+  googleDiag('Jeton OAuth reçu après redirection',{longueur:accessToken.length,expiresIn:hash.get('expires_in')});
+  setTimeout(()=>chargerProfilGoogle(),0);
+  return true;
+}
 
 // ── PROTECTION SAUVEGARDE / FERMETURE ──
 // Le navigateur n'autorise pas un message personnalisé au moment de fermer un onglet.
@@ -6204,7 +6297,7 @@ function afficherEtatGoogleDeconnecte(message='Reconnexion Google nécessaire'){
 }
 function gererDrive401(contexte='Drive'){
   console.warn('[MyCinebox Drive] Jeton expiré / non autorisé :',contexte);
-  _googleToken=null;
+  memoriserJetonGoogle(null,0);
   clearTimeout(_driveAutoSaveTimer);
   afficherEtatGoogleDeconnecte('Reconnexion Google nécessaire — jeton expiré');
   // On conserve google_was_connected pour permettre une reconnexion à la prochaine ouverture,
@@ -6220,9 +6313,16 @@ async function verifierReponseDrive(reponse,contexte){
 }
 
 function googleSignIn(){
-  googleDiag('Clic sur Se connecter',{googleDisponible:typeof google!=='undefined',instanceExistante:!!_googleClientInstance,origin:location.origin});
+  googleDiag('Clic sur Se connecter',{googleDisponible:typeof google!=='undefined',instanceExistante:!!_googleClientInstance,firefox:estFirefox(),origin:location.origin});
   const status=document.getElementById('drive-status');
   if(status) status.textContent='Connexion Google en cours…';
+
+  // Firefox : éviter complètement la popup GIS qui renvoie popup_closed.
+  if(estFirefox()){
+    demarrerOAuthGoogleParRedirection();
+    return;
+  }
+
   if(typeof google==='undefined'){
     googleDiag('Bibliothèque Google indisponible');
     if(status) status.textContent='Erreur : bibliothèque Google indisponible';
@@ -6240,13 +6340,19 @@ function googleSignIn(){
           snack('⚠️ Erreur connexion Google');
           return;
         }
-        _googleToken=resp.access_token;
+        memoriserJetonGoogle(resp.access_token,resp.expires_in);
         googleDiag('Jeton OAuth reçu',{longueur:_googleToken.length,scope:resp.scope,expiresIn:resp.expires_in});
         if(status) status.textContent='Jeton Google reçu, chargement du profil…';
         chargerProfilGoogle();
       },
       error_callback:(err)=>{
         googleDiag('Erreur popup OAuth',err);
+        // Si un Chromium atypique renvoie popup_closed, proposer le même secours par redirection.
+        if(err&&err.type==='popup_closed'){
+          if(status) status.textContent='Popup Google fermée — tentative par redirection…';
+          setTimeout(()=>demarrerOAuthGoogleParRedirection(),100);
+          return;
+        }
         if(status) status.textContent='Connexion interrompue : '+((err&&err.type)||'erreur popup');
         snack('⚠️ Fenêtre Google interrompue : '+((err&&err.type)||'erreur'));
       }
@@ -6300,7 +6406,7 @@ async function chargerProfilGoogle(){
 
 function googleSignOut(){
   if(typeof google!=='undefined'&&_googleToken) google.accounts.oauth2.revoke(_googleToken,()=>{});
-  _googleToken=null;
+  memoriserJetonGoogle(null,0);
   localStorage.removeItem('google_was_connected');
   document.getElementById('google-user-info').style.display='none';
   document.getElementById('btn-google-signin').style.display='block';
@@ -6584,6 +6690,9 @@ async function chargerDrive(auto=false){
   }catch(e){if(!auto) snack('⚠️ Erreur chargement Drive');}
   if(!auto&&btn){btn.textContent='☁️ Charger depuis Drive';btn.disabled=false;}
 }
+
+// Traiter immédiatement un retour OAuth par redirection (Firefox).
+traiterRetourOAuthGoogle();
 </script>
 
 <script>
