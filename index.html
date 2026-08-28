@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.71</title>
+<title>Vidéothèque v1.7.72</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -615,9 +615,10 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     <!-- Recherche TMDB unifiée : films, séries et personnes -->
     <div id="panel-tout">
       <div class="search-bar">
-        <input type="text" id="multi-query" placeholder="Film, série, émission, documentaire, acteur..." onkeydown="if(event.key==='Enter')searchTmdbMulti()">
+        <input type="text" id="multi-query" placeholder="Rechercher dans ma collection, puis ajouter si absent..." onkeydown="if(event.key==='Enter')searchTmdbMulti()">
         <button class="btn btn-primary" onclick="searchTmdbMulti()">🔍</button>
       </div>
+      <div id="multi-mode-info" style="display:none;margin:-4px 0 10px;padding:9px 11px;border-radius:9px;font-size:12px"></div>
       <div id="multi-loader" class="loader" style="display:none"><div class="spinner"></div></div>
       <div id="multi-filters" style="display:none;gap:6px;flex-wrap:wrap;margin-bottom:10px">
         <button class="sort-btn active" id="multi-filter-all" onclick="setMultiFilter('all',this)">Tout</button>
@@ -1064,7 +1065,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.71';
+const APP_VERSION='v1.7.72';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -3416,6 +3417,44 @@ function setSearchTab(tab){
 let multiSearchResults=[];
 let multiSearchFilter='all';
 
+// Dans l'onglet Recherche, on vérifie d'abord la médiathèque locale.
+// TMDB devient automatiquement le mode Ajout uniquement si aucun titre local ne correspond.
+function rechercherCollectionDepuisOngletRecherche(requete){
+  const q=(requete||'').trim();
+  if(!q) return [];
+  return films.map(f=>{
+    const texte=[f.titre||'',f.titreAlt||''].filter(Boolean).join(' ');
+    return {film:f,score:scoreRechercheSouple(q,texte)};
+  }).filter(x=>x.score>=0).sort((a,b)=>b.score-a.score||(b.film.annee||0)-(a.film.annee||0)).map(x=>x.film);
+}
+
+function renderResultatsCollectionRecherche(requete,trouves){
+  const results=document.getElementById('multi-results');
+  const filters=document.getElementById('multi-filters');
+  const info=document.getElementById('multi-mode-info');
+  if(filters) filters.style.display='none';
+  if(info){
+    info.style.display='block';
+    info.style.background='#17352c';
+    info.style.border='1px solid #356b58';
+    info.style.color='#c9f5e4';
+    info.innerHTML='✓ <strong>'+trouves.length+'</strong> résultat'+(trouves.length>1?'s':'')+' dans ta collection'
+      +'<button class="sort-btn" style="margin-left:10px" onclick="searchTmdbMulti(true)">➕ Chercher sur TMDB quand même</button>';
+  }
+  if(!results) return;
+  results.innerHTML=trouves.slice(0,80).map(f=>{
+    const cat=CATS[f.categorie]||CATS.films;
+    const meta=[f.annee||'',cat.icon+' '+cat.label,f.qualite||''].filter(Boolean).join(' • ');
+    const resume=f.resume||'';
+    return '<div class="result-item" onclick="ouvrirDetail('+f.id+')">'
+      +'<img src="'+esc(f.affichePath||'')+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="">'
+      +'<div class="result-info"><h4>'+esc(f.titre||'')+' <span style="font-size:10px;color:var(--green-light);font-weight:normal">✓ Dans ma collection</span></h4>'
+      +'<div class="rmeta">'+esc(meta)+'</div>'
+      +(resume?'<div class="roverview">'+esc(resume)+'</div>':'')+'</div>'
+      +'<span style="font-size:22px;color:var(--green-light)">›</span></div>';
+  }).join('');
+}
+
 function setMultiFilter(filter,btn){
   multiSearchFilter=filter;
   document.querySelectorAll('#multi-filters .sort-btn').forEach(b=>b.classList.remove('active'));
@@ -3476,14 +3515,35 @@ function renderMultiResults(){
   }).join('');
 }
 
-async function searchTmdbMulti(){
+async function searchTmdbMulti(forcerAjout=false){
   const q=(document.getElementById('multi-query')?.value||'').trim();
   if(!q) return;
-  const apiKey=ensureTmdbApiKey();
-  if(!apiKey){snack('⚠️ Configure ta clé TMDB dans Paramètres');return;}
   const loader=document.getElementById('multi-loader');
   const results=document.getElementById('multi-results');
   const filters=document.getElementById('multi-filters');
+  const info=document.getElementById('multi-mode-info');
+
+  // Recherche normale : priorité absolue à la collection.
+  // Le contexte « ajout à une saga » reste volontairement en mode TMDB.
+  if(!forcerAjout&&!sagaAjoutCourante){
+    const locaux=rechercherCollectionDepuisOngletRecherche(q);
+    if(locaux.length){
+      if(loader) loader.style.display='none';
+      renderResultatsCollectionRecherche(q,locaux);
+      return;
+    }
+  }
+
+  // Aucun résultat local (ou ajout explicitement demandé) : passage automatique en mode Ajout TMDB.
+  if(info){
+    info.style.display='block';
+    info.style.background='#342817';
+    info.style.border='1px solid #735c2d';
+    info.style.color='#ffe5a3';
+    info.innerHTML=(forcerAjout?'➕ <strong>Mode ajout TMDB</strong>':'➕ Aucun résultat dans ta collection — <strong>mode ajout TMDB</strong>');
+  }
+  const apiKey=ensureTmdbApiKey();
+  if(!apiKey){snack('⚠️ Configure ta clé TMDB dans Paramètres');return;}
   const searchId=++tmdbSearchSequence;
   loader.style.display='block';results.innerHTML='';filters.style.display='none';
   try{
