@@ -1,5 +1,5 @@
-// MyCinebox service worker — v1.7.72
-const CACHE_NAME = 'mycinebox-v1.7.72';
+// MyCinebox service worker — v1.7.73
+const CACHE_NAME = 'mycinebox-v1.7.73';
 const APP_SHELL = [
   '/MyCinebox/',
   '/MyCinebox/index.html',

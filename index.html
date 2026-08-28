@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.72</title>
+<title>Vidéothèque v1.7.73</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -472,7 +472,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     <div style="display:flex;gap:8px;margin-bottom:10px">
       <input type="search" placeholder="🔍 Rechercher par titre..." id="search-local"
         style="flex:1;background:var(--surface);border:1px solid #333;border-radius:10px;padding:10px 14px;color:#fff;font-size:14px;outline:none"
-        oninput="renderCollection()">
+        oninput="rechercheCollectionAvecFallback()"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();rechercheCollectionEnter();}">
       <button onclick="document.getElementById('search-local').value='';renderCollection()" title="Effacer la recherche"
         style="background:var(--surface);border:1px solid #333;border-radius:10px;padding:10px 14px;color:#fff;cursor:pointer">✕</button>
       <button id="btn-ajout-top" data-role="collection-add" onclick="ouvrirAjoutDepuisCollection()"
@@ -1065,7 +1066,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.72';
+const APP_VERSION='v1.7.73';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1479,12 +1480,57 @@ function nouveauFilm(data){
   };
 }
 
+let _rechercheFallbackTimer=null;
+let _rechercheFallbackSeq=0;
+
 function ouvrirRechercheCollection(){
   goPage('collection');
   setTimeout(()=>{
-    const input=document.getElementById('collection-search-input');
+    const input=document.getElementById('search-local');
     if(input){input.focus(); input.scrollIntoView({behavior:'smooth',block:'center'});}
   },100);
+}
+
+// Onglet Recherche (barre du bas) : on cherche d'abord dans la collection.
+// Si aucun résultat n'existe après une courte pause de frappe, on bascule
+// automatiquement vers l'ajout TMDB avec la même requête.
+function rechercheCollectionAvecFallback(){
+  const input=document.getElementById('search-local');
+  const q=(input?.value||'').trim();
+  if(_rechercheFallbackTimer){clearTimeout(_rechercheFallbackTimer);_rechercheFallbackTimer=null;}
+  const seq=++_rechercheFallbackSeq;
+  renderCollection();
+  if(q.length<2) return;
+  _rechercheFallbackTimer=setTimeout(()=>{
+    if(seq!==_rechercheFallbackSeq) return;
+    const courant=(document.getElementById('search-local')?.value||'').trim();
+    if(courant!==q) return;
+    if(Array.isArray(_listeFiltreCourante)&&_listeFiltreCourante.length===0){
+      basculerRechercheVersAjout(q);
+    }
+  },750);
+}
+
+function rechercheCollectionEnter(){
+  const q=(document.getElementById('search-local')?.value||'').trim();
+  if(_rechercheFallbackTimer){clearTimeout(_rechercheFallbackTimer);_rechercheFallbackTimer=null;}
+  ++_rechercheFallbackSeq;
+  renderCollection();
+  if(q && Array.isArray(_listeFiltreCourante) && _listeFiltreCourante.length===0){
+    basculerRechercheVersAjout(q);
+  }
+}
+
+function basculerRechercheVersAjout(requete){
+  const q=(requete||'').trim();
+  if(!q) return;
+  goPage('search');
+  setSearchTab('tout');
+  setTimeout(()=>{
+    const champ=document.getElementById('multi-query');
+    if(champ) champ.value=q;
+    searchTmdbMulti(true);
+  },60);
 }
 
 // ── NAVIGATION ──
