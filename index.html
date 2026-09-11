@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.75</title>
+<title>Vidéothèque v1.7.77</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -474,7 +474,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         style="flex:1;background:var(--surface);border:1px solid #333;border-radius:10px;padding:10px 14px;color:#fff;font-size:14px;outline:none"
         oninput="rechercheCollectionAvecFallback()"
         onkeydown="if(event.key==='Enter'){event.preventDefault();rechercheCollectionEnter();}">
-      <button onclick="document.getElementById('search-local').value='';renderCollection()" title="Effacer la recherche"
+      <button onclick="clearLocalSearch()" title="Effacer la recherche"
         style="background:var(--surface);border:1px solid #333;border-radius:10px;padding:10px 14px;color:#fff;cursor:pointer">✕</button>
       <button id="btn-ajout-top" data-role="collection-add" onclick="ouvrirAjoutDepuisCollection()"
         style="background:var(--green);border:1px solid var(--green-light);border-radius:10px;padding:10px 14px;color:#fff;font-size:22px;line-height:1;cursor:pointer" title="Ajouter un film, une série ou autre" aria-label="Ajouter">+</button>
@@ -616,7 +616,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     <!-- Recherche TMDB unifiée : films, séries et personnes -->
     <div id="panel-tout">
       <div class="search-bar">
-        <input type="text" id="multi-query" placeholder="Rechercher dans ma collection, puis ajouter si absent..." onkeydown="if(event.key==='Enter')searchTmdbMulti()">
+        <input type="text" id="multi-query" placeholder="Rechercher dans ma collection, puis ajouter si absent..." oninput="programmerRechercheMulti()" onkeydown="if(event.key==='Enter'){event.preventDefault();searchTmdbMulti();}">
         <button class="btn btn-primary" onclick="searchTmdbMulti()">🔍</button>
       </div>
       <div id="multi-mode-info" style="display:none;margin:-4px 0 10px;padding:9px 11px;border-radius:9px;font-size:12px"></div>
@@ -1066,7 +1066,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.75';
+const APP_VERSION='v1.7.77';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1495,17 +1495,7 @@ function ouvrirRechercheCollection(){
 // IMPORTANT : la décision de passer en mode Ajout ne dépend plus de la grille affichée
 // ni des filtres actifs. On vérifie directement les données de la médiathèque.
 function rechercheLocaleExistePourFallback(requete){
-  const q=(requete||'').trim();
-  if(!q) return false;
-  const nq=normaliser(q).trim();
-  const mots=nq.split(/\s+/).filter(Boolean);
-  return films.some(f=>{
-    const texteTitre=[f.titre,f.titreAlt].filter(Boolean).join(' ');
-    if(correspondRechercheTitre(q,texteTitre)) return true;
-    const metaGenres=normaliser([f.genres,f.sousGenres].filter(Boolean).join(' '));
-    const motsMeta=metaGenres.split(/[^a-z0-9]+/).filter(Boolean);
-    return mots.length>0 && mots.every(m=>motsMeta.includes(m));
-  });
+  return rechercherCollectionDepuisOngletRecherche(requete).length>0;
 }
 
 function rechercheCollectionAvecFallback(){
@@ -1518,7 +1508,7 @@ function rechercheCollectionAvecFallback(){
   _rechercheFallbackTimer=setTimeout(()=>{
     if(seq!==_rechercheFallbackSeq) return;
     const courant=(document.getElementById('search-local')?.value||'').trim();
-    if(courant!==q) return;
+    if(courant!==q||currentPage!=='collection') return;
     if(!rechercheLocaleExistePourFallback(q)){
       basculerRechercheVersAjout(q);
     }
@@ -1898,7 +1888,13 @@ function renderQuickGenres(){
   // Les genres rapides suivent la catégorie choisie (Films, Séries, etc.).
   // Pour les onglets de statut/saga, on part de toute la médiathèque visible.
   const catsNormales=['films','series','spectacles','documentaires','theatre','animation','humour'];
-  const src=catsNormales.includes(catTab)?films.filter(f=>f.categorie===catTab):films;
+  let src;
+  if(catsNormales.includes(catTab)) src=films.filter(f=>f.categorie===catTab);
+  else if(catTab==='atrouver') src=films.filter(f=>filmAStatut(f,'trouver'));
+  else if(catTab==='acritique') src=films.filter(f=>filmAStatut(f,'critique'));
+  else if(catTab==='avoir') src=films.filter(f=>filmAStatut(f,'avoir'));
+  else if(catTab==='plustard') src=films.filter(f=>filmAStatut(f,'plustard'));
+  else src=films;
   const compteur=new Map();
   src.filter(f=>statutEstVisible(f)).forEach(f=>{
     const vals=[...(f.genres||'').split(','),...(f.sousGenres||'').split(',')]
@@ -2028,15 +2024,20 @@ function renderCollection(){
   }
 
   let liste=films.filter(f=>{
+    if(rechercheGlobale) return [f.titre,f.titreAlt].filter(Boolean).some(t=>correspondRechercheTitre(q,t));
     if(!statutEstVisible(f)) return false;
     // Hors recherche textuelle, les onglets de catégories gardent leur comportement actuel.
     // Pendant une recherche, on ne limite pas au tab affiché : un titre doit pouvoir être
     // retrouvé même s'il est rangé dans « À trouver », « Critiques », une série, etc.
     if(!rechercheGlobale){
-      if(catTab==='atrouver') return filmAStatut(f,'trouver')&&(tagFiltres.catFilter===''||f.categorie===tagFiltres.catFilter);
-      if(catTab==='acritique') return filmAStatut(f,'critique')&&(tagFiltres.catFilter===''||f.categorie===tagFiltres.catFilter);
-      if(catTab==='avoir') return filmAStatut(f,'avoir');
-      if(catTab==='plustard') return filmAStatut(f,'plustard');
+      // Les onglets de statut filtrent d'abord le statut, puis laissent continuer
+      // le reste des filtres (genre, année, qualité, etc.). Avant v1.7.77,
+      // ces branches faisaient un `return true` trop tôt : le clic sur un genre
+      // était donc ignoré dans À voir / À trouver / Plus tard / Critiques.
+      if(catTab==='atrouver'&&(!filmAStatut(f,'trouver')||(tagFiltres.catFilter!==''&&f.categorie!==tagFiltres.catFilter))) return false;
+      if(catTab==='acritique'&&(!filmAStatut(f,'critique')||(tagFiltres.catFilter!==''&&f.categorie!==tagFiltres.catFilter))) return false;
+      if(catTab==='avoir'&&!filmAStatut(f,'avoir')) return false;
+      if(catTab==='plustard'&&!filmAStatut(f,'plustard')) return false;
       // Animation : afficher tout ce qui a catégorie animation OU genre Animation
       if(catTab==='animation'){
         const estAnimation=f.categorie==='animation'||(f.genres||'').toLowerCase().split(',').map(g=>g.trim()).includes('animation');
@@ -3482,10 +3483,8 @@ let multiSearchFilter='all';
 function rechercherCollectionDepuisOngletRecherche(requete){
   const q=(requete||'').trim();
   if(!q) return [];
-  return films.map(f=>{
-    const texte=[f.titre||'',f.titreAlt||''].filter(Boolean).join(' ');
-    return {film:f,score:scoreRechercheSouple(q,texte)};
-  }).filter(x=>x.score>=0).sort((a,b)=>b.score-a.score||(b.film.annee||0)-(a.film.annee||0)).map(x=>x.film);
+  return films.filter(f=>[f.titre,f.titreAlt].filter(Boolean).some(t=>correspondRechercheTitre(q,t)))
+    .sort((a,b)=>scoreRechercheSouple(q,b.titre||'')-scoreRechercheSouple(q,a.titre||''));
 }
 
 function renderResultatsCollectionRecherche(requete,trouves){
@@ -3575,7 +3574,23 @@ function renderMultiResults(){
   }).join('');
 }
 
+let _multiInputTimer=null;
+function programmerRechercheMulti(){
+  clearTimeout(_multiInputTimer);
+  ++tmdbSearchSequence;
+  const q=(document.getElementById('multi-query')?.value||'').trim();
+  if(!q){
+    multiSearchResults=[];
+    ['multi-results','multi-mode-info'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerHTML='';});
+    ['multi-loader','multi-filters'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+    return;
+  }
+  _multiInputTimer=setTimeout(()=>{if(currentPage==='search')searchTmdbMulti();},600);
+}
+
 async function searchTmdbMulti(forcerAjout=false){
+  clearTimeout(_multiInputTimer);
+  const searchId=++tmdbSearchSequence;
   const q=(document.getElementById('multi-query')?.value||'').trim();
   if(!q) return;
   const loader=document.getElementById('multi-loader');
@@ -3604,7 +3619,6 @@ async function searchTmdbMulti(forcerAjout=false){
   }
   const apiKey=ensureTmdbApiKey();
   if(!apiKey){snack('⚠️ Configure ta clé TMDB dans Paramètres');return;}
-  const searchId=++tmdbSearchSequence;
   loader.style.display='block';results.innerHTML='';filters.style.display='none';
   try{
     // La recherche d'ajout doit rester une vraie recherche TMDB :
@@ -3613,7 +3627,7 @@ async function searchTmdbMulti(forcerAjout=false){
     const variantes=variantesRequeteTmdb(q);
     const reponses=await Promise.all(variantes.map(v=>{
       const url=TMDB_API+'/search/multi?api_key='+encodeURIComponent(apiKey)+'&query='+encodeURIComponent(v)+'&language=fr-FR&include_adult=false';
-      return tmdbFetchJson(url,15000).catch(()=>({results:[]}));
+      return tmdbFetchJson(url,15000);
     }));
     if(searchId!==tmdbSearchSequence) return;
     const fusion=new Map();
@@ -6158,7 +6172,7 @@ window.addEventListener('load',()=>{
         client_id:GOOGLE_CLIENT_ID,
         scope:DRIVE_SCOPE,
         callback:(resp)=>{
-          googleDiag('Callback reconnexion automatique',resp);
+          googleDiag('Callback reconnexion automatique',{error:resp.error,jetonPresent:!!resp.access_token});
           if(resp.error||!resp.access_token) return;
           memoriserJetonGoogle(resp.access_token,resp.expires_in);
           googleDiag('Jeton reçu en reconnexion',{longueur:_googleToken.length});
@@ -6437,16 +6451,11 @@ function googleSignIn(){
   const status=document.getElementById('drive-status');
   if(status) status.textContent='Connexion Google en cours…';
 
-  // Firefox : éviter complètement la popup GIS qui renvoie popup_closed.
-  if(estFirefox()){
-    demarrerOAuthGoogleParRedirection();
-    return;
-  }
-
-  if(typeof google==='undefined'){
+  // Le flux GIS est ouvert directement par le clic, y compris sur Firefox.
+  // Une redirection forcée dépendait d'une URI supplémentaire autorisée chez Google.
+  if(typeof google==='undefined'||!google.accounts?.oauth2){
     googleDiag('Bibliothèque Google indisponible');
-    if(status) status.textContent='Erreur : bibliothèque Google indisponible';
-    snack('⚠️ Connexion Google disponible sur https:// uniquement');
+    if(status) status.textContent='Le module Google ne s’est pas chargé. Recharge la page ; si cela persiste, vérifie le bloqueur de contenu pour ce site.';
     return;
   }
   try{
@@ -6454,7 +6463,7 @@ function googleSignIn(){
       client_id:GOOGLE_CLIENT_ID,
       scope:DRIVE_SCOPE,
       callback:(resp)=>{
-        googleDiag('Callback OAuth reçu',resp);
+        googleDiag('Callback OAuth reçu',{error:resp.error,jetonPresent:!!resp.access_token});
         if(resp.error||!resp.access_token){
           if(status) status.textContent='Connexion refusée : '+(resp.error||'aucun jeton reçu');
           snack('⚠️ Erreur connexion Google');
@@ -6467,14 +6476,13 @@ function googleSignIn(){
       },
       error_callback:(err)=>{
         googleDiag('Erreur popup OAuth',err);
-        // Si un Chromium atypique renvoie popup_closed, proposer le même secours par redirection.
-        if(err&&err.type==='popup_closed'){
-          if(status) status.textContent='Popup Google fermée — tentative par redirection…';
-          setTimeout(()=>demarrerOAuthGoogleParRedirection(),100);
-          return;
-        }
-        if(status) status.textContent='Connexion interrompue : '+((err&&err.type)||'erreur popup');
-        snack('⚠️ Fenêtre Google interrompue : '+((err&&err.type)||'erreur'));
+        const type=err&&err.type;
+        if(status) status.textContent=type==='popup_failed_to_open'
+          ? 'Fenêtre Google bloquée. Autorise les fenêtres popup pour ce site, puis clique sur Se connecter.'
+          : type==='popup_closed'
+            ? 'Fenêtre Google fermée avant la fin de la connexion. Clique sur Se connecter pour réessayer.'
+            : 'Connexion interrompue : '+(type||'erreur popup');
+
       }
     });
     googleDiag('Client OAuth créé',{clientId:GOOGLE_CLIENT_ID,scope:DRIVE_SCOPE});
@@ -7189,7 +7197,7 @@ window.rafraichirFicheCourante = rafraichirFicheCourante;
 // v1.7.35 : recherche de collection séparée de l’ajout TMDB
 function clearLocalSearch(){
   const e=document.getElementById('search-local');
-  if(e){e.value='';renderCollection();e.focus();}
+  if(e){e.value='';rechercheCollectionAvecFallback();e.focus();}
 }
 
 // Affichage long appui tactile des images de fiche
