@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.77</title>
+<title>Vidéothèque v1.7.80</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1066,7 +1066,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.77';
+const APP_VERSION='v1.7.80';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -2031,7 +2031,7 @@ function renderCollection(){
     // retrouvé même s'il est rangé dans « À trouver », « Critiques », une série, etc.
     if(!rechercheGlobale){
       // Les onglets de statut filtrent d'abord le statut, puis laissent continuer
-      // le reste des filtres (genre, année, qualité, etc.). Avant v1.7.77,
+      // le reste des filtres (genre, année, qualité, etc.). Avant v1.7.80,
       // ces branches faisaient un `return true` trop tôt : le clic sur un genre
       // était donc ignoré dans À voir / À trouver / Plus tard / Critiques.
       if(catTab==='atrouver'&&(!filmAStatut(f,'trouver')||(tagFiltres.catFilter!==''&&f.categorie!==tagFiltres.catFilter))) return false;
@@ -6147,43 +6147,50 @@ function googleDiag(etape,details){
   if(details instanceof Error) console.error('[MyCinebox Google]',heure,etape,details);
   else console.log('[MyCinebox Google]',heure,etape,details===undefined?'':details);
 }
-// Reconnexion Google : réutiliser d'abord le jeton de la session.
-// Sur Firefox on ne lance plus de popup silencieuse au chargement : elle est souvent bloquée.
+// Réutiliser le jeton encore valide, puis tenter GIS une fois sur chaque navigateur.
+// Si le navigateur bloque la fenêtre, conserver un bouton de connexion explicite.
 window.addEventListener('load',()=>{
   const wasConnected=localStorage.getItem('google_was_connected');
-  googleDiag('Chargement de la page',{wasConnected:!!wasConnected,googleDisponible:typeof google!=='undefined',firefox:estFirefox(),origin:location.origin,href:location.href});
+  googleDiag('Chargement de la page',{wasConnected:!!wasConnected,googleDisponible:typeof google!=='undefined',firefox:estFirefox(),origin:location.origin});
   if(restaurerJetonGoogleSession()){
     googleDiag('Jeton Google restauré depuis la session');
     chargerProfilGoogle();
     return;
   }
   if(!wasConnected) return;
-  if(estFirefox()){
-    const status=document.getElementById('drive-status');
-    if(status) status.textContent='Google Drive : reconnexion manuelle nécessaire sur Firefox';
-    googleDiag('Firefox : reconnexion automatique désactivée pour éviter popup_closed');
-    return;
-  }
   setTimeout(()=>{
     googleDiag('Tentative de reconnexion automatique',{googleDisponible:typeof google!=='undefined'});
-    if(typeof google==='undefined'){ googleDiag('Reconnexion impossible : bibliothèque Google absente'); return; }
+    if(_googleToken||_googleClientInstance) return;
+    if(typeof google==='undefined'||!google.accounts?.oauth2){
+      afficherEtatGoogleDeconnecte('Module Google indisponible — recharge la page pour te reconnecter');
+      return;
+    }
     try{
       _googleClientInstance=google.accounts.oauth2.initTokenClient({
         client_id:GOOGLE_CLIENT_ID,
         scope:DRIVE_SCOPE,
         callback:(resp)=>{
           googleDiag('Callback reconnexion automatique',{error:resp.error,jetonPresent:!!resp.access_token});
-          if(resp.error||!resp.access_token) return;
+          if(resp.error||!resp.access_token){
+            afficherEtatGoogleDeconnecte('Google demande une confirmation — clique sur Se connecter');
+            return;
+          }
           memoriserJetonGoogle(resp.access_token,resp.expires_in);
           googleDiag('Jeton reçu en reconnexion',{longueur:_googleToken.length});
           chargerProfilGoogle();
         },
-        error_callback:(err)=>googleDiag('Erreur reconnexion automatique',err)
+        error_callback:(err)=>{
+          googleDiag('Erreur reconnexion automatique',err);
+          afficherEtatGoogleDeconnecte('Reconnexion automatique bloquée — clique sur Se connecter');
+        }
       });
       googleDiag('Client reconnexion créé');
       _googleClientInstance.requestAccessToken({prompt:''});
       googleDiag('Demande silencieuse envoyée');
-    }catch(e){googleDiag('Exception reconnexion automatique',e);}
+    }catch(e){
+      googleDiag('Exception reconnexion automatique',e);
+      afficherEtatGoogleDeconnecte('Clique sur Se connecter pour rétablir Google Drive');
+    }
   },2000);
 });
 const _sagaAffiches=JSON.parse(localStorage.getItem('sagaAffiches')||'{}');
@@ -6222,29 +6229,57 @@ const GOOGLE_OAUTH_STATE_KEY='mycinebox_google_oauth_state';
 function estFirefox(){
   return /firefox\//i.test(navigator.userAgent||'');
 }
+// Cache atomique à durée limitée : partagé entre ouvertures, jamais renouvelé localement.
+const GOOGLE_TOKEN_CACHE_KEY='mycinebox_google_session_v2';
 function memoriserJetonGoogle(token,expiresIn){
   _googleToken=token||null;
   try{
-    if(_googleToken){
-      sessionStorage.setItem(GOOGLE_SESSION_TOKEN_KEY,_googleToken);
-      const exp=Date.now()+Math.max(60,Number(expiresIn)||3600)*1000-60000;
-      sessionStorage.setItem(GOOGLE_SESSION_TOKEN_EXP_KEY,String(exp));
-    }else{
-      sessionStorage.removeItem(GOOGLE_SESSION_TOKEN_KEY);
-      sessionStorage.removeItem(GOOGLE_SESSION_TOKEN_EXP_KEY);
-    }
-  }catch(_){ }
-}
-function restaurerJetonGoogleSession(){
-  try{
-    const token=sessionStorage.getItem(GOOGLE_SESSION_TOKEN_KEY)||'';
-    const exp=Number(sessionStorage.getItem(GOOGLE_SESSION_TOKEN_EXP_KEY)||0);
-    if(token&&exp>Date.now()){ _googleToken=token; return true; }
     sessionStorage.removeItem(GOOGLE_SESSION_TOKEN_KEY);
     sessionStorage.removeItem(GOOGLE_SESSION_TOKEN_EXP_KEY);
   }catch(_){ }
+  try{
+    const seconds=Number(expiresIn);
+    if(_googleToken&&Number.isFinite(seconds)&&seconds>60){
+      localStorage.setItem(GOOGLE_TOKEN_CACHE_KEY,JSON.stringify({
+        token:_googleToken, expiresAt:Date.now()+(seconds-60)*1000
+      }));
+    }else localStorage.removeItem(GOOGLE_TOKEN_CACHE_KEY);
+  }catch(_){ }
+}
+function restaurerJetonGoogleSession(){
+  let cached=null;
+  try{ cached=JSON.parse(localStorage.getItem(GOOGLE_TOKEN_CACHE_KEY)||'null'); }catch(_){ }
+  if(cached&&typeof cached.token==='string'&&cached.token&&Number.isFinite(cached.expiresAt)&&cached.expiresAt>Date.now()){
+    _googleToken=cached.token;
+    return true;
+  }
+  try{ localStorage.removeItem(GOOGLE_TOKEN_CACHE_KEY); }catch(_){ }
+  // Migration de la session existante sans prolonger sa validité.
+  try{
+    const token=sessionStorage.getItem(GOOGLE_SESSION_TOKEN_KEY)||'';
+    const expiresAt=Number(sessionStorage.getItem(GOOGLE_SESSION_TOKEN_EXP_KEY)||0);
+    sessionStorage.removeItem(GOOGLE_SESSION_TOKEN_KEY);
+    sessionStorage.removeItem(GOOGLE_SESSION_TOKEN_EXP_KEY);
+    if(token&&Number.isFinite(expiresAt)&&expiresAt>Date.now()){
+      _googleToken=token;
+      try{localStorage.setItem(GOOGLE_TOKEN_CACHE_KEY,JSON.stringify({token,expiresAt}));}catch(_){ }
+      return true;
+    }
+  }catch(_){ }
+  _googleToken=null;
   return false;
 }
+window.addEventListener('storage',event=>{
+  if((event.key===GOOGLE_TOKEN_CACHE_KEY&&!event.newValue)||event.key===null){
+    _googleToken=null;
+    try{
+      sessionStorage.removeItem(GOOGLE_SESSION_TOKEN_KEY);
+      sessionStorage.removeItem(GOOGLE_SESSION_TOKEN_EXP_KEY);
+    }catch(_){ }
+    clearTimeout(_driveAutoSaveTimer);
+    afficherEtatGoogleDeconnecte('Session Google terminée dans un autre onglet');
+  }
+});
 function demarrerOAuthGoogleParRedirection(){
   const status=document.getElementById('drive-status');
   try{
@@ -6487,7 +6522,7 @@ function googleSignIn(){
     });
     googleDiag('Client OAuth créé',{clientId:GOOGLE_CLIENT_ID,scope:DRIVE_SCOPE});
     googleDiag('Ouverture du sélecteur de compte');
-    _googleClientInstance.requestAccessToken({prompt:'select_account'});
+    _googleClientInstance.requestAccessToken({prompt:localStorage.getItem('google_was_connected')?'':'select_account'});
   }catch(e){
     googleDiag('Exception dans googleSignIn',e);
     if(status) status.textContent='Erreur technique de connexion Google';
@@ -6529,9 +6564,11 @@ async function chargerProfilGoogle(){
 }
 
 function googleSignOut(){
-  if(typeof google!=='undefined'&&_googleToken) google.accounts.oauth2.revoke(_googleToken,()=>{});
+  try{if(typeof google!=='undefined'&&_googleToken) google.accounts.oauth2.revoke(_googleToken,()=>{});}catch(_){ }
   memoriserJetonGoogle(null,0);
   localStorage.removeItem('google_was_connected');
+  clearTimeout(_driveAutoSaveTimer);
+  afficherEtatGoogleDeconnecte('Déconnecté de Google');
   document.getElementById('google-user-info').style.display='none';
   document.getElementById('btn-google-signin').style.display='block';
   document.getElementById('btn-drive-save').style.display='none';
@@ -7233,3 +7270,4 @@ function trierQualitesAffichees(qs){
 </script>
 </body>
 </html>
+

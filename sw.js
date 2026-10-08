@@ -1,5 +1,5 @@
-// MyCinebox service worker — v1.7.77
-const CACHE_NAME = 'mycinebox-v1.7.77';
+// MyCinebox service worker — v1.7.80
+const CACHE_NAME = 'mycinebox-v1.7.80';
 const APP_SHELL = [
   '/MyCinebox/',
   '/MyCinebox/index.html',
@@ -51,3 +51,4 @@ self.addEventListener('fetch', event => {
       .catch(() => caches.match(request).then(cached => cached || caches.match('/MyCinebox/')))
   );
 });
+
