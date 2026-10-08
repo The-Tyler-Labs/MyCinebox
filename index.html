@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.80</title>
+<title>Vidéothèque v1.7.81</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -706,6 +706,23 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <div class="page" id="page-settings">
   <div style="padding-top:8px">
     <div class="settings-section">
+      <h3>☁️ Google Drive</h3>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Sauvegardez votre collection dans votre Google Drive.</p>
+      <div style="font-size:11px;color:var(--text2);background:var(--surface2);border:1px solid #333;border-radius:8px;padding:9px 10px;margin-bottom:10px;line-height:1.5">🛡️ Protection fermeture active : la collection est enregistrée localement avant la fermeture. Si des changements ne sont pas encore confirmés sur Drive, le navigateur demandera confirmation avant de quitter.</div>
+      <div id="google-user-info" style="display:none;align-items:center;gap:10px;margin-bottom:12px;background:var(--surface2);padding:10px;border-radius:10px">
+        <img id="google-avatar" src="" style="width:36px;height:36px;border-radius:50%">
+        <div><div id="google-name" style="font-size:13px;font-weight:bold"></div><div id="google-email" style="font-size:11px;color:var(--text2)"></div></div>
+        <button onclick="googleSignOut()" style="margin-left:auto;background:none;border:1px solid #444;color:var(--text2);border-radius:8px;padding:4px 10px;font-size:11px;cursor:pointer">Déco.</button>
+      </div>
+      <button id="btn-google-signin" class="btn btn-primary" style="width:100%;margin-bottom:8px;background:#4285f4" onclick="googleSignIn()">G Se connecter avec Google</button>
+      <button id="btn-drive-save" class="btn btn-primary" style="width:100%;margin-bottom:8px;display:none;background:#0f9d58" onclick="sauvegarderDrive()">☁️ Sauvegarder sur Drive</button>
+      <button id="btn-drive-load" class="btn" style="width:100%;margin-bottom:8px;display:none;background:var(--surface2);color:var(--text2);border:1px solid #333" onclick="chargerDrive()">☁️ Charger depuis Drive</button>
+      <button id="btn-drive-merge" class="btn" style="width:100%;margin-bottom:8px;display:none;background:#1a3a5c;color:#90d0ff;border:1px solid #333" onclick="chargerDriveAvecMerge()">🔀 Merger local + Drive</button>
+      <div id="drive-status" style="font-size:11px;color:var(--text2);text-align:center"></div>
+      <div id="drive-last-save" style="font-size:10px;color:#666;text-align:right;margin-top:4px;font-style:italic"></div>
+      <div id="drive-total" style="font-size:11px;color:var(--text2);text-align:center"></div>
+    </div>
+    <div class="settings-section">
       <h3>📊 Statistiques</h3>
       <div id="settings-stats" style="font-size:14px;line-height:2"></div>
     </div>
@@ -791,23 +808,6 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <button class="btn btn-primary" id="save-api-key-btn" style="flex:1" onclick="saveApiKey()">Sauvegarder</button>
         <button class="btn" id="test-api-key-btn" style="flex:1;background:var(--surface2);color:var(--text);border:1px solid #333" onclick="testerCleTmdb()">Tester la clé</button>
       </div></div>
-    </div>
-    <div class="settings-section">
-      <h3>☁️ Google Drive</h3>
-      <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Sauvegardez votre collection dans votre Google Drive.</p>
-      <div style="font-size:11px;color:var(--text2);background:var(--surface2);border:1px solid #333;border-radius:8px;padding:9px 10px;margin-bottom:10px;line-height:1.5">🛡️ Protection fermeture active : la collection est enregistrée localement avant la fermeture. Si des changements ne sont pas encore confirmés sur Drive, le navigateur demandera confirmation avant de quitter.</div>
-      <div id="google-user-info" style="display:none;align-items:center;gap:10px;margin-bottom:12px;background:var(--surface2);padding:10px;border-radius:10px">
-        <img id="google-avatar" src="" style="width:36px;height:36px;border-radius:50%">
-        <div><div id="google-name" style="font-size:13px;font-weight:bold"></div><div id="google-email" style="font-size:11px;color:var(--text2)"></div></div>
-        <button onclick="googleSignOut()" style="margin-left:auto;background:none;border:1px solid #444;color:var(--text2);border-radius:8px;padding:4px 10px;font-size:11px;cursor:pointer">Déco.</button>
-      </div>
-      <button id="btn-google-signin" class="btn btn-primary" style="width:100%;margin-bottom:8px;background:#4285f4" onclick="googleSignIn()">G Se connecter avec Google</button>
-      <button id="btn-drive-save" class="btn btn-primary" style="width:100%;margin-bottom:8px;display:none;background:#0f9d58" onclick="sauvegarderDrive()">☁️ Sauvegarder sur Drive</button>
-      <button id="btn-drive-load" class="btn" style="width:100%;margin-bottom:8px;display:none;background:var(--surface2);color:var(--text2);border:1px solid #333" onclick="chargerDrive()">☁️ Charger depuis Drive</button>
-      <button id="btn-drive-merge" class="btn" style="width:100%;margin-bottom:8px;display:none;background:#1a3a5c;color:#90d0ff;border:1px solid #333" onclick="chargerDriveAvecMerge()">🔀 Merger local + Drive</button>
-      <div id="drive-status" style="font-size:11px;color:var(--text2);text-align:center"></div>
-      <div id="drive-last-save" style="font-size:10px;color:#666;text-align:right;margin-top:4px;font-style:italic"></div>
-      <div id="drive-total" style="font-size:11px;color:var(--text2);text-align:center"></div>
     </div>
     <div class="settings-section">
       <h3>💾 Sauvegarde</h3>
@@ -1066,7 +1066,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.80';
+const APP_VERSION='v1.7.81';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1484,11 +1484,17 @@ let _rechercheFallbackTimer=null;
 let _rechercheFallbackSeq=0;
 
 function ouvrirRechercheCollection(){
-  goPage('collection');
-  setTimeout(()=>{
-    const input=document.getElementById('search-local');
-    if(input){input.focus(); input.scrollIntoView({behavior:'smooth',block:'center'});}
-  },100);
+  sagaAjoutCourante='';
+  goPage('search');
+  setSearchTab('tout');
+  const input=document.getElementById('multi-query');
+  const locale=document.getElementById('search-local');
+  if(input){
+    input.value=locale?.value||'';
+    input.focus();
+    if(input.value.trim()) searchTmdbMulti();
+    else programmerRechercheMulti();
+  }
 }
 
 // Onglet Recherche (barre du bas) : on cherche d'abord dans toute la collection.
@@ -1503,31 +1509,39 @@ function rechercheCollectionAvecFallback(){
   const q=(input?.value||'').trim();
   if(_rechercheFallbackTimer){clearTimeout(_rechercheFallbackTimer);_rechercheFallbackTimer=null;}
   const seq=++_rechercheFallbackSeq;
+  // Planifier le passage TMDB avant tout rendu de cartes/bannières.
+  if(q && !rechercheLocaleExistePourFallback(q)){
+    _rechercheFallbackTimer=setTimeout(()=>{
+      if(seq!==_rechercheFallbackSeq) return;
+      const courant=(document.getElementById('search-local')?.value||'').trim();
+      if(courant===q && currentPage==='collection') basculerRechercheVersAjout(q);
+    },600);
+    const grid=document.getElementById('coll-grid');
+    const empty=document.getElementById('coll-empty');
+    const count=document.getElementById('coll-count');
+    if(grid) grid.innerHTML='';
+    if(empty) empty.style.display='none';
+    if(count) count.textContent='Aucun titre dans ta collection — recherche sur TMDB…';
+    return;
+  }
   renderCollection();
-  if(q.length<2) return;
-  _rechercheFallbackTimer=setTimeout(()=>{
-    if(seq!==_rechercheFallbackSeq) return;
-    const courant=(document.getElementById('search-local')?.value||'').trim();
-    if(courant!==q||currentPage!=='collection') return;
-    if(!rechercheLocaleExistePourFallback(q)){
-      basculerRechercheVersAjout(q);
-    }
-  },600);
 }
 
 function rechercheCollectionEnter(){
   const q=(document.getElementById('search-local')?.value||'').trim();
-  if(_rechercheFallbackTimer){clearTimeout(_rechercheFallbackTimer);_rechercheFallbackTimer=null;}
+  clearTimeout(_rechercheFallbackTimer);
   ++_rechercheFallbackSeq;
-  renderCollection();
   if(q && !rechercheLocaleExistePourFallback(q)){
     basculerRechercheVersAjout(q);
+    return;
   }
+  renderCollection();
 }
 
 function basculerRechercheVersAjout(requete){
   const q=(requete||'').trim();
   if(!q) return;
+  sagaAjoutCourante='';
   goPage('search');
   setSearchTab('tout');
   setTimeout(()=>{
@@ -2031,7 +2045,7 @@ function renderCollection(){
     // retrouvé même s'il est rangé dans « À trouver », « Critiques », une série, etc.
     if(!rechercheGlobale){
       // Les onglets de statut filtrent d'abord le statut, puis laissent continuer
-      // le reste des filtres (genre, année, qualité, etc.). Avant v1.7.80,
+      // le reste des filtres (genre, année, qualité, etc.). Avant v1.7.81,
       // ces branches faisaient un `return true` trop tôt : le clic sur un genre
       // était donc ignoré dans À voir / À trouver / Plus tard / Critiques.
       if(catTab==='atrouver'&&(!filmAStatut(f,'trouver')||(tagFiltres.catFilter!==''&&f.categorie!==tagFiltres.catFilter))) return false;
@@ -6149,7 +6163,11 @@ function googleDiag(etape,details){
 }
 // Réutiliser le jeton encore valide, puis tenter GIS une fois sur chaque navigateur.
 // Si le navigateur bloque la fenêtre, conserver un bouton de connexion explicite.
-window.addEventListener('load',()=>{
+// Ne pas attendre window.load : les affiches et scripts externes peuvent rester en attente.
+let _googleStartupDone=false;
+function demarrerReconnexionGoogle(){
+  if(_googleStartupDone) return;
+  _googleStartupDone=true;
   const wasConnected=localStorage.getItem('google_was_connected');
   googleDiag('Chargement de la page',{wasConnected:!!wasConnected,googleDisponible:typeof google!=='undefined',firefox:estFirefox(),origin:location.origin});
   if(restaurerJetonGoogleSession()){
@@ -6158,11 +6176,13 @@ window.addEventListener('load',()=>{
     return;
   }
   if(!wasConnected) return;
-  setTimeout(()=>{
+  const limite=Date.now()+15000;
+  function attendreGoogle(){
     googleDiag('Tentative de reconnexion automatique',{googleDisponible:typeof google!=='undefined'});
     if(_googleToken||_googleClientInstance) return;
     if(typeof google==='undefined'||!google.accounts?.oauth2){
-      afficherEtatGoogleDeconnecte('Module Google indisponible — recharge la page pour te reconnecter');
+      if(Date.now()<limite){setTimeout(attendreGoogle,250);return;}
+      afficherEtatGoogleDeconnecte('Le module Google ne répond pas. Clique sur Se connecter pour réessayer.');
       return;
     }
     try{
@@ -6181,7 +6201,9 @@ window.addEventListener('load',()=>{
         },
         error_callback:(err)=>{
           googleDiag('Erreur reconnexion automatique',err);
-          afficherEtatGoogleDeconnecte('Reconnexion automatique bloquée — clique sur Se connecter');
+          afficherEtatGoogleDeconnecte(err&&err.type==='popup_failed_to_open'
+            ? 'Firefox ou le navigateur bloque la fenêtre Google. Autorise les popups pour ce site, puis recharge la page.'
+            : 'Connexion Google interrompue — clique sur Se connecter pour réessayer');
         }
       });
       googleDiag('Client reconnexion créé');
@@ -6191,8 +6213,14 @@ window.addEventListener('load',()=>{
       googleDiag('Exception reconnexion automatique',e);
       afficherEtatGoogleDeconnecte('Clique sur Se connecter pour rétablir Google Drive');
     }
-  },2000);
-});
+  }
+  attendreGoogle();
+}
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',demarrerReconnexionGoogle,{once:true});
+}else{
+  setTimeout(demarrerReconnexionGoogle,0);
+}
 const _sagaAffiches=JSON.parse(localStorage.getItem('sagaAffiches')||'{}');
 document.documentElement.style.setProperty('--cols',prefs.cols||2);
 document.documentElement.style.setProperty('--home-cols',prefs.homeCols||4);
@@ -7270,4 +7298,3 @@ function trierQualitesAffichees(qs){
 </script>
 </body>
 </html>
-
