@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.82</title>
+<title>Vidéothèque v1.7.83</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1070,7 +1070,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.82';
+const APP_VERSION='v1.7.83';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -2021,7 +2021,7 @@ function renderCollection(){
     // retrouvé même s'il est rangé dans « À trouver », « Critiques », une série, etc.
     if(!rechercheGlobale){
       // Les onglets de statut filtrent d'abord le statut, puis laissent continuer
-      // le reste des filtres (genre, année, qualité, etc.). Avant v1.7.82,
+      // le reste des filtres (genre, année, qualité, etc.). Avant v1.7.83,
       // ces branches faisaient un `return true` trop tôt : le clic sur un genre
       // était donc ignoré dans À voir / À trouver / Plus tard / Critiques.
       if(catTab==='atrouver'&&(!filmAStatut(f,'trouver')||(tagFiltres.catFilter!==''&&f.categorie!==tagFiltres.catFilter))) return false;
@@ -7061,7 +7061,7 @@ class Session {
       timeout = 90000,
     } = {},
   ) {
-    this.fetch = fetcher;
+    this.fetch = fetcher.bind(window || globalThis);
     this.window = window;
     this.storage = storage;
     this.loader = loader;
