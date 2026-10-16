@@ -1,54 +1,59 @@
-// MyCinebox service worker — v1.7.81
-const CACHE_NAME = 'mycinebox-v1.7.81';
-const APP_SHELL = [
-  '/MyCinebox/',
-  '/MyCinebox/index.html',
-  '/MyCinebox/manifest.json',
-  '/MyCinebox/icon-192.png',
-  '/MyCinebox/icon-512.png'
+const CACHE = "mycinebox-static-v31-20261016";
+const ASSETS = [
+  "./",
+  "./index.html",
+  "./app.css",
+  "./manifest.json",
+  "./icon-192.png",
+  "./icon-512.png",
+  "./js/config.js",
+  "./js/main.js",
+  "./js/app.js",
+  "./js/model.js",
+  "./js/store.js",
+  "./js/tmdb.js",
+  "./js/search.js",
+  "./js/session.js",
+  "./js/sync.js",
+  "./js/ui.js",
 ];
-
-self.addEventListener('install', event => {
-  self.skipWaiting();
+self.addEventListener("install", (event) =>
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS))),
+);
+self.addEventListener("activate", (event) =>
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache =>
-      Promise.allSettled(APP_SHELL.map(url => cache.add(url)))
-    )
-  );
-});
-
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys
-        .filter(key => key !== CACHE_NAME)
-        .map(key => caches.delete(key))
-      ))
-      .then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener('fetch', event => {
-  const request = event.request;
-  if (request.method !== 'GET') return;
-
-  const url = new URL(request.url);
-
-  // IMPORTANT : ne jamais intercepter les ressources externes (TMDB, Google APIs,
-  // Google Identity, images, etc.). Firefox signale sinon des erreurs du service worker.
-  if (url.origin !== self.location.origin) return;
-
-  // Fichiers MyCinebox : réseau d'abord, cache en secours.
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key.startsWith("mycinebox-") && key !== CACHE)
+            .map((key) => caches.delete(key)),
+        ),
+      )
+      .then(() => self.clients.claim()),
+  ),
+);
+self.addEventListener("fetch", (event) => {
+  const url = new URL(event.request.url);
+  if (
+    event.request.method !== "GET" ||
+    url.origin !== location.origin ||
+    !url.pathname.startsWith("/MyCinebox/") ||
+    url.search
+  )
+    return;
   event.respondWith(
-    fetch(request)
-      .then(response => {
-        if (response && response.ok) {
+    fetch(event.request)
+      .then((response) => {
+        if (response.ok) {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(request, copy)).catch(()=>{});
+          event.waitUntil(
+            caches.open(CACHE).then((cache) => cache.put(event.request, copy)),
+          );
         }
         return response;
       })
-      .catch(() => caches.match(request).then(cached => cached || caches.match('/MyCinebox/')))
+      .catch(() => caches.match(event.request)),
   );
 });
-
