@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.85</title>
+<title>Vidéothèque v1.7.86</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1070,7 +1070,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.85';
+const APP_VERSION='v1.7.86';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1414,6 +1414,7 @@ function definirStatutFilm(f,statut,actif){
   const liste=getFilmStatuts(f);
   const present=liste.includes(s);
   const doitEtreActif=actif===undefined?!present:!!actif;
+  if(present&&!doitEtreActif&&!confirmerSuppression('Retirer le statut « '+statutInfo(s).label+' » de « '+f.titre+' » ?'))return null;
   f.statuts=doitEtreActif?[...new Set([...liste,s])]:liste.filter(x=>x!==s);
   synchroniserStatutsFilm(f);
   return doitEtreActif;
@@ -2021,7 +2022,7 @@ function renderCollection(){
     // retrouvé même s'il est rangé dans « À trouver », « Critiques », une série, etc.
     if(!rechercheGlobale){
       // Les onglets de statut filtrent d'abord le statut, puis laissent continuer
-      // le reste des filtres (genre, année, qualité, etc.). Avant v1.7.85,
+      // le reste des filtres (genre, année, qualité, etc.). Avant v1.7.86,
       // ces branches faisaient un `return true` trop tôt : le clic sur un genre
       // était donc ignoré dans À voir / À trouver / Plus tard / Critiques.
       if(catTab==='atrouver'&&(!filmAStatut(f,'trouver')||(tagFiltres.catFilter!==''&&f.categorie!==tagFiltres.catFilter))) return false;
@@ -2171,6 +2172,7 @@ function actionRapide(action){
     return;
   }
   const actif=definirStatutFilm(f,action);
+  if(actif===null)return;
   sauvegarder();
   renderCollection();renderHome();
   snack((actif?'✓ Ajouté : ':'✓ Retiré : ')+statutInfo(action).label);
@@ -2515,6 +2517,7 @@ function fusionnerFilms(){
   const ids=[..._selectionIds];
   const aFusionner=films.filter(f=>ids.includes(f.id));
   if(aFusionner.length<2){snack('⚠️ Pas assez de fiches');return;}
+  if(!confirmerSuppression('Fusionner ces '+aFusionner.length+' fiches en une seule ? Les fiches d’origine seront retirées.'))return;
 
   // Fusionner les données
   const base=aFusionner[0];
@@ -2661,6 +2664,7 @@ function urlRechercheTrailerYoutube(f){
 function toggleStatutCarte(id,statut){
   const f=films.find(f=>f.id===id);if(!f)return;
   const actif=definirStatutFilm(f,statut);
+  if(actif===null)return;
   sauvegarder();
   if(currentPage==='home')renderHome();
   if(currentPage==='collection')renderCollection();
@@ -2671,7 +2675,7 @@ function cycleStatut(id){
   // Sur une fiche sans statut, le badge rapide ajoute « À trouver ».
   // Les autres statuts se choisissent indépendamment dans la fiche détaillée.
   if(!getFilmStatuts(f).length) definirStatutFilm(f,'trouver',true);
-  else definirStatutFilm(f,getFilmStatuts(f)[0],false);
+  else if(definirStatutFilm(f,getFilmStatuts(f)[0],false)===null)return;
   sauvegarder();
   if(currentPage==='home') renderHome();
   if(currentPage==='collection') renderCollection();
@@ -3022,6 +3026,7 @@ function setStatutDetailBtn(btn){
   const statut=btn.dataset.statut;
   const f=films.find(f=>f.id===id);if(!f) return false;
   const actif=definirStatutFilm(f,statut);
+  if(actif===null)return false;
   sauvegarder();
   btn.className='statut-opt '+statutInfo(statut).cls+(actif?' active':'');
   btn.setAttribute('aria-pressed',actif?'true':'false');
@@ -3060,6 +3065,7 @@ function toggleQualite(id,qualite,btn){
   const f=films.find(f=>f.id===id);if(!f) return;
   if(!f.qualites) f.qualites=[];
   const idx=f.qualites.indexOf(qualite);
+  if(idx>=0&&!confirmerSuppression('Retirer la qualité « '+qualite+' » de « '+f.titre+' » ?'))return;
   if(idx>=0){ f.qualites.splice(idx,1); btn.classList.remove('active'); }
   else { f.qualites.push(qualite); btn.classList.add('active'); }
   // Compat ancienne qualite string
@@ -3382,9 +3388,15 @@ function ajouterEditionRapide(id,label){
   snack('✓ '+label+' ajoutée');
 }
 
+function confirmerSuppression(message){
+  return confirm(message+'\n\nAnnuler conserve les données.');
+}
+
 function supprimerEdition(id,index){
   const f=films.find(x=>x.id===id); if(!f) return;
   const editions=getEditions(f);
+  if(!Number.isInteger(index)||index<0||index>=editions.length)return;
+  if(!confirmerSuppression('Supprimer la version « '+(editions[index].label||'Édition '+(index+1))+' » de « '+f.titre+' » ?'))return;
   editions.splice(index,1);
   f.versions=editions.map(e=>e.label);
   sauvegarder(); rafraichirEditions(f); renderCollection(); renderHome();
@@ -3438,6 +3450,8 @@ function ajouterVersionTexte(id,v){
 
 function supprimerVersion(id,idx){
   const f=films.find(f=>f.id===id);if(!f) return;
+  if(!Array.isArray(f.versions)||!Number.isInteger(idx)||idx<0||idx>=f.versions.length)return;
+  if(!confirmerSuppression('Supprimer la version « '+f.versions[idx]+' » de « '+f.titre+' » ?'))return;
   f.versions.splice(idx,1);sauvegarder();
   rafraichirVersions(f);
 }
@@ -5114,6 +5128,8 @@ function ajouterSousGenre(id){
 function supprimerSousGenre(id,idx){
   const f=films.find(f=>f.id===id);if(!f) return;
   const sousGenres=f.sousGenres?f.sousGenres.split(',').map(x=>x.trim()).filter(Boolean):[];
+  if(!Number.isInteger(idx)||idx<0||idx>=sousGenres.length)return;
+  if(!confirmerSuppression('Supprimer le sous-genre « '+sousGenres[idx]+' » de « '+f.titre+' » ?'))return;
   sousGenres.splice(idx,1);
   f.sousGenres=sousGenres.join(',');
   sauvegarder();
@@ -5408,6 +5424,8 @@ function ajouterGenre(id){
 function supprimerGenre(id,idx){
   const f=films.find(f=>f.id===id);if(!f) return;
   const genres=f.genres?f.genres.split(',').map(x=>x.trim()).filter(Boolean):[];
+  if(!Number.isInteger(idx)||idx<0||idx>=genres.length)return;
+  if(!confirmerSuppression('Supprimer le genre « '+genres[idx]+' » de « '+f.titre+' » ?'))return;
   genres.splice(idx,1);
   f.genres=genres.join(',');
   sauvegarder();
@@ -5418,7 +5436,10 @@ function supprimerGenre(id,idx){
 
 function sauvegarderSagaDetail(id){
   const f=films.find(f=>f.id===id);if(!f) return;
-  f.saga=(document.getElementById('saga-input-'+id).value||'').trim();
+  const input=document.getElementById('saga-input-'+id);
+  const saga=(input.value||'').trim();
+  if(f.saga&&!saga&&!confirmerSuppression('Retirer la saga « '+f.saga+' » de « '+f.titre+' » ?')){input.value=f.saga;return;}
+  f.saga=saga;
   sauvegarder();
   snack(f.saga?'🏷 Saga : '+f.saga:'Saga effacée');
 }
@@ -5472,6 +5493,7 @@ function toggleLangue(id,langue,btn){
   const f=films.find(f=>f.id===id);if(!f) return;
   if(!f.langues) f.langues=[];
   const idx=f.langues.indexOf(langue);
+  if(idx>=0&&!confirmerSuppression('Retirer la langue « '+langue+' » de « '+f.titre+' » ?'))return;
   if(idx>=0){f.langues.splice(idx,1);btn.classList.remove('active');}
   else{f.langues.push(langue);btn.classList.add('active');}
   sauvegarder();
@@ -5493,6 +5515,8 @@ function ajouterLangueCustom(id){
 
 function supprimerLangue(id,langue){
   const f=films.find(f=>f.id===id);if(!f) return;
+  if(!(f.langues||[]).includes(langue))return;
+  if(!confirmerSuppression('Retirer la langue « '+langue+' » de « '+f.titre+' » ?'))return;
   f.langues=(f.langues||[]).filter(l=>l!==langue);
   sauvegarder();
   afficherDetail(f);
@@ -5537,6 +5561,7 @@ function modifierTitreAlt(id){
   const f=films.find(f=>f.id===id);if(!f) return;
   const nouveau=prompt('Titre alternatif (entre parenthèses) :', f.titreAlt||'');
   if(nouveau===null) return;
+  if(f.titreAlt&&!nouveau.trim()&&!confirmerSuppression('Supprimer le titre alternatif « '+f.titreAlt+' » ?'))return;
   f.titreAlt=nouveau.trim();
   sauvegarder();
   afficherDetail(f);
@@ -5549,6 +5574,7 @@ function setSaisonQualite(id,numSaison,qualite,btn){
   if(!f.saisonQualites) f.saisonQualites={};
   const key='s'+numSaison;
   if(f.saisonQualites[key]===qualite){
+    if(!confirmerSuppression('Retirer la qualité « '+qualite+' » de la saison '+numSaison+' ?'))return;
     delete f.saisonQualites[key];
     btn.classList.remove('active');
   } else {
@@ -5581,6 +5607,7 @@ function modifierNomSaga(ancienNom){
 function sauvegarderQualiteSaison(id,numSaison,valeur){
   const f=films.find(f=>f.id===id);if(!f) return;
   if(!f.saisonQualites) f.saisonQualites={};
+  if(!valeur.trim()&&f.saisonQualites['s'+numSaison]&&!confirmerSuppression('Supprimer la qualité de la saison '+numSaison+' ?'))return;
   if(valeur.trim()) f.saisonQualites['s'+numSaison]=valeur.trim();
   else delete f.saisonQualites['s'+numSaison];
   sauvegarder();
@@ -5591,7 +5618,9 @@ function sauvegarderTitreAlt(id){
   const f=films.find(f=>f.id===id);if(!f) return;
   const input=document.getElementById('titrealt-'+id);
   if(!input) return;
-  f.titreAlt=(input.value||'').trim();
+  const titre=(input.value||'').trim();
+  if(f.titreAlt&&!titre&&!confirmerSuppression('Supprimer le titre alternatif « '+f.titreAlt+' » ?')){input.value=f.titreAlt;return;}
+  f.titreAlt=titre;
   sauvegarder();
 }
 
@@ -5657,6 +5686,7 @@ function sauvegarderEmplacement(id){
   const f=films.find(f=>f.id===id);if(!f) return;
   const input=document.getElementById('empl-input-'+id);
   const val=(input&&input.value||'').trim();
+  if(f.emplacement&&!val&&!confirmerSuppression('Effacer l’emplacement « '+f.emplacement+' » ?')){if(input)input.value=f.emplacement;return;}
   f.emplacement=val;sauvegarder();
   hideEmplSuggestions(id);
   const zone=document.getElementById('emplacement-zone-'+id);
@@ -6616,6 +6646,10 @@ async function chargerDrive(auto=false){
         return;
       }
     }
+    if(!auto&&films.length&&JSON.stringify(data)!==JSON.stringify(films)&&!confirmerSuppression('Remplacer la collection locale par la sauvegarde Drive ? Les données locales actuelles seront remplacées.')){
+      if(btn){btn.textContent='☁️ Charger depuis Drive';btn.disabled=false;}
+      return;
+    }
     // Avant tout remplacement depuis Drive, conserver une copie locale de récupération.
     // Ainsi une vieille sauvegarde Drive ne peut plus effacer définitivement la collection courante.
     await archiverSnapshotRecovery('avant chargement Drive',JSON.stringify(films));
@@ -6837,7 +6871,10 @@ function ajouterChecklistItem(index) {
 }
 
 function supprimerChecklistItem(index, itemIndex) {
-  notesData[index].items.splice(itemIndex, 1);
+  const items=notesData[index]?.items;
+  if(!Array.isArray(items)||!Number.isInteger(itemIndex)||itemIndex<0||itemIndex>=items.length)return;
+  if(!confirmerSuppression('Supprimer la tâche « '+(items[itemIndex].text||'Tâche sans texte')+' » ?'))return;
+  items.splice(itemIndex, 1);
   saveNotes();
   renderNotes();
 }
