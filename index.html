@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.84</title>
+<title>Vidéothèque v1.7.85</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1070,7 +1070,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.84';
+const APP_VERSION='v1.7.85';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -2021,7 +2021,7 @@ function renderCollection(){
     // retrouvé même s'il est rangé dans « À trouver », « Critiques », une série, etc.
     if(!rechercheGlobale){
       // Les onglets de statut filtrent d'abord le statut, puis laissent continuer
-      // le reste des filtres (genre, année, qualité, etc.). Avant v1.7.84,
+      // le reste des filtres (genre, année, qualité, etc.). Avant v1.7.85,
       // ces branches faisaient un `return true` trop tôt : le clic sur un genre
       // était donc ignoré dans À voir / À trouver / Plus tard / Critiques.
       if(catTab==='atrouver'&&(!filmAStatut(f,'trouver')||(tagFiltres.catFilter!==''&&f.categorie!==tagFiltres.catFilter))) return false;
@@ -2685,7 +2685,7 @@ let _detailActifId=null;
 function ouvrirDetail(id){
   const f=films.find(f=>f.id===id);if(!f) return;
   _detailActifId=f.id;
-  editionsOpenState[id]=getEditions(f).length>0;
+  editionsOpenState[id]=false;
   if(currentPage!=='detail'){
 
     rememberPageScroll(currentPage);prevPage=currentPage;
@@ -3194,7 +3194,7 @@ let editionPointerDrag=null;
 
 function editionsAreOpen(id){
   if(Object.prototype.hasOwnProperty.call(editionsOpenState,id))return editionsOpenState[id];
-  return getEditions(films.find(f=>f.id===id)).length>0;
+  return false;
 }
 
 function toggleEditionsSection(id){
@@ -3227,20 +3227,21 @@ function renderEditionsSection(f){
   const title=nb===1?'1 édition':nb+' éditions';
   return '<div class="editions-section" id="editions-section-'+f.id+'">'
     +'<button class="editions-toggle" onclick="toggleEditionsSection('+f.id+')" aria-expanded="'+(open?'true':'false')+'">'
-      +'<span>💿 Éditions / versions <span class="editions-toggle-sub">('+title+')</span></span>'
+      +'<span>💿 Éditions / versions <span class="editions-toggle-sub">('+title+') · '+(open?'Fermer l’ajout':'Ajouter une version')+'</span></span>'
       +'<span style="font-size:18px;line-height:1">'+(open?'⌃':'⌄')+'</span>'
     +'</button>'
-    +(open?'<div class="editions-content">'
+    +'<div class="editions-content">'
+      +'<div id="editions-list-'+f.id+'">'+renderEditionsList(f)+'</div>'
+    +(open?'<div class="edition-management">'
       +'<p style="font-size:11px;color:var(--text2);margin:0 0 8px">Garde une seule fiche pour le film et ajoute ici ses Director’s Cut, versions longues, non censurées, etc.</p>'
       +(nb>1?'<p class="edition-order-help">⋮⋮ Maintiens la poignée d’une version puis fais-la glisser pour changer l’ordre.</p>':'')
-      +'<div id="editions-list-'+f.id+'">'+renderEditionsList(f)+'</div>'
       +'<input class="version-input" id="edition-label-'+f.id+'" placeholder="Nom de l’édition (facultatif)" style="width:100%;box-sizing:border-box;margin:4px 0 8px">'
       +'<textarea class="version-input" id="edition-release-'+f.id+'" placeholder="Colle le nom complet du fichier / release : Terminator [Enhanced Extended Cut Open Matte Audio ITA non censurato] [1080p.x265.10bit.ITA.AC3.2.0] (by.phadron) MIRCrew" style="width:100%;min-height:74px;box-sizing:border-box;resize:vertical"></textarea>'
       +'<button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="ajouterEdition('+f.id+')">✨ Analyser et ajouter cette édition</button>'
       +'<div class="qualite-row" style="margin-top:10px">'
       +["Director's Cut",'Version longue','Version étendue','Version non censurée','Open Matte','Version cinéma','Remaster'].map(v=>'<button class="qualite-btn" onclick="ajouterEditionRapide('+f.id+',\''+v.replace(/'/g,"\\'")+'\')">'+v+'</button>').join('')
       +'</div></div>':'')
-    +'</div>';
+    +'</div></div>';
 }
 
 function editionMove(id,fromIndex,toIndex){
