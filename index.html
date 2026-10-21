@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.83</title>
+<title>Vidéothèque v1.7.84</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1070,7 +1070,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.83';
+const APP_VERSION='v1.7.84';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -2021,7 +2021,7 @@ function renderCollection(){
     // retrouvé même s'il est rangé dans « À trouver », « Critiques », une série, etc.
     if(!rechercheGlobale){
       // Les onglets de statut filtrent d'abord le statut, puis laissent continuer
-      // le reste des filtres (genre, année, qualité, etc.). Avant v1.7.83,
+      // le reste des filtres (genre, année, qualité, etc.). Avant v1.7.84,
       // ces branches faisaient un `return true` trop tôt : le clic sur un genre
       // était donc ignoré dans À voir / À trouver / Plus tard / Critiques.
       if(catTab==='atrouver'&&(!filmAStatut(f,'trouver')||(tagFiltres.catFilter!==''&&f.categorie!==tagFiltres.catFilter))) return false;
@@ -2212,7 +2212,7 @@ function itemCard(f){
     +'<span class="fc-stars">'+(f.maNote>0?'★'.repeat(Math.min(f.maNote,10)):'')+'</span></div>'
     +(f.saga?'<div style="font-size:10px;color:#90d0ff;padding:0 8px 2px">🎯 '+esc(f.saga)+'</div>':'')
     +(f.emplacement?'<div style="font-size:10px;color:var(--green-light);padding:0 8px 6px">📍 '+esc(f.emplacement)+'</div>':'')
-    +((Array.isArray(f.editions)?f.editions.length:0)>0?'<div style="font-size:10px;color:#c8b8ff;padding:0 8px 6px;font-weight:700">💿 '+f.editions.length+' version'+(f.editions.length>1?'s':'')+'</div>':'')
+    +renderResumeEditionCarte(f)
     +'</div></div>';
 }
 
@@ -2685,8 +2685,9 @@ let _detailActifId=null;
 function ouvrirDetail(id){
   const f=films.find(f=>f.id===id);if(!f) return;
   _detailActifId=f.id;
+  editionsOpenState[id]=getEditions(f).length>0;
   if(currentPage!=='detail'){
-    editionsOpenState[id]=false;
+
     rememberPageScroll(currentPage);prevPage=currentPage;
   }
 
@@ -3143,6 +3144,41 @@ function analyserNomEdition(texte){
   return {label,rawName:raw,details,languages,source};
 }
 
+// Résumé d’une seule édition : ne jamais mélanger la langue d’une copie
+// avec la résolution d’une autre. Le classement ne change pas l’ordre enregistré.
+function resumeEdition(e){
+  const list=value=>Array.isArray(value)?value:typeof value==='string'?[value]:[];
+  const text=[...list(e.details),e.qualite,e.quality,e.rawName,e.nomFichier,e.label,e.nom].filter(Boolean).join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/_/g,' ').toLowerCase();
+  const resolutions=[[/\b(?:4320[pi]?|8k)\b/,4320,'8K'],[/\b(?:2160[pi]?|4k|uhd)\b/,2160,'4K'],[/\b1080p\b|\bfull[ .-]?hd\b|\bfhd\b/,1080,'1080p'],[/\b1080i\b/,1079,'1080i'],[/\b720p\b/,720,'720p'],[/\b576[pi]\b/,576,'576p'],[/\b480[pi]\b/,480,'480p'],[/\b360p\b/,360,'360p']];
+  const resolution=resolutions.find(([regex])=>regex.test(text));
+  const quality=resolution?resolution[2]:/\bdvd(?:rip)?\b/.test(text)?'DVD':/\bsd\b/.test(text)?'SD':'';
+  const sourceText=text+' '+String(e.source||'').toLowerCase();
+  const source=/\bremux\b/.test(sourceText)?40:/blu[ .-]?ray|\bb[dr]rip\b/.test(sourceText)?30:/\bweb(?:rip|[ .-]?dl)?\b/.test(sourceText)?20:/\bhdtv\b/.test(sourceText)?15:/\bdvd(?:rip)?\b/.test(sourceText)?10:0;
+  const aliases={FR:'FR',FRA:'FR',FRE:'FR',FRENCH:'FR',FRANCAIS:'FR',VF:'FR',VFF:'FR',VFI:'FR',VFQ:'FR',TRUEFRENCH:'FR',EN:'EN',ENG:'EN',ENGLISH:'EN',ANGLAIS:'EN',IT:'IT',ITA:'IT',ITALIAN:'IT',ITALIEN:'IT',ES:'ES',SPA:'ES',SPANISH:'ES',ESPAGNOL:'ES',DE:'DE',DEU:'DE',GER:'DE',GERMAN:'DE',ALLEMAND:'DE',JA:'JA',JP:'JA',JPN:'JA',JAPANESE:'JA',JAPONAIS:'JA'};
+  let languages=list(e.languages).flatMap(v=>String(v).split(/\s*[/,;+|]\s*/)).map(v=>{const tag=v.trim().toUpperCase();return aliases[tag]||tag;}).filter(Boolean);
+  if(!languages.length){
+    for(const [regex,tag] of [[/\b(fr|fra|fre|french|francais|vf|vff|vfi|vfq|truefrench)\b/,'FR'],[/\b(en|eng|english|anglais)\b/,'EN'],[/\b(it|ita|italian[oa]?|italien)\b/,'IT'],[/\b(es|spa|spanish|espagnol)\b/,'ES'],[/\b(de|deu|ger|german|deutsch|allemand)\b/,'DE'],[/\b(ja|jp|jpn|jap|japanese|japonais)\b/,'JA']])if(regex.test(text))languages.push(tag);
+    if(!languages.length){if(/\bvostfr\b/.test(text))languages.push('VOSTFR');else if(/\bmulti\b/.test(text))languages.push('MULTI');else if(/\bvo\b/.test(text))languages.push('VO');}
+  }
+  languages=[...new Set(languages)];
+  const parts=[languages.join(' / '),quality].filter(Boolean);
+  const fallback=e.label||e.nom||'Qualité non précisée';
+  return {edition:e,label:parts.join(' · ')||fallback,resolution:resolution?resolution[1]:quality==='DVD'?576:quality==='SD'?480:0,light:/\blight\b/.test(text),source};
+}
+function meilleureEditionResume(f){
+  const candidates=getEditions(f).map(resumeEdition);
+  return candidates.reduce((best,item)=>{
+    if(!best)return item;
+    if(item.resolution!==best.resolution)return item.resolution>best.resolution?item:best;
+    if(item.light!==best.light)return item.light?best:item;
+    return item.source>best.source?item:best;
+  },null);
+}
+function renderResumeEditionCarte(f){
+  const best=meilleureEditionResume(f);
+  return best?'<div class="fc-edition" style="font-size:10px;color:#c8b8ff;padding:0 8px 6px;font-weight:700" title="'+esc(best.edition.label||best.label)+'">💿 '+esc(best.label)+'</div>':'';
+}
+
 function editionInfos(e){
   const infos=[];
   (e.details||[]).forEach(v=>ajouterUnique(infos,v));
@@ -3156,7 +3192,10 @@ const editionsOpenState={};
 let editionNativeDrag=null;
 let editionPointerDrag=null;
 
-function editionsAreOpen(id){ return editionsOpenState[id]===true; }
+function editionsAreOpen(id){
+  if(Object.prototype.hasOwnProperty.call(editionsOpenState,id))return editionsOpenState[id];
+  return getEditions(films.find(f=>f.id===id)).length>0;
+}
 
 function toggleEditionsSection(id){
   editionsOpenState[id]=!editionsAreOpen(id);
