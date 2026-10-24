@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.86</title>
+<title>Vidéothèque v1.7.87</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -722,7 +722,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <button id="btn-drive-save" class="btn btn-primary" style="width:100%;margin-bottom:8px;display:none;background:#0f9d58" onclick="sauvegarderDrive()">☁️ Sauvegarder sur Drive</button>
       <button id="btn-drive-load" class="btn" style="width:100%;margin-bottom:8px;display:none;background:var(--surface2);color:var(--text2);border:1px solid #333" onclick="chargerDrive()">☁️ Charger depuis Drive</button>
       <button id="btn-drive-merge" class="btn" style="width:100%;margin-bottom:8px;display:none;background:#1a3a5c;color:#90d0ff;border:1px solid #333" onclick="chargerDriveAvecMerge()">🔀 Merger local + Drive</button>
-      <div id="drive-status" style="font-size:11px;color:var(--text2);text-align:center"></div>
+      <div id="drive-status" role="status" aria-live="polite" style="font-size:11px;color:var(--text2);text-align:center"></div>
+      <button class="btn btn-sm" style="margin-top:8px;width:100%" onclick="afficherDiagnosticGoogle()">État de la connexion</button>
       <div id="drive-last-save" style="font-size:10px;color:#666;text-align:right;margin-top:4px;font-style:italic"></div>
       <div id="drive-total" style="font-size:11px;color:var(--text2);text-align:center"></div>
     </div>
@@ -1070,7 +1071,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.86';
+const APP_VERSION='v1.7.87';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -2022,7 +2023,7 @@ function renderCollection(){
     // retrouvé même s'il est rangé dans « À trouver », « Critiques », une série, etc.
     if(!rechercheGlobale){
       // Les onglets de statut filtrent d'abord le statut, puis laissent continuer
-      // le reste des filtres (genre, année, qualité, etc.). Avant v1.7.86,
+      // le reste des filtres (genre, année, qualité, etc.). Avant v1.7.87,
       // ces branches faisaient un `return true` trop tôt : le clic sur un genre
       // était donc ignoré dans À voir / À trouver / Plus tard / Critiques.
       if(catTab==='atrouver'&&(!filmAStatut(f,'trouver')||(tagFiltres.catFilter!==''&&f.categorie!==tagFiltres.catFilter))) return false;
@@ -6380,8 +6381,12 @@ async function verifierReponseDrive(reponse,contexte){
 }
 
 function googleSignIn(){
-  try { classicSession.signIn(document.getElementById('google-preferred-email').value).catch(()=>{}); }
-  catch(e){document.getElementById('drive-status').textContent=e.message;}
+  try {
+    classicSession.signIn(document.getElementById('google-preferred-email').value).then(
+      ()=>snack('✓ Compte Google connecté'),
+      error=>snack('⚠️ '+(error?.message||'Connexion Google interrompue.'))
+    );
+  }catch(error){const message=error?.message||'Connexion Google impossible.';document.getElementById('drive-status').textContent=message;snack('⚠️ '+message);}
 }
 function googleSignOut(){classicSession.logout();}
 
@@ -7087,6 +7092,7 @@ function trierQualitesAffichees(qs){
 <script>
 const Session=(()=>{
 const TOKEN_KEY = "mycinebox_google_token_v3";
+const ATTEMPT_KEY = "mycinebox_google_attempt_v1";
 const EMAIL_KEY = "mycinebox_google_email_v3";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const SCOPES = "openid email profile " + DRIVE_SCOPE;
@@ -7167,6 +7173,7 @@ class Session {
     this.state = {
       status: "checking",
       ready: false,
+      step: "demarrage",
       message: "Vérification de l’accès Google…",
       account: null,
     };
@@ -7238,14 +7245,30 @@ class Session {
         "L’accès Google a expiré. Clique sur Se connecter pour le renouveler.",
     });
   }
+  mark(step) {
+    try { this.storage?.setItem(ATTEMPT_KEY,JSON.stringify({step,time:this.now()})); } catch {}
+    this.set({step});
+  }
+  recentAttempt() {
+    try { const item=JSON.parse(this.storage?.getItem(ATTEMPT_KEY)||'null');return item&&this.now()-item.time<300000?item:null; }catch{return null;}
+  }
+  async request(url, options={}, deadline=12000) {
+    const controller=new AbortController();
+    let timer;
+    try {
+      return await Promise.race([
+        this.fetch(url,{...options,signal:controller.signal}),
+        new Promise((_,reject)=>{timer=setTimeout(()=>{reject(Error('Google ne répond pas au réseau. Réessaie la connexion.'));controller.abort();},deadline);})
+      ]);
+    } finally {clearTimeout(timer);}
+  }
   async profile(token) {
-    const r = await this.fetch(
+    const r = await this.request(
       "https://openidconnect.googleapis.com/v1/userinfo",
       {
         headers: { Authorization: "Bearer " + token.accessToken },
         cache: "no-store",
         credentials: "omit",
-        signal: AbortSignal.timeout(12000),
       },
     );
     if (!r.ok) {
@@ -7260,6 +7283,7 @@ class Session {
   }
   activate(token, account) {
     this.token = token;
+    this.mark("compte-verifie");
     this.setEmail(account.email);
     try {
       this.storage?.setItem(TOKEN_KEY, JSON.stringify(token));
@@ -7281,7 +7305,10 @@ class Session {
     });
   }
   async check() {
-    if (this.state.status === "authorizing") return;
+    if (this.state.status === "authorizing") {
+      if(this.authDeadline&&this.now()>=this.authDeadline)this.cancelPending?.('Google n’a pas terminé la connexion. Clique sur Se connecter pour réessayer.');
+      return;
+    }
     if (this.pending) return this.pending;
     const token = this.token || this.cacheRead();
     if (!token || token.expiresAt <= this.now() + 15000) {
@@ -7289,7 +7316,9 @@ class Session {
       this.set({
         status: "disconnected",
         account: null,
-        message: "Connecte ton compte Google pour sauvegarder sur Drive.",
+        message: this.recentAttempt()?.step==='attente-retour-google'
+          ? "Retour de Google sans autorisation reçue dans cet onglet. Clique sur Se connecter pour réessayer."
+          : "Connecte ton compte Google pour sauvegarder sur Drive.",
       });
       return;
     }
@@ -7297,7 +7326,11 @@ class Session {
     this.pending = (async () => {
       try {
         const account = await this.profile(token);
-        if (epoch === this.epoch) this.activate(token, account);
+        if (epoch !== this.epoch)return;
+        if(token.requestedEmail&&account.email.toLowerCase()!==token.requestedEmail.toLowerCase()){
+          this.clearToken();this.set({status:'disconnected',account:null,message:'Le compte Google reçu ne correspond pas à l’adresse demandée. Reconnecte-toi.'});return;
+        }
+        this.activate(token, account);
       } catch (e) {
         if (epoch !== this.epoch) return;
         if (e.status === 401 || e.status === 403) this.expire();
@@ -7323,6 +7356,8 @@ class Session {
     this.setEmail(email);
     const epoch = ++this.epoch;
     this.clearToken();
+    this.mark("attente-retour-google");
+    this.authDeadline=this.now()+this.timeout;
     this.set({
       status: "authorizing",
       account: null,
@@ -7332,21 +7367,27 @@ class Session {
       let settled = false,
         receivedToken = false;
       const requestedEmail = this.preferredEmail;
-      const fail = (message) => {
+      const fail = (message, keepCandidate=false) => {
         if (settled || epoch !== this.epoch) return;
         settled = true;
         clearTimeout(this.authTimer);
+        clearTimeout(this.popupCloseTimer);
+        this.authDeadline=0;
+        if(!keepCandidate)this.clearToken();
+        this.mark('connexion-interrompue');
         this.cancelPending = null;
+        message=message||'Connexion Google interrompue. Réessaie.';
         this.set({ status: "disconnected", account: null, message });
         reject(Error(message));
       };
-      this.cancelPending = () => fail("Connexion annulée. Tu peux réessayer.");
+      this.cancelPending = (message) => fail(message||"Connexion annulée. Tu peux réessayer.");
       this.authTimer = setTimeout(
         () => fail("Google n’a pas terminé la connexion. Tu peux réessayer."),
         this.timeout,
       );
       const callback = async (response) => {
         if (settled || epoch !== this.epoch) return;
+        if(!response||typeof response!=="object")return fail("Réponse Google absente. Réessaie.");
         if (response.error)
           return fail(
             response.error === "access_denied"
@@ -7365,11 +7406,18 @@ class Session {
             "Autorise l’accès aux fichiers Drive de MyCinebox pour sauvegarder.",
           );
         receivedToken = true;
+        clearTimeout(this.popupCloseTimer);
+        this.mark('autorisation-recue');
+        this.set({message:'Autorisation Google reçue — vérification du compte…'});
         const token = {
           clientId: this.clientId,
           accessToken: response.access_token,
           expiresAt: this.now() + Math.min(seconds, 86400) * 1000,
+          requestedEmail,
         };
+        // Android may discard the opener while the account selector is visible.
+        // Preserve only the short-lived authorization; account identity is checked again after reload.
+        try {this.storage?.setItem(TOKEN_KEY,JSON.stringify(token));}catch{}
         try {
           const account = await this.profile(token);
           if (settled || epoch !== this.epoch) return;
@@ -7386,11 +7434,12 @@ class Session {
             );
           settled = true;
           clearTimeout(this.authTimer);
+          this.authDeadline=0;
           this.cancelPending = null;
           this.activate(token, account);
           resolve(account);
         } catch (e) {
-          fail(e.message);
+          fail(e?.message||"Impossible de vérifier le compte Google. Vérifie le réseau et réessaie.", !e?.status);
         }
       };
       try {
@@ -7400,6 +7449,12 @@ class Session {
           include_granted_scopes: true,
           callback,
           error_callback: (error) => {
+            if(error?.type==='popup_closed'&&!receivedToken){
+              this.set({message:'Retour de la fenêtre Google — attente de l’autorisation…'});
+              clearTimeout(this.popupCloseTimer);
+              this.popupCloseTimer=setTimeout(()=>{if(!receivedToken)fail('La fenêtre Google est revenue sans autorisation. Clique sur Se connecter pour réessayer.');},350);
+              return;
+            }
             if (!receivedToken)
               fail(
                 error.type === "popup_closed"
@@ -7450,13 +7505,12 @@ class Session {
     const headers = new Headers(options.headers);
     headers.delete("X-CSRF-Token");
     headers.set("Authorization", "Bearer " + this.token.accessToken);
-    const r = await this.fetch(target, {
+    const r = await this.request(target, {
       ...options,
       headers,
       credentials: "omit",
       cache: "no-store",
-      signal: AbortSignal.timeout(25000),
-    });
+    },25000);
     if (r.status === 401) {
       this.expire();
       throw Error(this.state.message);
@@ -7474,12 +7528,18 @@ class Session {
     this.cancelSignIn();
     clearTimeout(this.expiryTimer);
     clearTimeout(this.authTimer);
+    clearTimeout(this.popupCloseTimer);
     this.listeners.clear();
   }
 }
 ;return Session;})();
 
 const classicSession=new Session();
+function afficherDiagnosticGoogle(){
+  const state=classicSession.state;
+  const cached=classicSession.cacheRead();
+  alert('MyCinebox '+APP_VERSION+'\nÉtape : '+(state.step||'inconnue')+'\nÉtat : '+state.status+'\nModule Google : '+(state.ready?'chargé':'non chargé')+'\nAutorisation temporaire disponible : '+(cached?'oui':'non')+'\n\n'+state.message);
+}
 let classicAccount=null;
 classicSession.subscribe(state=>{
   _googleToken=state.status==='connected'?classicSession.token?.accessToken:null;
