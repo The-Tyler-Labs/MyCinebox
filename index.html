@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.88</title>
+<title>Vidéothèque v1.7.89</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -860,6 +860,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     <p id="media-picker-help" style="font-size:12px;color:var(--text2);margin:0 0 12px">Choisis une image TMDB ou importe la tienne.</p>
     <button class="btn btn-primary" type="button" style="width:100%;margin-bottom:12px" onclick="document.getElementById('media-upload-input').click()">📤 Importer une image depuis cet appareil</button>
     <input id="media-upload-input" type="file" accept="image/*" style="display:none" onchange="importerImageMedia(this)">
+    <div id="backdrop-saved-gallery" style="margin-bottom:12px"></div>
     <div id="affiche-film-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px"></div>
     <button class="btn" style="width:100%;margin-top:14px;background:var(--surface2);color:var(--text2)" onclick="fermerModal('modal-affiche-film')">Fermer</button>
   </div>
@@ -1071,7 +1072,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.88';
+const APP_VERSION='v1.7.89';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1472,6 +1473,7 @@ function nouveauFilm(data){
     id:nextId(),tmdbId:data.tmdbId||null,categorie:data.categorie||'films',
     titre:data.titre||'',resume:data.resume||'',
     affichePath:data.affichePath||null,backdropPath:data.backdropPath||null,
+    ...(Array.isArray(data.backdropPhotos)?{backdropPhotos:[...data.backdropPhotos]}:{}),
     dateSortie:data.dateSortie||'',notesTmdb:data.notesTmdb||0,
     genres:data.genres||'',sousGenres:data.sousGenres||'',casting:data.casting||'',
     realisateur:data.realisateur||'',producteur:data.producteur||'',
@@ -2539,6 +2541,8 @@ function fusionnerFilms(){
     ...base,
     id:nextId(),
     titre,
+    backdropPhotos:[...new Set(aFusionner.flatMap(getPhotosDuHaut))],
+    backdropPath:aFusionner.flatMap(getPhotosDuHaut)[0]||null,
     categorie:_fusionCat,
     genres:tousGenres.join(','),
     pays:tousPays,
@@ -2827,12 +2831,7 @@ function afficherDetail(f){
   }
 
   document.getElementById('detail-content').innerHTML=
-    '<div style="position:relative">'
-    +'<img class="detail-backdrop" src="'+(f.backdropPath||f.affichePath||'')+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="" onclick="voirPhoto(this.src)" style="cursor:pointer" title="Cliquer pour agrandir">'
-    +'<button onclick="goPage(prevPage)" style="position:absolute;top:12px;left:12px;background:rgba(0,0,0,.6);border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-size:20px;border:none;color:#fff;cursor:pointer">←</button>'
-    +'<span style="position:absolute;top:12px;right:12px;background:rgba(0,0,0,.6);padding:4px 10px;border-radius:12px;font-size:13px">'+cat.icon+' '+cat.label+'</span>'
-    +'<button onclick="choisirBackdropFilm('+f.id+')" style="position:absolute;bottom:10px;right:12px;background:rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.35);border-radius:14px;padding:6px 10px;color:#fff;font-size:11px;cursor:pointer">🖼 Photo du haut</button>'
-    +'</div>'
+    renderPhotosDuHaut(f,cat)
     +'<div class="detail-body">'
     +'<div class="detail-header">'
     +'<img class="detail-poster" src="'+(f.affichePath||'')+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="" onclick="voirPhoto(\''+(f.affichePath||'')+'\')" style="cursor:pointer" title="Voir en grand">'
@@ -5200,6 +5199,74 @@ function setAfficheSaga(saga,affiche){
   snack('✓ Affiche de la saga mise à jour');
 }
 
+function getPhotosDuHaut(f){
+  const photos=Array.isArray(f.backdropPhotos)?f.backdropPhotos:[f.backdropPath];
+  return [...new Set(photos.filter(p=>typeof p==='string'&&p))];
+}
+
+function definirPhotosDuHaut(f,photos){
+  f.backdropPhotos=[...new Set(photos)];
+  f.backdropPath=f.backdropPhotos[0]||null;
+}
+
+function voirPhotosDuHaut(id,index=0){
+  const f=films.find(x=>x.id===id);if(!f)return;
+  const photos=getPhotosDuHaut(f);
+  if(!photos.length&&f.affichePath)photos.push(f.affichePath);
+  voirPhoto(photos[0],photos,index);
+}
+
+function renderPhotosDuHaut(f,cat){
+  const photos=getPhotosDuHaut(f);
+  return '<div style="position:relative">'
+    +'<img class="detail-backdrop" data-gallery="true" src="'+attr(photos[0]||f.affichePath||'')+'" alt="Photo principale" onclick="voirPhotosDuHaut('+f.id+')" style="cursor:pointer" title="Voir les photos en grand">'
+    +'<button onclick="goPage(prevPage)" style="position:absolute;top:12px;left:12px;background:rgba(0,0,0,.6);border-radius:50%;width:38px;height:38px;font-size:20px;border:none;color:#fff;cursor:pointer">←</button>'
+    +'<span style="position:absolute;top:12px;right:12px;background:rgba(0,0,0,.6);padding:4px 10px;border-radius:12px;font-size:13px">'+cat.icon+' '+cat.label+'</span>'
+    +'<button onclick="choisirBackdropFilm('+f.id+')" style="position:absolute;bottom:10px;right:12px;background:rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.35);border-radius:14px;padding:6px 10px;color:#fff;font-size:11px;cursor:pointer">🖼 Photos du haut'+(photos.length?' ('+photos.length+')':'')+'</button>'
+    +'</div>'
+    +(photos.length>1?'<div aria-label="Photos du haut" style="display:flex;gap:8px;overflow-x:auto;padding:8px 12px;background:#111">'+photos.map((url,i)=>'<button type="button" onclick="voirPhotosDuHaut('+f.id+','+i+')" aria-label="Agrandir la photo '+(i+1)+'" style="padding:0;border:1px solid #555;border-radius:6px;background:#000;flex:0 0 72px;overflow:hidden"><img src="'+attr(url)+'" alt="Photo '+(i+1)+'" loading="lazy" style="display:block;width:72px;height:48px;object-fit:cover"></button>').join('')+'</div>':'');
+}
+
+function renderGestionPhotosDuHaut(f,cible='backdrop'){
+  const zone=document.getElementById('backdrop-saved-gallery');if(!zone)return;
+  zone.innerHTML=cible!=='backdrop'?'':getPhotosDuHaut(f).map((url,i)=>
+    '<div style="display:inline-flex;position:relative;margin:6px 12px 6px 0;vertical-align:top">'
+    +'<button type="button" onclick="voirPhotosDuHaut('+f.id+','+i+')" aria-label="Voir la photo '+(i+1)+'" style="border:0;padding:0;background:#000"><img src="'+attr(url)+'" alt="Photo '+(i+1)+'" style="display:block;width:90px;height:60px;object-fit:cover;border-radius:6px"></button>'
+    +'<button type="button" onclick="supprimerPhotoDuHaut('+f.id+','+i+')" aria-label="Supprimer la photo '+(i+1)+'" style="position:absolute;right:-8px;top:-8px;background:#b52b27;border:0;border-radius:50%;color:#fff;width:26px;height:26px;cursor:pointer">✕</button></div>'
+  ).join('');
+}
+
+function supprimerPhotoDuHaut(id,index){
+  const f=films.find(x=>x.id===id);if(!f)return;
+  const photos=getPhotosDuHaut(f);
+  if(!Number.isInteger(index)||index<0||index>=photos.length)return;
+  if(!confirmerSuppression('Supprimer la photo '+(index+1)+' du haut de « '+f.titre+' » ?'))return;
+  photos.splice(index,1);definirPhotosDuHaut(f,photos);
+  sauvegarder();afficherDetail(f);renderGestionPhotosDuHaut(f);
+}
+
+async function importerPhotosDuHaut(id,input){
+  const f=films.find(x=>x.id===id);
+  const files=Array.from(input&&input.files||[]);
+  if(!f||!files.length||input.disabled)return;
+  if(files.some(file=>!String(file.type||'').startsWith('image/'))){
+    snack('⚠️ Choisis uniquement des fichiers image.');input.value='';return;
+  }
+  input.disabled=true;snack('Préparation des photos du haut…');
+  try{
+    const photos=[];
+    for(const file of files)photos.push(await compresserImageImportee(file,1280,1280,260000,.60));
+    if(!films.includes(f))return;
+    definirPhotosDuHaut(f,[...getPhotosDuHaut(f),...photos]);
+    sauvegarder();afficherDetail(f);
+    if(window._mediaFilmId===id&&window._mediaTarget==='backdrop')renderGestionPhotosDuHaut(f);
+    snack('✓ '+photos.length+' photo(s) ajoutée(s) en haut de la fiche');
+  }catch(e){
+    console.error('[MyCinebox] Import des photos du haut échoué',e);
+    snack('⚠️ Impossible d’importer ces photos. Réessaie avec un autre fichier.');
+  }finally{input.disabled=false;input.value='';}
+}
+
 function choisirAfficheFilm(id){
   ouvrirChoixImageFilm(id,'poster');
 }
@@ -5219,9 +5286,12 @@ function ouvrirChoixImageFilm(id,cible){
 
   window._mediaFilmId=id;
   window._mediaTarget=cible;
-  if(input) input.value='';
-  if(title) title.textContent=cible==='backdrop'?'🖼 Choisir la photo du haut':'🖼 Choisir une affiche';
-  if(help) help.textContent='Choisis une image proposée par TMDB ou importe une image depuis ton téléphone, ta tablette ou ton PC.';
+  if(input){input.value='';input.multiple=cible==='backdrop';}
+  if(title) title.textContent=cible==='backdrop'?'🖼 Photos du haut':'🖼 Choisir une affiche';
+  if(help) help.textContent=cible==='backdrop'?'Ajoute plusieurs photos depuis ton appareil ou clique sur les images TMDB. La première est la photo principale.':'Choisis une image proposée par TMDB ou importe une image depuis ton appareil.';
+  const uploadButton=input?.previousElementSibling;
+  if(uploadButton) uploadButton.textContent=cible==='backdrop'?'📤 Importer des photos depuis cet appareil':'📤 Importer une image depuis cet appareil';
+  renderGestionPhotosDuHaut(f,cible);
   grid.style.gridTemplateColumns=cible==='backdrop'?'repeat(2,1fr)':'repeat(3,1fr)';
   grid.innerHTML='<div style="grid-column:1/-1;color:var(--text2);font-size:12px;text-align:center;padding:10px">Chargement des images proposées…</div>';
   modal.classList.add('open');
@@ -5261,9 +5331,10 @@ function ouvrirChoixImageFilm(id,cible){
 }
 
 function importerImageMedia(input){
-  const file=input&&input.files&&input.files[0];
   const id=window._mediaFilmId;
   const cible=window._mediaTarget||'poster';
+  if(cible==='backdrop') return importerPhotosDuHaut(id,input);
+  const file=input&&input.files&&input.files[0];
   const f=films.find(x=>x.id===id);
   if(!file||!f) return;
   if(!String(file.type||'').startsWith('image/')){
@@ -5272,22 +5343,12 @@ function importerImageMedia(input){
     return;
   }
 
-  const estPhotoDuHaut=cible==='backdrop';
-  // Plusieurs niveaux : une photo venant d’un téléphone ou d’un PC est réduite
-  // automatiquement jusqu’à pouvoir être sauvegardée dans MyCinebox.
-  const profils=estPhotoDuHaut
-    ?[
-        {maxW:960,maxH:540,maxChars:170000},
-        {maxW:760,maxH:428,maxChars:110000},
-        {maxW:600,maxH:338,maxChars:75000}
-      ]
-    :[
-        {maxW:420,maxH:630,maxChars:105000},
-        {maxW:340,maxH:510,maxChars:70000},
-        {maxW:280,maxH:420,maxChars:48000}
-      ];
-
-  const cle=estPhotoDuHaut?'backdropPath':'affichePath';
+  const profils=[
+    {maxW:420,maxH:630,maxChars:105000},
+    {maxW:340,maxH:510,maxChars:70000},
+    {maxW:280,maxH:420,maxChars:48000}
+  ];
+  const cle='affichePath';
   const ancienneValeur=f[cle];
   let derniereErreur=null;
 
@@ -5306,7 +5367,7 @@ function importerImageMedia(input){
         sauvegarder();
         fermerModal('modal-affiche-film');
         afficherDetail(f);
-        snack(estPhotoDuHaut?'✓ Photo du haut importée':'✓ Affiche importée');
+        snack('✓ Affiche importée');
         return;
       }catch(e){
         derniereErreur=e;
@@ -5385,12 +5446,16 @@ function setAfficheFilm(id,url){
 
 function setImageFilm(id,url,cible='poster'){
   const f=films.find(x=>x.id===id);if(!f) return;
-  if(cible==='backdrop') f.backdropPath=url;
-  else f.affichePath=url;
+  if(cible==='backdrop'){
+    const photos=getPhotosDuHaut(f);
+    if(photos.includes(url)){snack('Cette photo est déjà ajoutée.');return;}
+    definirPhotosDuHaut(f,[...photos,url]);
+  }else f.affichePath=url;
   sauvegarder();
-  fermerModal('modal-affiche-film');
+  if(cible!=='backdrop') fermerModal('modal-affiche-film');
   afficherDetail(f);
-  snack(cible==='backdrop'?'✓ Photo du haut mise à jour':'✓ Affiche mise à jour');
+  renderGestionPhotosDuHaut(f,cible);
+  snack(cible==='backdrop'?'✓ Photo ajoutée en haut de la fiche':'✓ Affiche mise à jour');
 }
 
 function supprimerPays(id,idx){
@@ -5546,18 +5611,59 @@ function supprimerPhoto(id,idx){
   snack('Photo supprimée');
 }
 
-function voirPhoto(url){
-  let modal=document.getElementById('modal-photo-viewer');
-  if(!modal){
-    modal=document.createElement('div');
-    modal.id='modal-photo-viewer';
-    modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:1000;display:flex;align-items:center;justify-content:center';
-    modal.onclick=()=>modal.remove();
-    document.body.appendChild(modal);
+function voirPhoto(url,galerie=null,index=0){
+  const photos=Array.isArray(galerie)?galerie.filter(p=>typeof p==='string'&&p):[url].filter(Boolean);
+  if(!photos.length)return;
+  const ancienne=document.getElementById('modal-photo-viewer');
+  if(ancienne)ancienne.remove();
+  const retourFocus=document.activeElement;
+  const modal=document.createElement('div');
+  modal.id='modal-photo-viewer';
+  modal.setAttribute('role','dialog');
+  modal.setAttribute('aria-modal','true');
+  modal.setAttribute('aria-label','Photos en grand');
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:1000;display:flex;align-items:center;justify-content:center';
+  const image=document.createElement('img');
+  image.style.cssText='max-width:95vw;max-height:80vh;object-fit:contain;border-radius:8px;cursor:pointer';
+  image.tabIndex=0;
+  image.setAttribute('role','button');
+  const compteur=document.createElement('p');
+  compteur.style.cssText='position:absolute;bottom:18px;left:10px;right:10px;text-align:center;color:#fff;font-size:13px;pointer-events:none';
+  compteur.setAttribute('aria-live','polite');
+  const fermer=()=>{modal.remove();if(retourFocus?.isConnected)retourFocus.focus();};
+  const bouton=(texte,label,style,action)=>{
+    const b=document.createElement('button');b.type='button';b.textContent=texte;b.setAttribute('aria-label',label);
+    b.style.cssText='position:absolute;background:rgba(0,0,0,.75);border:1px solid #888;color:#fff;border-radius:50%;width:42px;height:42px;font-size:22px;cursor:pointer;'+style;
+    b.onclick=action;modal.appendChild(b);return b;
+  };
+  let courant=((index%photos.length)+photos.length)%photos.length;
+  const afficher=()=>{
+    image.src=photos[courant];image.alt='Photo '+(courant+1)+' sur '+photos.length;
+    image.setAttribute('aria-label',photos.length>1?'Photo suivante':'Fermer la photo');
+    compteur.textContent=(courant+1)+' / '+photos.length+(photos.length>1?' · Clique sur la photo pour passer à la suivante':'');
+  };
+  const avancer=delta=>{courant=(courant+delta+photos.length)%photos.length;afficher();};
+  image.onclick=()=>{if(photos.length>1)avancer(1);else fermer();};
+  modal.onclick=e=>{if(e.target===modal)fermer();};
+  modal.onkeydown=e=>{
+    if(e.key==='Escape'){e.preventDefault();fermer();}
+    else if(e.key==='ArrowRight'){e.preventDefault();avancer(1);}
+    else if(e.key==='ArrowLeft'){e.preventDefault();avancer(-1);}
+    else if(e.target===image&&(e.key==='Enter'||e.key===' ')){e.preventDefault();image.click();}
+    else if(e.key==='Tab'){
+      const controls=Array.from(modal.querySelectorAll('button,[tabindex="0"]'));
+      const first=controls[0],last=controls[controls.length-1];
+      if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
+      else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+    }
+  };
+  modal.append(image,compteur);
+  const croix=bouton('✕','Fermer','top:16px;right:16px',fermer);
+  if(photos.length>1){
+    bouton('‹','Photo précédente','left:10px;top:calc(50% - 21px)',()=>avancer(-1));
+    bouton('›','Photo suivante','right:10px;top:calc(50% - 21px)',()=>avancer(1));
   }
-  modal.innerHTML='<img src="'+url+'" style="max-width:95vw;max-height:95vh;object-fit:contain;border-radius:8px">'
-    +'<button onclick="this.parentElement.remove()" style="position:absolute;top:16px;right:16px;background:rgba(0,0,0,.7);border:none;color:#fff;border-radius:50%;width:36px;height:36px;font-size:20px;cursor:pointer">✕</button>';
-  modal.style.display='flex';
+  afficher();document.body.appendChild(modal);croix.focus();
 }
 
 
@@ -7084,7 +7190,7 @@ function clearLocalSearch(){
   el.addEventListener('touchmove',stop);
  }
  window.bindLongPressImages=function(){
-  document.querySelectorAll('.modal-film-poster,.detail-backdrop').forEach(bindLongPress);
+  document.querySelectorAll('.modal-film-poster,.detail-backdrop:not([data-gallery])').forEach(bindLongPress);
  };
  window.openImageFullscreen=function(src){
   if(!src)return;
