@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.87</title>
+<title>Vidéothèque v1.7.88</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1071,7 +1071,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.87';
+const APP_VERSION='v1.7.88';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -5325,7 +5325,7 @@ function importerImageMedia(input){
   })().finally(()=>{ if(input) input.value=''; });
 }
 
-function compresserImageImportee(file,maxW,maxH,maxChars){
+function compresserImageImportee(file,maxW,maxH,maxChars,qualiteMin=.30){
   return new Promise((resolve,reject)=>{
     const reader=new FileReader();
     reader.onerror=()=>reject(reader.error||new Error('Lecture impossible'));
@@ -5351,16 +5351,16 @@ function compresserImageImportee(file,maxW,maxH,maxChars){
 
         let qualite=.78;
         let data=render(largeur,hauteur,qualite);
-        while(data.length>maxChars&&qualite>.30){
-          qualite=Math.max(.30,qualite-.08);
+        while(data.length>maxChars&&qualite>qualiteMin){
+          qualite=Math.max(qualiteMin,qualite-.08);
           data=render(largeur,hauteur,qualite);
         }
         while(data.length>maxChars&&(largeur>180||hauteur>180)){
-          largeur=Math.max(180,Math.round(largeur*.80));
-          hauteur=Math.max(180,Math.round(hauteur*.80));
+          largeur=Math.max(1,Math.round(largeur*.80));
+          hauteur=Math.max(1,Math.round(hauteur*.80));
           data=render(largeur,hauteur,qualite);
-          while(data.length>maxChars&&qualite>.30){
-            qualite=Math.max(.30,qualite-.06);
+          while(data.length>maxChars&&qualite>qualiteMin){
+            qualite=Math.max(qualiteMin,qualite-.06);
             data=render(largeur,hauteur,qualite);
           }
           if(largeur===180&&hauteur===180) break;
@@ -5469,24 +5469,37 @@ function choisirSagaDetail(id,saga){
   sauvegarderSagaDetail(id);
 }
 
-function ajouterPhotos(id, input){
-  const f=films.find(f=>f.id===id);if(!f) return;
-  if(!f.photos) f.photos=[];
-  const files=Array.from(input.files);
-  let loaded=0;
-  files.forEach(file=>{
-    const reader=new FileReader();
-    reader.onload=e=>{
-      f.photos.push(e.target.result);
-      loaded++;
-      if(loaded===files.length){
-        sauvegarder();
-        afficherDetail(f);
-        snack('✓ '+files.length+' photo(s) ajoutée(s)');
-      }
-    };
-    reader.readAsDataURL(file);
-  });
+async function ajouterPhotos(id, input){
+  const f=films.find(f=>f.id===id);
+  const files=Array.from(input&&input.files||[]);
+  if(!f||!files.length||input.disabled) return;
+  if(files.some(file=>!String(file.type||'').startsWith('image/'))){
+    snack('⚠️ Choisis uniquement des fichiers image.');
+    input.value='';
+    return;
+  }
+  input.disabled=true;
+  snack('Préparation des photos…');
+  try{
+    // Traitement séquentiel pour limiter la mémoire utilisée sur tablette.
+    // Le budget inclut le surcoût du stockage de l’image dans le JSON.
+    const photos=[];
+    for(const file of files){
+      photos.push(await compresserImageImportee(file,1280,1280,260000,.60));
+    }
+    // Ne pas modifier une fiche supprimée pendant le traitement.
+    if(!films.includes(f)) return;
+    f.photos=[...(f.photos||[]),...photos];
+    sauvegarder();
+    afficherDetail(f);
+    snack('✓ '+photos.length+' photo(s) ajoutée(s) et optimisée(s)');
+  }catch(e){
+    console.error('[MyCinebox] Import des photos échoué',e);
+    snack('⚠️ Impossible d’importer ces photos. Réessaie avec un autre fichier.');
+  }finally{
+    input.disabled=false;
+    input.value='';
+  }
 }
 
 // ── LANGUES ──
