@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.92</title>
+<title>Vidéothèque v1.7.93</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -356,6 +356,14 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .banner-speed-row input[type=range]{flex:1;min-width:180px;accent-color:var(--green-light)}
 .banner-speed-value{min-width:70px;text-align:right;font-weight:bold;color:var(--green-light)}
 
+
+/* Recommendations flow left to right without shrinking artwork or text. */
+#modal-meme-delire .modal-box{width:calc(100% - 32px);max-width:1200px}
+#meme-delire-body{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:12px}
+#meme-delire-body>p{grid-column:1 / -1}
+#meme-delire-body .meme-delire-result{min-width:0;height:100%;margin-bottom:0!important}
+#meme-delire-body .meme-delire-result img{flex-shrink:0}
+#meme-delire-body .meme-delire-result>span{min-width:0;overflow-wrap:anywhere}
 </style>
 
 </head>
@@ -747,6 +755,10 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <span>📀 Afficher À prendre CCDR</span>
         <input type="checkbox" id="pref-show-ccdr" onchange="setAfficherStatut('ccdr',this.checked)" style="width:20px;height:20px;accent-color:var(--green)">
       </label>
+      <label style="display:flex;gap:10px;align-items:center;margin-bottom:12px;font-size:14px;min-height:44px">
+        <input type="checkbox" id="pref-show-card-versions" onchange="changerAffichageVersions(this.checked)">
+        Afficher la langue et la qualité sous les titres (FR · 1080p…)
+      </label>
     </div>
     <div class="settings-section">
       <h3>🎯 Sagas dans la collection</h3>
@@ -784,10 +796,6 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     </div>
     <div class="settings-section">
       <h3>🖼 Taille des affiches</h3>
-      <label style="display:flex;gap:10px;align-items:center;margin-bottom:12px;font-size:14px;min-height:44px">
-        <input type="checkbox" id="pref-show-card-versions" onchange="changerAffichageVersions(this.checked)">
-        Afficher la langue et la qualité sous les titres (FR · 1080p…)
-      </label>
       <div class="size-slider-wrap">
         <span>▦</span>
         <input type="range" class="size-slider" id="cols-slider" min="1" max="20" step="1" value="2" oninput="appliquerCols(this.value)">
@@ -1084,7 +1092,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.92';
+const APP_VERSION='v1.7.93';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
