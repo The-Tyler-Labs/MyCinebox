@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.91</title>
+<title>Vidéothèque v1.7.92</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -784,6 +784,10 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     </div>
     <div class="settings-section">
       <h3>🖼 Taille des affiches</h3>
+      <label style="display:flex;gap:10px;align-items:center;margin-bottom:12px;font-size:14px;min-height:44px">
+        <input type="checkbox" id="pref-show-card-versions" onchange="changerAffichageVersions(this.checked)">
+        Afficher la langue et la qualité sous les titres (FR · 1080p…)
+      </label>
       <div class="size-slider-wrap">
         <span>▦</span>
         <input type="range" class="size-slider" id="cols-slider" min="1" max="20" step="1" value="2" oninput="appliquerCols(this.value)">
@@ -980,6 +984,13 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-meme-delire" role="dialog" aria-modal="true" aria-labelledby="meme-delire-title">
+  <div class="modal-box"><div class="modal-header">
+    <button class="modal-close" aria-label="Fermer" onclick="fermerModal('modal-meme-delire')">✕</button>
+    <h3 id="meme-delire-title">😎 Même délire</h3>
+  </div><div class="modal-body" id="meme-delire-body"></div></div>
+</div>
+
 <!-- MODAL SUGGESTION -->
 <div class="modal-overlay" id="modal-suggestion">
   <div class="modal-box">
@@ -1073,7 +1084,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.91';
+const APP_VERSION='v1.7.92';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1991,7 +2002,7 @@ function resetFiltres(){
 function cleFiltresCollection(avecSelection=true){
   return JSON.stringify({catTab,triActuel,filters:{...tagFiltres,decennie:[...(tagFiltres.decennie||[])]},
     inputs:['search-local','collection-search-input','filtre-acteur','filtre-realisateur','filtre-producteur','filtre-scenariste'].map(id=>document.getElementById(id)?.value||''),
-    selection:avecSelection?[..._selectionIds]:[],mode:_modeSelection,sagaMode:prefs.sagaMode||'groupe',vis:lireVisibiliteStatuts()});
+    selection:avecSelection?[..._selectionIds]:[],mode:_modeSelection,sagaMode:prefs.sagaMode||'groupe',showCardVersions:prefs.showCardVersions!==false,vis:lireVisibiliteStatuts()});
 }
 function arreterChargementCollection(){
   _collectionBatch?.observer?.disconnect();
@@ -2270,6 +2281,72 @@ function actionRapide(action){
 }
 let _selectionIds=new Set();
 
+
+function changerAffichageVersions(visible){
+  prefs.showCardVersions=!!visible;
+  savePrefs();
+  _collectionRenderCache=null;
+  renderCollection();
+}
+
+// Comparaison locale : aucune requête réseau, aucun résumé ni spoiler affiché.
+function termesMemeDelire(value){
+  const values=Array.isArray(value)?value:String(value||'').split(/[,;|]/);
+  return [...new Set(values.map(v=>String(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase()).filter(Boolean))];
+}
+function propositionsMemeDelire(source){
+  const communs=(a,b)=>termesMemeDelire(a).filter(v=>termesMemeDelire(b).includes(v));
+  const sagas=f=>f.sagas?.length?f.sagas:f.saga;
+  return films.filter(f=>f.id!==source.id&&!(source.tmdbId&&f.tmdbId===source.tmdbId&&f.tmdbType===source.tmdbType))
+    .map(f=>{
+      const genres=communs(source.genres,f.genres),sousGenres=communs(source.sousGenres,f.sousGenres);
+      const saga=communs(sagas(source),sagas(f));
+      const real=communs(source.realisateur,f.realisateur);
+      const creation=communs(source.createur,f.createur);
+      // Un acteur seul ou une année commune ne suffisent pas à suggérer un titre.
+      let score=sousGenres.length*8+saga.length*12+real.length*5+creation.length*5;
+      const union=new Set([...termesMemeDelire(source.genres),...termesMemeDelire(f.genres)]).size;
+      if(genres.length) score+=6*genres.length/union;
+      const raisons=[];
+      if(sousGenres.length)raisons.push('Sous-genre : '+sousGenres.join(', '));
+      if(saga.length)raisons.push('Même saga');
+      if(genres.length)raisons.push('Genres : '+genres.join(', '));
+      if(real.length)raisons.push('Réalisation : '+real.join(', '));
+      if(creation.length)raisons.push('Création : '+creation.join(', '));
+      return {film:f,score,raisons};
+    }).filter(x=>x.score>0)
+    .sort((a,b)=>b.score-a.score||String(a.film.titre).localeCompare(String(b.film.titre),'fr'))
+    .slice(0,8);
+}
+window.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('modal-meme-delire').classList.remove('open');});
+window.addEventListener('popstate',()=>document.getElementById('modal-meme-delire').classList.remove('open'));
+function ouvrirMemeDelire(id){
+  const source=films.find(f=>f.id===id);if(!source)return;
+  const propositions=propositionsMemeDelire(source);
+  const body=document.getElementById('meme-delire-body');
+  body.replaceChildren();
+  const intro=document.createElement('p');
+  intro.style.cssText='color:var(--text2);font-size:13px;margin-bottom:16px';
+  intro.textContent='Dans ta collection, dans le même délire que « '+source.titre+' » :';body.append(intro);
+  if(!propositions.length){
+    const vide=document.createElement('p');
+    vide.textContent='Aucun titre proche trouvé pour le moment. Complète les genres ou les sous-genres de tes fiches pour améliorer les propositions.';
+    body.append(vide);
+  }
+  for(const {film,raisons} of propositions){
+    const bouton=document.createElement('button');bouton.type='button';bouton.className='meme-delire-result';
+    bouton.style.cssText='display:flex;gap:12px;align-items:center;text-align:left;width:100%;padding:10px;margin-bottom:8px;border:1px solid var(--surface2);border-radius:10px;background:var(--surface2);color:var(--text);cursor:pointer';
+    if(film.affichePath){const img=document.createElement('img');img.src=film.affichePath;img.alt='';img.loading='lazy';img.style.cssText='width:48px;height:72px;object-fit:cover;border-radius:5px';bouton.append(img);}
+    const texte=document.createElement('span');
+    const titre=document.createElement('strong');titre.textContent=film.titre;texte.append(titre);
+    const raisonsEl=document.createElement('span');raisonsEl.style.cssText='display:block;font-size:12px;color:var(--text2);margin-top:5px';
+    raisonsEl.textContent=(CATS[film.categorie]||CATS.films).label+' · '+raisons.slice(0,2).join(' · ');texte.append(raisonsEl);bouton.append(texte);
+    bouton.onclick=()=>{fermerModal('modal-meme-delire');ouvrirDetail(film.id);};body.append(bouton);
+  }
+  document.getElementById('modal-meme-delire').classList.add('open');
+  document.querySelector('#modal-meme-delire .modal-close').focus();
+}
+
 function itemCard(f){
   // Si le film fait partie d'une saga, afficher la fiche saga
   const fSagas_=(f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]));if(fSagas_.length>0&&!_modeSelection&&catTab!=='saga'&&(prefs.sagaMode||'groupe')==='groupe'){
@@ -2301,7 +2378,7 @@ function itemCard(f){
     +'</div>'
     +'<div class="fc-body">'
     +'<div class="fc-title">'+esc(f.titre)+'</div>'
-    +'<div class="fc-meta"><span class="fc-year">'+(f.dateSortie||'').slice(0,4)+((f.qualites&&f.qualites.length)?' · '+f.qualites.join(' '):'')+'</span>'
+    +'<div class="fc-meta"><span class="fc-year">'+(f.dateSortie||'').slice(0,4)+((prefs.showCardVersions!==false&&f.qualites&&f.qualites.length&&!meilleureEditionResume(f))?' · '+esc(f.qualites.join(' ')):'')+'</span>'
     +'<span class="fc-stars">'+(f.maNote>0?'★'.repeat(Math.min(f.maNote,10)):'')+'</span></div>'
     +(f.saga?'<div style="font-size:10px;color:#90d0ff;padding:0 8px 2px">🎯 '+esc(f.saga)+'</div>':'')
     +(f.emplacement?'<div style="font-size:10px;color:var(--green-light);padding:0 8px 6px">📍 '+esc(f.emplacement)+'</div>':'')
@@ -2934,6 +3011,7 @@ function afficherDetail(f){
     +(ecritureCreation?'✍️ Écriture / création : '+esc(ecritureCreation)+'<br>':'')
     +(casting?'🎭 '+esc(casting):'')
     +'</div></div></div>'
+    +'<button class="btn btn-primary" style="margin:0 0 16px" onclick="ouvrirMemeDelire('+f.id+')">😎 Même délire</button>'
     // Casting avec photos
     +(f.castingDetails&&f.castingDetails.length?
       '<p style="font-size:11px;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">🎭 Casting</p>'
@@ -3265,6 +3343,7 @@ function meilleureEditionResume(f){
   },null);
 }
 function renderResumeEditionCarte(f){
+  if(prefs.showCardVersions===false)return "";
   const best=meilleureEditionResume(f);
   return best?'<div class="fc-edition" style="font-size:10px;color:#c8b8ff;padding:0 8px 6px;font-weight:700" title="'+esc(best.edition.label||best.label)+'">💿 '+esc(best.label)+'</div>':'';
 }
@@ -5003,6 +5082,7 @@ function appliquerPolice(val){
 }
 
 function renderSettings(){
+  document.getElementById('pref-show-card-versions').checked=prefs.showCardVersions!==false;
   const filmsVisibles=films.filter(f=>statutEstVisible(f));
   console.log('[MyCinebox Google]',new Date().toLocaleTimeString(),'renderSettings',{films:films.length,filmsVisibles:filmsVisibles.length,tokenPresent:!!_googleToken});
   
@@ -5013,7 +5093,7 @@ function pushModalState(modalId){
 
 window.addEventListener('popstate', (e)=>{
   // Fermer la modal ouverte si retour navigateur
-  const modals=['modal-fiche','modal-filmo','modal-affiche-film','modal-affiche-saga',
+  const modals=['modal-meme-delire','modal-fiche','modal-filmo','modal-affiche-film','modal-affiche-saga',
     'modal-tri','modal-fusion','modal-saga','modal-genre-selection','modal-actions-rapides'];
   const ouvertes=modals.filter(id=>{
     const el=document.getElementById(id);
