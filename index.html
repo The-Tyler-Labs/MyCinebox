@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.95</title>
+<title>Vidéothèque v1.7.96</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -543,7 +543,11 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <div class="tags-scroll" id="tags-genres"></div>
       </div>
       <div class="filtre-groupe">
-        <span class="filtre-label">Nationalité</span>
+          <span class="filtre-label">Étiquettes personnelles</span>
+          <div class="tags-scroll" id="tags-etiquette"></div>
+        </div>
+        <div class="filtre-groupe">
+          <span class="filtre-label">Nationalité</span>
         <div class="tags-scroll" id="tags-nationalite"></div>
       </div>
       <div class="filtre-groupe">
@@ -1092,7 +1096,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.95';
+const APP_VERSION='v1.7.96';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1210,7 +1214,7 @@ let pageScrollPositions={home:0,collection:0,search:0,visionnages:0,notes:0,sett
 let _listeFiltreCourante=[];
 let catTab='tous';
 let quickGenresTous=false;
-let tagFiltres={statut:'tous',decennie:new Set(),annee:'',genre:'',nationalite:'',qualite:'',saga:'',catFilter:''};
+let tagFiltres={statut:'tous',decennie:new Set(),annee:'',genre:'',etiquette:'',nationalite:'',qualite:'',saga:'',catFilter:''};
 let manuelType='films';
 let ficheFilmCourante=null;
 let contexteRetourFilmographie=null;
@@ -1973,6 +1977,11 @@ function construireFiltresCollection(){
   const sousGenres=[...new Set(src.flatMap(f=>(f.sousGenres||'').split(',').map(g=>g.trim()).filter(Boolean)))].filter(g=>!genres.includes(g)).sort();
   const tousGenres=[...genres,...sousGenres];
   document.getElementById('tags-genres').innerHTML='<button class="tag active" onclick="setTagFiltre(\'genre\',\'\',this)">Tous</button>'+tousGenres.map(g=>'<button class="tag" onclick="setTagFiltre(\'genre\',\''+esc(g)+'\',this)">'+esc(g)+'</button>').join('');
+  // Etiquettes personnelles independantes des genres TMDB.
+  const toutesEtiquettes=[...new Set(src.flatMap(f=>listeEtiquettesPerso(f)))].sort((a,b)=>a.localeCompare(b,'fr'));
+  document.getElementById('tags-etiquette').innerHTML=
+    '<button class="tag '+(!tagFiltres.etiquette?'active':'')+'" onclick="setTagFiltre(\'etiquette\',\'\',this)">Toutes</button>'
+    +toutesEtiquettes.map(n=>'<button class="tag '+(tagFiltres.etiquette===n?'active':'')+'" data-value="'+attr(n)+'" onclick="setTagFiltre(\'etiquette\',this.dataset.value,this)">'+esc(n)+'</button>').join('');
   // Nationalité — chaque pays séparé
   const tousLesPays=[...new Set(src.flatMap(f=>(f.pays||[]).map(p=>p.trim()).filter(Boolean)))].sort();
   document.getElementById('tags-nationalite').innerHTML=tousLesPays.length===0
@@ -1998,7 +2007,7 @@ function construireFiltresCollection(){
 }
 
 function resetFiltres(){
-  tagFiltres={statut:'tous',decennie:new Set(),annee:'',genre:'',nationalite:'',qualite:'',saga:'',catFilter:''};
+tagFiltres={statut:'tous',decennie:new Set(),annee:'',genre:'',etiquette:'',nationalite:'',qualite:'',saga:'',catFilter:''};
   ['filtre-acteur','filtre-realisateur','filtre-producteur','filtre-scenariste'].forEach(id=>{
     const input=document.getElementById(id); if(input) input.value='';
   });
@@ -2154,6 +2163,7 @@ function calculerCollection(){
     if(tagFiltres.decennie&&tagFiltres.decennie.size>0){const y=parseInt((f.dateSortie||'').slice(0,4));if(isNaN(y)||!tagFiltres.decennie.has(String(Math.floor(y/10)*10))) return false;}
     if(tagFiltres.annee&&(f.dateSortie||'').slice(0,4)!==tagFiltres.annee) return false;
     if(tagFiltres.genre&&!normaliser([f.genres,f.sousGenres].filter(Boolean).join(' ')).includes(normaliser(tagFiltres.genre))) return false;
+    if(tagFiltres.etiquette&&!listeEtiquettesPerso(f).some(e=>normaliser(e)===normaliser(tagFiltres.etiquette))) return false;
     if(tagFiltres.nationalite&&!(f.pays||[]).includes(tagFiltres.nationalite)) return false;
     if(tagFiltres.qualite&&!(f.qualites||[]).includes(tagFiltres.qualite)) return false;
     if(!rechercheGlobale&&tagFiltres.saga){const fSagas=f.sagas&&f.sagas.length?f.sagas:(f.saga?[f.saga]:[]);if(!fSagas.includes(tagFiltres.saga)) return false;}
@@ -2297,137 +2307,152 @@ function changerAffichageVersions(visible){
   renderCollection();
 }
 
-// Rapprochements précis locaux et recommandations TMDB ; aucun résumé affiché.
-function termesMemeDelire(value){
-  const values=Array.isArray(value)?value:String(value||'').split(/[,;|]/);
-  return [...new Set(values.map(v=>String(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase()).filter(Boolean))];
+// Etiquettes personnelles, sauvegardees avec la fiche (IndexedDB, JSON et Drive).
+function listeEtiquettesPerso(f){
+  const brut=f&&f.etiquettes;
+  return (Array.isArray(brut)?brut:(typeof brut==='string'?brut.split(','):[]))
+    .map(v=>String(v||'').trim()).filter(Boolean);
+}
+function toutesEtiquettesPerso(){
+  return [...new Set(['Curiosité','Film doudou','Pépite oubliée','Plaisir coupable',...films.flatMap(listeEtiquettesPerso)])]
+    .sort((a,b)=>a.localeCompare(b,'fr'));
+}
+function ajouterEtiquettePerso(id,valeur){
+  const f=films.find(x=>x.id===id);if(!f)return;
+  const input=document.getElementById('etiquette-input-'+id);
+  const nom=String(valeur||input?.value||'').trim().replace(/\s+/g,' ').slice(0,50);
+  if(!nom)return;
+  const actuel=listeEtiquettesPerso(f);
+  if(actuel.some(t=>normaliser(t)===normaliser(nom))){snack('Étiquette déjà présente');return;}
+  f.etiquettes=[...actuel,nom];sauvegarder();afficherDetail(f);
+  snack('✓ Étiquette ajoutée : '+nom);
+}
+function supprimerEtiquettePerso(id,index){
+  const f=films.find(x=>x.id===id);if(!f)return;
+  const noms=listeEtiquettesPerso(f);
+  if(!Number.isInteger(index)||index<0||index>=noms.length)return;
+  const retiree=noms.splice(index,1)[0];
+  f.etiquettes=noms;
+  if(tagFiltres.etiquette===retiree&&!films.some(x=>listeEtiquettesPerso(x).includes(retiree)))tagFiltres.etiquette='';
+  sauvegarder();afficherDetail(f);snack('Étiquette retirée');
 }
 
-function cleDelire(f){return (f.tmdbType||(f.categorie==='series'?'tv':'movie'))+':'+(f.tmdbId||('local-'+f.id));}
-function lireThemesDelire(f){try{const d=JSON.parse(localStorage.getItem('mycinebox-themes-'+cleDelire(f)));return d&&Array.isArray(d.ids)?d:null;}catch(e){return null;}}
-async function chargerThemesDelire(f){
-  const cache=lireThemesDelire(f);if(!f.tmdbId)return cache;
-  if(cache&&Date.now()-cache.date<30*86400000)return cache;
-  try{
-    const type=f.tmdbType||(f.categorie==='series'?'tv':'movie');
-    const d=await tmdbFetchJson(TMDB_API+'/'+type+'/'+encodeURIComponent(f.tmdbId)+'/keywords?api_key='+encodeURIComponent(ensureTmdbApiKey()),6000);
-    const rows=type==='tv'?d.results:d.keywords;if(!Array.isArray(rows))throw new Error('Mots-clés absents');
-    const data={date:Date.now(),ids:[...new Set(rows.filter(k=>! /^(woman director|based on novel or book|independent film|short film|sequel)$/i.test(k.name||'')).map(k=>Number(k.id)).filter(Number.isFinite))]};
-    try{localStorage.setItem('mycinebox-themes-'+cleDelire(f),JSON.stringify(data));}catch(e){}
-    themesDelireMemo.set(cleDelire(f),data);return data;
-  }catch(e){return cache;}
+// "Même délire" : résultats locaux instantanés, sans aucun appel réseau.
+function termesMemeDelire(value){
+  const valeurs=Array.isArray(value)?value:String(value||'').split(/[,;|]/);
+  return [...new Set(valeurs.map(v=>String(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase()).filter(Boolean))];
 }
+function cleDelire(f){return (f.tmdbType||(f.categorie==='series'?'tv':'movie'))+':'+(f.tmdbId||('local-'+f.id));}
 const themesDelireMemo=new Map();
-function themesDelire(f){return themesDelireMemo.get(cleDelire(f))||lireThemesDelire(f)||{ids:[]};}
-function refusDelire(source){try{const a=JSON.parse(localStorage.getItem('mycinebox-refus-'+cleDelire(source)));return Array.isArray(a)?a:[];}catch(e){return [];}}
+function themesDelire(f){
+  const cle=cleDelire(f);
+  if(themesDelireMemo.has(cle))return themesDelireMemo.get(cle);
+  let data={ids:[]};
+  try{const cache=JSON.parse(localStorage.getItem('mycinebox-themes-'+cle));if(cache&&Array.isArray(cache.ids))data={ids:cache.ids};}catch(_){ }
+  themesDelireMemo.set(cle,data);return data;
+}
+function refusDelire(source){
+  try{const a=JSON.parse(localStorage.getItem('mycinebox-refus-'+cleDelire(source)));return Array.isArray(a)?a:[];}catch(_){return [];}
+}
 function refuserDelire(source,film){
   const a=[...new Set([...refusDelire(source),cleDelire(film)])];
-  try{localStorage.setItem('mycinebox-refus-'+cleDelire(source),JSON.stringify(a));return true;}catch(e){snack('Impossible de mémoriser ce choix');return false;}
+  try{localStorage.setItem('mycinebox-refus-'+cleDelire(source),JSON.stringify(a));return true;}
+  catch(_){snack('Impossible de mémoriser ce choix');return false;}
 }
-
-function propositionsMemeDelire(source,recommandations=[]){
-  const communs=(a,b)=>termesMemeDelire(a).filter(v=>termesMemeDelire(b).includes(v));
-  const sagas=f=>f.sagas?.length?f.sagas:f.saga;
-  return films.filter(f=>!refusDelire(source).includes(cleDelire(f))&&f.id!==source.id&&!(source.tmdbId&&f.tmdbId===source.tmdbId&&f.tmdbType===source.tmdbType))
+const MOTS_DELIRE_IGNORES=new Set(('avec dans pour mais donc alors cette comme sont leurs elles ils elle nous vous leur chez plus moins tout tous toutes notre votre entre avoir etre etait etaient apres avant depuis lorsque ainsi sans sous dont aussi encore cette ceux celle ces des les une un aux est par qui que quoi sur ses son sa de du au en ne pas se il on et ou the and for with from this that into when while about their they them then his her its she him was were you are film movie homme femme jeune histoire vie monde deux trois').split(/\s+/));
+function motsSynopsisDelire(value){
+  return [...new Set(String(value||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .split(/[^a-z0-9]+/).filter(m=>m.length>=5&&!MOTS_DELIRE_IGNORES.has(m)))].slice(0,90);
+}
+function typeDelire(f){return f.tmdbType||(f.categorie==='series'?'tv':'movie');}
+function propositionsMemeDelire(source){
+  const set=v=>new Set(termesMemeDelire(v));
+  const commun=(a,b)=>[...a].filter(x=>b.has(x));
+  const genresSource=set(source.genres),sousSource=set(source.sousGenres),tagsSource=set(listeEtiquettesPerso(source));
+  const sagasSource=set(source.sagas?.length?source.sagas:source.saga);
+  const realSource=set(source.realisateur),creaSource=set(source.createur);
+  const acteursSource=set(Array.isArray(source.castingDetails)?source.castingDetails.slice(0,10).map(a=>a.name):String(source.casting||'').split(',').slice(0,10));
+  const motsSource=new Set(motsSynopsisDelire(source.resume));
+  const themesSource=new Set(themesDelire(source).ids);
+  const anSource=parseInt(String(source.dateSortie||'').slice(0,4),10);
+  const exclus=new Set(refusDelire(source));
+  return films.filter(f=>f.id!==source.id&&typeDelire(f)===typeDelire(source)
+      &&!(source.tmdbId&&f.tmdbId&&String(f.tmdbId)===String(source.tmdbId))
+      &&!exclus.has(cleDelire(f)))
     .map(f=>{
-      const genres=communs(source.genres,f.genres),sousGenres=communs(source.sousGenres,f.sousGenres);
-      const saga=communs(sagas(source),sagas(f));
-      const real=communs(source.realisateur,f.realisateur);
-      const creation=communs(source.createur,f.createur);
-      const type=x=>x.tmdbType||(x.categorie==='series'?'tv':'movie');
-      const rang=type(source)===type(f)?recommandations.indexOf(Number(f.tmdbId)):-1;
-      const precis=sousGenres.filter(x=>!['horreur','science-fiction','drame','comedie','thriller','action','fantastique','aventure'].includes(x));
-      const a=themesDelire(source).ids,b=themesDelire(f).ids;
-      const commun=a.filter(k=>b.includes(k));
-      const similarite=commun.length/Math.max(1,new Set([...a,...b]).size);
-      const themesProches=commun.length>=2&&similarite>=0.12&&genres.length>0;
-      const pertinent=saga.length>0||(precis.length>0&&genres.length>0)||themesProches;
-      // Un acteur seul ou une année commune ne suffisent pas à suggérer un titre.
-      let score=precis.length*8+saga.length*12+similarite*35+(themesProches?commun.length*3:0)+(rang>=0?3:0);
-      const union=new Set([...termesMemeDelire(source.genres),...termesMemeDelire(f.genres)]).size;
-      if(genres.length) score+=6*genres.length/union;
+      const genres=commun(genresSource,set(f.genres)),sous=commun(sousSource,set(f.sousGenres));
+      const tags=commun(tagsSource,set(listeEtiquettesPerso(f)));
+      const saga=commun(sagasSource,set(f.sagas?.length?f.sagas:f.saga));
+      const real=commun(realSource,set(f.realisateur)),crea=commun(creaSource,set(f.createur));
+      const acteurs=commun(acteursSource,set(Array.isArray(f.castingDetails)?f.castingDetails.slice(0,10).map(a=>a.name):String(f.casting||'').split(',').slice(0,10)));
+      const themes=commun(themesSource,new Set(themesDelire(f).ids));
+      const mots=commun(motsSource,new Set(motsSynopsisDelire(f.resume)));
+      const an=parseInt(String(f.dateSortie||'').slice(0,4),10);
+      const ecart=Number.isFinite(an)&&Number.isFinite(anSource)?Math.abs(an-anSource):Infinity;
+      const score=saga.length*60+tags.length*34+sous.length*28
+        +Math.min(3,themes.length)*14+Math.min(5,mots.length)*5
+        +Math.min(2,genres.length)*9+real.length*12+crea.length*12
+        +Math.min(2,acteurs.length)*6+(ecart<=5?4:ecart<=12?2:0);
+      const fort=!!(saga.length||tags.length||sous.length||themes.length>=2
+        ||mots.length>=3||(genres.length&&(real.length||crea.length||acteurs.length>=2)));
+      const admissible=fort||genres.length||real.length||crea.length||acteurs.length>=2||themes.length||mots.length>=2;
+      if(!admissible)return null;
       const raisons=[];
-      if(themesProches)raisons.push(commun.length+" mots-clés communs et genres compatibles");
-      if(rang>=0)raisons.push("Également recommandé par TMDB");
-      if(sousGenres.length)raisons.push('Sous-genre : '+sousGenres.join(', '));
       if(saga.length)raisons.push('Même saga');
+      if(tags.length)raisons.push('Étiquette : '+tags.join(', '));
+      if(sous.length)raisons.push('Sous-genre : '+sous.join(', '));
+      if(themes.length>=2)raisons.push('Thèmes proches');
+      if(mots.length>=2)raisons.push('Ambiance du résumé proche');
+      if(real.length)raisons.push('Même réalisateur');
+      if(crea.length)raisons.push('Même créateur');
+      if(acteurs.length)raisons.push('Casting en commun');
       if(genres.length)raisons.push('Genres : '+genres.join(', '));
-      if(real.length)raisons.push('Réalisation : '+real.join(', '));
-      if(creation.length)raisons.push('Création : '+creation.join(', '));
-      return {film:f,score:pertinent?score:0,raisons};
-    }).filter(x=>x.score>0)
-    .sort((a,b)=>b.score-a.score||String(a.film.titre).localeCompare(String(b.film.titre),'fr'))
+      return {film:f,score,fort,raisons};
+    }).filter(Boolean)
+    .sort((a,b)=>Number(b.fort)-Number(a.fort)||b.score-a.score||String(a.film.titre).localeCompare(String(b.film.titre),'fr'))
     .slice(0,8);
 }
 window.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('modal-meme-delire').classList.remove('open');});
 window.addEventListener('popstate',()=>document.getElementById('modal-meme-delire').classList.remove('open'));
-let memeDelireRequete=0;
-async function chargerRecommandationsMemeDelire(source){
-  if(!source.tmdbId)return {ids:[],message:'Comparaison locale : sous-genres et sagas.'};
-  const type=source.tmdbType||(source.categorie==='series'?'tv':'movie');
-  const key='mycinebox-delire-v2-'+type+'-'+source.tmdbId;
-  let cache=null;try{cache=JSON.parse(localStorage.getItem(key));}catch(e){}
-  if(cache&&Array.isArray(cache.ids)&&Date.now()-cache.date<7*86400000)return {ids:cache.ids,message:'Recommandations TMDB en mémoire et rapprochements locaux.'};
-  try{
-    const url=TMDB_API+'/'+type+'/'+encodeURIComponent(source.tmdbId)+'/recommendations?api_key='+encodeURIComponent(ensureTmdbApiKey())+'&language=fr-FR';
-    const data=await tmdbFetchJson(url+'&page=1',8000);
-    if(!Array.isArray(data.results))throw new Error('Réponse invalide');
-    const ids=data.results.map(x=>Number(x.id)).filter(Number.isFinite);
-    if(data.total_pages>1){try{const suite=await tmdbFetchJson(url+'&page=2',8000);if(Array.isArray(suite.results))ids.push(...suite.results.map(x=>Number(x.id)).filter(Number.isFinite));}catch(e){}}
-    const unique=[...new Set(ids)];
-    try{localStorage.setItem(key,JSON.stringify({ids:unique,date:Date.now()}));}catch(e){}
-    return {ids:unique,message:'Recommandations TMDB présentes dans ta collection et rapprochements locaux.'};
-  }catch(e){return {ids:Array.isArray(cache?.ids)?cache.ids:[],message:cache?'TMDB indisponible : recommandations en mémoire et rapprochements locaux.':'TMDB indisponible : comparaison locale uniquement.'};}
-}
-async function ouvrirMemeDelire(id){
+function ouvrirMemeDelire(id){afficherMemeDelire(id);}
+function afficherMemeDelire(id){
   const source=films.find(f=>f.id===id);if(!source)return;
-  const requete=++memeDelireRequete;
-  const actif=()=>requete===memeDelireRequete&&document.getElementById('modal-meme-delire').classList.contains('open');
-  afficherMemeDelire(id,[],'Comparaison des thèmes…');
-  if(!source.tmdbId){afficherMemeDelire(id,[],'Comparaison locale : sous-genres et sagas.');return;}
-  const [rec,sourceThemes]=await Promise.all([chargerRecommandationsMemeDelire(source),chargerThemesDelire(source)]);
-  if(!actif())return;
-  if(!sourceThemes?.ids.length){afficherMemeDelire(id,rec.ids,'Thèmes indisponibles : comparaison locale uniquement.');return;}
-  const candidats=films.filter(f=>f.id!==id&&f.tmdbId&&termesMemeDelire(f.genres).some(g=>termesMemeDelire(source.genres).includes(g)));
-  let prochain=0,fait=0,manquants=0;
-  async function worker(){
-    while(actif()&&prochain<candidats.length){
-      const f=candidats[prochain++];const data=await chargerThemesDelire(f);if(!data)manquants++;fait++;
-      if(actif())afficherMemeDelire(id,rec.ids,'Comparaison des thèmes : '+fait+' / '+candidats.length+' titres.');
-    }
-  }
-  await Promise.all([worker(),worker(),worker()]);
-  if(actif())afficherMemeDelire(id,rec.ids,'Thèmes et sous-genres comparés.'+(manquants?' Données indisponibles pour '+manquants+' titre(s).':''));
-}
-function afficherMemeDelire(id,recommandations=[],message=''){
-  const source=films.find(f=>f.id===id);if(!source)return;
-  const propositions=propositionsMemeDelire(source,recommandations);
-  const body=document.getElementById('meme-delire-body');
-  body.replaceChildren();
+  const propositions=propositionsMemeDelire(source);
+  const body=document.getElementById('meme-delire-body');body.replaceChildren();
   const intro=document.createElement('p');
   intro.style.cssText='color:var(--text2);font-size:13px;margin-bottom:16px';
-  intro.textContent='Dans ta collection, dans le même délire que « '+source.titre+' » : '+message;body.append(intro);
+  intro.textContent='Dans ta collection, dans le même délire que « '+source.titre+' » : résultats immédiats, sans attente TMDB.';
+  body.append(intro);
   if(refusDelire(source).length){
-    const ligne=document.createElement('p');const restaurer=document.createElement('button');restaurer.className='btn btn-sm';restaurer.textContent='Réafficher les suggestions écartées';
-    restaurer.onclick=()=>{try{localStorage.removeItem('mycinebox-refus-'+cleDelire(source));afficherMemeDelire(id,recommandations,message);}catch(e){snack('Impossible de rétablir les suggestions');}};ligne.append(restaurer);body.append(ligne);
+    const ligne=document.createElement('p'),restaurer=document.createElement('button');
+    restaurer.className='btn btn-sm';restaurer.textContent='Réafficher les suggestions écartées';
+    restaurer.onclick=()=>{try{localStorage.removeItem('mycinebox-refus-'+cleDelire(source));afficherMemeDelire(id);}catch(_){snack('Impossible de rétablir les suggestions');}};
+    ligne.append(restaurer);body.append(ligne);
   }
   if(!propositions.length){
     const vide=document.createElement('p');
-    vide.textContent='Aucun titre proche suffisamment étayé dans ta collection. Les genres généraux seuls ne suffisent plus.';
+    vide.textContent='Aucun autre titre comparable trouvé avec les informations déjà enregistrées. Ajoute des sous-genres ou des étiquettes pour affiner les rapprochements.';
     body.append(vide);
   }
-  for(const {film,raisons} of propositions){
+  let dernierGroupe=null;
+  for(const {film,raisons,fort} of propositions){
+    if(dernierGroupe!==fort){
+      const titre=document.createElement('p');titre.style.cssText='font-size:12px;font-weight:bold;color:var(--green-light);margin:14px 0 8px';
+      titre.textContent=fort?'Correspondances les plus fortes':'Autres pistes (correspondances plus larges)';
+      body.append(titre);dernierGroupe=fort;
+    }
     const bouton=document.createElement('button');bouton.type='button';bouton.className='meme-delire-result';
-    bouton.style.cssText='display:flex;gap:12px;align-items:center;text-align:left;width:100%;padding:10px;margin-bottom:8px;border:1px solid var(--surface2);border-radius:10px;background:var(--surface2);color:var(--text);cursor:pointer';
+    bouton.style.cssText='display:flex;gap:12px;align-items:center;text-align:left;width:100%;padding:10px;margin-bottom:6px;border:1px solid var(--surface2);border-radius:10px;background:var(--surface2);color:var(--text);cursor:pointer';
     if(film.affichePath){const img=document.createElement('img');img.src=film.affichePath;img.alt='';img.loading='lazy';img.style.cssText='width:48px;height:72px;object-fit:cover;border-radius:5px';bouton.append(img);}
     const texte=document.createElement('span');
     const titre=document.createElement('strong');titre.textContent=film.titre;texte.append(titre);
-    const raisonsEl=document.createElement('span');raisonsEl.style.cssText='display:block;font-size:12px;color:var(--text2);margin-top:5px';
-    raisonsEl.textContent=(CATS[film.categorie]||CATS.films).label+' · '+raisons.slice(0,2).join(' · ');texte.append(raisonsEl);bouton.append(texte);
+    const raison=document.createElement('span');raison.style.cssText='display:block;font-size:12px;color:var(--text2);margin-top:5px';
+    raison.textContent=(CATS[film.categorie]||CATS.films).label+' · '+raisons.slice(0,3).join(' · ');
+    texte.append(raison);bouton.append(texte);
     bouton.onclick=()=>{fermerModal('modal-meme-delire');ouvrirDetail(film.id);};
-    const carte=document.createElement('div');carte.style.cssText='display:flex;flex-direction:column;gap:6px;min-width:0';carte.append(bouton);
+    const carte=document.createElement('div');carte.style.cssText='display:flex;flex-direction:column;gap:3px;min-width:0';carte.append(bouton);
     const refus=document.createElement('button');refus.type='button';refus.className='btn btn-sm delire-refus';refus.textContent='Pas le même délire';
-    refus.onclick=()=>{if(refuserDelire(source,film))afficherMemeDelire(id,recommandations,message);};carte.append(refus);body.append(carte);
+    refus.onclick=()=>{if(refuserDelire(source,film))afficherMemeDelire(id);};carte.append(refus);body.append(carte);
   }
   document.getElementById('modal-meme-delire').classList.add('open');
   document.querySelector('#modal-meme-delire .modal-close').focus();
@@ -3147,6 +3172,20 @@ function afficherDetail(f){
     +'<button class="btn btn-primary btn-sm" onclick="ajouterGenre('+f.id+')">+</button>'
     +'</div>'
     +'</div>'
+    // Etiquettes personnelles : champs independants, stockes avec la fiche.
+    +'<section style="margin-bottom:16px">'
+    +'<p style="font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">💛 Étiquettes personnelles</p>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:7px">'
+    +listeEtiquettesPerso(f).map((nom,i)=>'<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:15px;background:#4b3620;color:#ffe0a5;font-size:11px">'+esc(nom)+'<button type="button" aria-label="Retirer '+attr(nom)+'" onclick="supprimerEtiquettePerso('+f.id+','+i+')" style="border:0;background:none;color:inherit;cursor:pointer;font-size:13px">✕</button></span>').join('')
+    +'</div>'
+    +'<div style="display:flex;gap:6px">'
+    +'<input class="version-input" id="etiquette-input-'+f.id+'" list="etiquette-liste-'+f.id+'" placeholder="Curiosité, Film doudou…" maxlength="50" style="flex:1;min-width:0" onkeydown="if(event.key===\'Enter\'){event.preventDefault();ajouterEtiquettePerso('+f.id+')}">'
+    +'<datalist id="etiquette-liste-'+f.id+'">'+toutesEtiquettesPerso().map(n=>'<option value="'+attr(n)+'"></option>').join('')+'</datalist>'
+    +'<button type="button" class="btn btn-primary btn-sm" onclick="ajouterEtiquettePerso('+f.id+')">+</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">'
+    +['Curiosité','Film doudou','Pépite oubliée','Plaisir coupable'].filter(n=>!listeEtiquettesPerso(f).some(t=>normaliser(t)===normaliser(n))).map(n=>'<button type="button" class="tag" data-nom="'+attr(n)+'" onclick="ajouterEtiquettePerso('+f.id+',this.dataset.nom)">+ '+esc(n)+'</button>').join('')
+    +'</div></section>'
     +(f.resume?'<p class="detail-overview">'+esc(f.resume)+'</p>':'')
     +(f.trailerKey
       ?'<a href="https://www.youtube.com/watch?v='+f.trailerKey+'" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:10px;background:#c0392b;color:#fff;border-radius:10px;padding:12px;margin-bottom:16px;text-decoration:none;font-weight:bold;font-size:14px">'
