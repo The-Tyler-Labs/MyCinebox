@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.96</title>
+<title>Vidéothèque v1.7.97</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -732,10 +732,12 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <button id="google-retry" class="btn" onclick="classicSession.prepare()">Recharger le module Google</button>
       <button id="google-cancel" class="btn" style="display:none" onclick="classicSession.cancelSignIn()">Annuler la connexion</button>
       <button id="btn-google-signin" disabled class="btn btn-primary" style="width:100%;margin-bottom:8px;background:#4285f4" onclick="googleSignIn()">G Se connecter avec Google</button>
+      <button id="btn-google-renew" type="button" class="btn" style="display:none;width:100%;margin-bottom:8px;background:var(--surface2);color:var(--text);border:1px solid #555" onclick="googleSignIn()">↻ Renouveler l’accès Google Drive</button>
       <button id="btn-drive-save" class="btn btn-primary" style="width:100%;margin-bottom:8px;display:none;background:#0f9d58" onclick="sauvegarderDrive()">☁️ Sauvegarder sur Drive</button>
       <button id="btn-drive-load" class="btn" style="width:100%;margin-bottom:8px;display:none;background:var(--surface2);color:var(--text2);border:1px solid #333" onclick="chargerDrive()">☁️ Charger depuis Drive</button>
       <button id="btn-drive-merge" class="btn" style="width:100%;margin-bottom:8px;display:none;background:#1a3a5c;color:#90d0ff;border:1px solid #333" onclick="chargerDriveAvecMerge()">🔀 Merger local + Drive</button>
       <div id="drive-status" role="status" aria-live="polite" style="font-size:11px;color:var(--text2);text-align:center"></div>
+      <p id="drive-auth-help" style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Google limite la durée des autorisations Drive : si l’accès expire, un clic sur « Reconnecter Google » suffit généralement. Tes fiches restent sauvegardées localement.</p>
       <button class="btn btn-sm" style="margin-top:8px;width:100%" onclick="afficherDiagnosticGoogle()">État de la connexion</button>
       <div id="drive-last-save" style="font-size:10px;color:#666;text-align:right;margin-top:4px;font-style:italic"></div>
       <div id="drive-total" style="font-size:11px;color:var(--text2);text-align:center"></div>
@@ -1096,7 +1098,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.96';
+const APP_VERSION='v1.7.97';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -2331,10 +2333,14 @@ function supprimerEtiquettePerso(id,index){
   const f=films.find(x=>x.id===id);if(!f)return;
   const noms=listeEtiquettesPerso(f);
   if(!Number.isInteger(index)||index<0||index>=noms.length)return;
-  const retiree=noms.splice(index,1)[0];
+  // La croix ne supprime jamais silencieusement une étiquette.
+  // En cas d'annulation, ne modifier ni les données ni les filtres.
+  const nom=noms[index];
+  if(!confirmerSuppression('Supprimer l’étiquette « '+nom+' » de « '+f.titre+' » ?'))return;
+  noms.splice(index,1);
   f.etiquettes=noms;
-  if(tagFiltres.etiquette===retiree&&!films.some(x=>listeEtiquettesPerso(x).includes(retiree)))tagFiltres.etiquette='';
-  sauvegarder();afficherDetail(f);snack('Étiquette retirée');
+  if(tagFiltres.etiquette===nom&&!films.some(x=>listeEtiquettesPerso(x).includes(nom)))tagFiltres.etiquette='';
+  sauvegarder();afficherDetail(f);snack('Étiquette supprimée : '+nom);
 }
 
 // "Même délire" : résultats locaux instantanés, sans aucun appel réseau.
@@ -6812,7 +6818,11 @@ function googleSignIn(){
     );
   }catch(error){const message=error?.message||'Connexion Google impossible.';document.getElementById('drive-status').textContent=message;snack('⚠️ '+message);}
 }
-function googleSignOut(){classicSession.logout();}
+function googleSignOut(){
+  // Une déconnexion volontaire est distincte d'une expiration du jeton Drive.
+  try{localStorage.removeItem('google_was_connected');}catch(_){ }
+  classicSession.logout();
+}
 
 function choisirFichierDriveLePlusRecent(files){
   if(!Array.isArray(files)||files.length===0) return null;
@@ -7665,8 +7675,7 @@ class Session {
     this.set({
       status: "disconnected",
       account: null,
-      message:
-        "L’accès Google a expiré. Clique sur Se connecter pour le renouveler.",
+      message: "Accès Drive expiré — reconnecte Google en un clic pour reprendre les sauvegardes. Ta collection reste enregistrée localement.",
     });
   }
   mark(step) {
@@ -7720,12 +7729,9 @@ class Session {
     this.set({
       status: "connected",
       account,
-      message:
-        "Google connecté — accès valable jusqu’à " +
-        new Date(token.expiresAt).toLocaleTimeString("fr-FR", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
+      // L'heure de fin du jeton est purement technique ; ne pas l'afficher
+      // comme une date de déconnexion du compte Google.
+      message: "✓ Google connecté — accès Drive actif",
     });
   }
   async check() {
@@ -7742,7 +7748,9 @@ class Session {
         account: null,
         message: this.recentAttempt()?.step==='attente-retour-google'
           ? "Retour de Google sans autorisation reçue dans cet onglet. Clique sur Se connecter pour réessayer."
-          : "Connecte ton compte Google pour sauvegarder sur Drive.",
+          : (this.storage?.getItem('google_was_connected')
+            ? "Google Drive à reconnecter — tes données locales sont conservées."
+            : "Connecte ton compte Google pour sauvegarder sur Drive."),
       });
       return;
     }
@@ -7972,7 +7980,12 @@ classicSession.subscribe(state=>{
   document.getElementById('google-user-info').style.display=connected?'flex':'none';
   const sign=document.getElementById('btn-google-signin');
   sign.style.display=connected?'none':'block';
+  const precedent=localStorage.getItem('google_was_connected')==='1';
+  sign.textContent=precedent?'↻ Reconnecter Google (1 clic)':'G Se connecter avec Google';
   sign.disabled=!state.ready||state.status==='authorizing';
+  const renew=document.getElementById('btn-google-renew');
+  renew.style.display=connected?'block':'none';
+  renew.disabled=!state.ready||state.status==='authorizing';
   document.getElementById('google-retry').style.display=state.ready?'none':'block';
   document.getElementById('google-cancel').style.display=state.status==='authorizing'?'block':'none';
   for(const id of ['btn-drive-save','btn-drive-load','btn-drive-merge'])document.getElementById(id).style.display=connected?'block':'none';
@@ -7983,9 +7996,13 @@ classicSession.subscribe(state=>{
     document.getElementById('google-avatar').style.display='none';
     localStorage.setItem('google_was_connected','1');
     if(classicAccount!==state.account.id){
-      // A newly selected account must never receive a silent collection upload.
+      // Une connexion à un AUTRE compte ne doit jamais déclencher d'upload silencieux.
       classicAccount=state.account.id;
-      document.getElementById('drive-status').textContent+=' — utilise Charger, Merger ou Sauvegarder pour ta collection.';
+      document.getElementById('drive-status').textContent+=' — compte vérifié.';
+    }else if(_driveDirty){
+      // Après renouvellement sur le MÊME compte, reprendre les modifications
+      // restées en attente sans risquer d'écrire sur un autre Drive.
+      planifierSauvegardeDriveAuto(1500);
     }
   }
 });
