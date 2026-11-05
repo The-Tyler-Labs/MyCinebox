@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.96</title>
+<title>Vidéothèque v1.7.97</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1092,7 +1092,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.96';
+const APP_VERSION='v1.7.97';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -3883,7 +3883,7 @@ function renderMultiResults(){
     const connu=isPerson?(item.known_for||[]).slice(0,3).map(x=>x.title||x.name).filter(Boolean).join(', '):'';
     const resume=isPerson?(connu?'Connu pour : '+connu:'Voir la filmographie'):(item.overview||'');
     if(isPerson){
-      return '<div class="result-item" onclick="ouvrirFilmographie('+item.id+',\''+esc(titre).replace(/'/g,"\\'")+'\')">'
+      return '<div class="result-item" data-pid="'+item.id+'" data-pname="'+esc(titre)+'" onclick="ouvrirFilmographie(this.dataset.pid,this.dataset.pname)">' 
         +'<img src="'+img+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="">'
         +'<div class="result-info"><h4>'+esc(titre)+' <span style="font-size:10px;color:var(--green-light);font-weight:normal">'+typeLabelTmdb(item)+'</span></h4>'
         +'<div class="roverview">'+esc(resume)+'</div></div><span style="font-size:22px;color:var(--green-light)">›</span></div>';
@@ -4695,7 +4695,7 @@ async function searchActeur(){
     }
     results.innerHTML=data.results.slice(0,8).map(p=>{
       const connu=(p.known_for||[]).slice(0,3).map(f=>esc(f.title||f.name||'')).join(', ');
-      return '<div style="display:flex;gap:12px;background:var(--surface);border-radius:10px;padding:10px;margin-bottom:8px;align-items:center;cursor:pointer" data-pid="'+p.id+'" data-pname="'+esc(p.name)+'" onclick="chargerFilmographie(this.dataset.pid,this.dataset.pname)">'
+      return '<div style="display:flex;gap:12px;background:var(--surface);border-radius:10px;padding:10px;margin-bottom:8px;align-items:center;cursor:pointer" data-pid="'+p.id+'" data-pname="'+esc(p.name)+'" onclick="ouvrirFilmographie(this.dataset.pid,this.dataset.pname)">'
         +'<img src="'+(p.profile_path?'https://image.tmdb.org/t/p/w185'+p.profile_path:'')+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="" style="width:52px;height:78px;object-fit:cover;border-radius:8px;flex-shrink:0;background:var(--green-dark)">'
         +'<div style="flex:1;min-width:0">'
         +'<div style="font-weight:bold;font-size:15px;margin-bottom:4px">'+esc(p.name)+'</div>'
@@ -4709,59 +4709,6 @@ async function searchActeur(){
   }finally{
     loader.style.display='none';
   }
-}
-
-async function chargerFilmographie(acteurId,nom){
-  const retour='<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
-    +'<button onclick="document.getElementById(\'acteur-results\').innerHTML=\'\';document.getElementById(\'acteur-query\').value=\'\'" '
-    +'style="background:none;border:none;color:var(--green-light);font-size:14px;cursor:pointer">← Retour</button>'
-    +'<span style="font-weight:bold;font-size:15px">'+esc(nom)+'</span></div>';
-  const tabs='<div style="display:flex;gap:8px;margin-bottom:12px">'
-    +'<button id="cftab-f" onclick="switchCFilmoTab(\'f\')" style="flex:1;padding:8px;border-radius:8px;border:none;background:var(--green);color:#fff;font-size:12px;font-weight:bold;cursor:pointer">🎬 Films</button>'
-    +'<button id="cftab-s" onclick="switchCFilmoTab(\'s\')" style="flex:1;padding:8px;border-radius:8px;border:none;background:var(--surface2);color:var(--text2);font-size:12px;font-weight:bold;cursor:pointer">📺 Séries</button>'
-    +'</div>';
-  document.getElementById('acteur-results').innerHTML=retour+tabs+'<div class="loader"><div class="spinner"></div></div>';
-  try{
-    const [rF,rS]=await Promise.all([
-      fetch(TMDB_API+'/person/'+acteurId+'/movie_credits?api_key='+prefs.apiKey+'&language=fr-FR'),
-      fetch(TMDB_API+'/person/'+acteurId+'/tv_credits?api_key='+prefs.apiKey+'&language=fr-FR')
-    ]);
-    const [dF,dS]=await Promise.all([rF.json(),rS.json()]);
-    function mkCartes(cast,isTV){
-      const vus=new Set();
-      const type=isTV?'tv':'movie';
-      return (cast||[]).filter(f=>{
-        const titre=isTV?f.name:f.title;
-        if(!f.id||!titre||!f.poster_path) return false;
-        if(vus.has(f.id)) return false;
-        vus.add(f.id);return true;
-      }).sort((a,b)=>(b.release_date||b.first_air_date||'').localeCompare(a.release_date||a.first_air_date||''))
-      .map(f=>{
-        const titre=esc(isTV?f.name:f.title);
-        const date=(isTV?f.first_air_date:f.release_date||'').slice(0,4);
-        const deja=films.some(x=>x.tmdbId===f.id);
-        return '<div class="filmo-card '+(deja?'deja':'')+'" onclick="ouvrirFicheFilm('+f.id+',\''+type+'\')">'
-          +'<img src="'+TMDB_IMG+f.poster_path+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="">'
-          +'<button class="add-filmo" onclick="event.stopPropagation();'+action+'" '+(deja&&!(sagaAjoutCourante&&!isTV)?'disabled':'')+'>'+(deja?(sagaAjoutCourante&&!isTV?'📎':'✓'):'+')+'</button>'
-          +'<div class="filmo-info"><div class="filmo-title">'+titre+'</div>'
-          +'<div class="filmo-meta">'+date+(f.vote_average>0?' · ⭐'+f.vote_average.toFixed(1):'')+'</div>'
-          +'<div class="filmo-meta" style="color:var(--green-light);font-size:10px">'+esc(f.character||'')+'</div>'
-          +'</div></div>';
-      }).join('');
-    }
-    const gF='<div class="filmo-grid">'+mkCartes(dF.cast,false)+'</div>';
-    const gS='<div class="filmo-grid">'+mkCartes(dS.cast,true)+'</div>';
-    document.getElementById('acteur-results').innerHTML=retour+tabs
-      +'<div id="cfc-f">'+gF+'</div>'
-      +'<div id="cfc-s" style="display:none">'+gS+'</div>';
-  }catch(e){snack('Erreur de chargement');}
-}
-
-function switchCFilmoTab(t){
-  document.getElementById('cfc-f').style.display=t==='f'?'block':'none';
-  document.getElementById('cfc-s').style.display=t==='s'?'block':'none';
-  document.getElementById('cftab-f').style.cssText='flex:1;padding:8px;border-radius:8px;border:none;background:'+(t==='f'?'var(--green)':'var(--surface2)')+';color:'+(t==='f'?'#fff':'var(--text2)')+';font-size:12px;font-weight:bold;cursor:pointer';
-  document.getElementById('cftab-s').style.cssText='flex:1;padding:8px;border-radius:8px;border:none;background:'+(t==='s'?'var(--green)':'var(--surface2)')+';color:'+(t==='s'?'#fff':'var(--text2)')+';font-size:12px;font-weight:bold;cursor:pointer';
 }
 
 function closeFilmographie(){
@@ -4795,7 +4742,8 @@ async function ouvrirFilmographie(acteurId,nom){
     snack('⚠️ Acteur introuvable');
     return;
   }
-  if(!prefs.apiKey){
+  const apiKey=ensureTmdbApiKey();
+  if(!apiKey){
     snack('⚠️ Configurez votre clé API TMDB dans Paramètres');
     return;
   }
@@ -4813,21 +4761,10 @@ async function ouvrirFilmographie(acteurId,nom){
   document.getElementById('modal-filmo').classList.add('open');
   if(typeof pushModalState==='function') pushModalState('modal-filmo');
 
-  const fetchJsonTimeout=(url,timeoutMs=15000)=>{
-    const controller=new AbortController();
-    const timer=setTimeout(()=>controller.abort(),timeoutMs);
-    return fetch(url,{signal:controller.signal})
-      .then(r=>{
-        if(!r.ok) throw new Error('HTTP '+r.status);
-        return r.json();
-      })
-      .finally(()=>clearTimeout(timer));
-  };
-
   try{
-    const urlF=TMDB_API+'/person/'+acteurId+'/movie_credits?api_key='+prefs.apiKey+'&language=fr-FR';
-    const urlS=TMDB_API+'/person/'+acteurId+'/tv_credits?api_key='+prefs.apiKey+'&language=fr-FR';
-    const [resF,resS]=await Promise.allSettled([fetchJsonTimeout(urlF),fetchJsonTimeout(urlS)]);
+    const urlF=TMDB_API+'/person/'+acteurId+'/movie_credits?api_key='+encodeURIComponent(apiKey)+'&language=fr-FR';
+    const urlS=TMDB_API+'/person/'+acteurId+'/tv_credits?api_key='+encodeURIComponent(apiKey)+'&language=fr-FR';
+    const [resF,resS]=await Promise.allSettled([tmdbFetchJson(urlF),tmdbFetchJson(urlS)]);
     const dF=resF.status==='fulfilled'?resF.value:{cast:[]};
     const dS=resS.status==='fulfilled'?resS.value:{cast:[]};
 
@@ -4840,7 +4777,7 @@ async function ouvrirFilmographie(acteurId,nom){
       return (cast||[]).filter(f=>{
         const titre=isTV?f.name:f.title;
         const date=isTV?f.first_air_date:f.release_date;
-        if(!f.id||!titre||!f.poster_path||!date) return false;
+        if(!f.id||!titre) return false;
         if(f.character&&f.character.toLowerCase().includes('uncredited')) return false;
         if(typeof f.order==='number'&&f.order>30) return false;
         if(vus.has(f.id)) return false;
@@ -4853,11 +4790,11 @@ async function ouvrirFilmographie(acteurId,nom){
       const type=isTV?'tv':'movie';
       return '<div class="filmo-grid">'+credits.map(f=>{
         const titre=esc(isTV?f.name:f.title);
-        const date=(isTV?f.first_air_date:f.release_date||'').slice(0,4);
+        const date=((isTV?f.first_air_date:f.release_date)||'').slice(0,4);
         const deja=films.some(x=>x.tmdbId===f.id);
         const genres=(f.genre_ids||[]).slice(0,2).map(id=>TMDB_GENRES[id]).filter(Boolean).join(', ');
         return '<div class="filmo-card '+(deja?'deja':'')+'" onclick="ouvrirFicheFilmDepuisFilmo('+f.id+',\''+type+'\')">'
-          +'<img src="'+TMDB_IMG+f.poster_path+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="">'
+          +(f.poster_path?'<img src="'+TMDB_IMG+f.poster_path+'" alt="">':'')
           +'<button class="add-filmo" onclick="event.stopPropagation();event.preventDefault();ajouterTmdb('+f.id+',\''+type+'\',this)" '+(deja?'disabled':'')+'>'+(deja?'✓':'+')+'</button>'
           +'<div class="filmo-info"><div class="filmo-title">'+titre+'</div>'
           +'<div class="filmo-meta">'+date+(f.vote_average>0?' · ⭐'+f.vote_average.toFixed(1):'')+'</div>'
@@ -4875,6 +4812,7 @@ async function ouvrirFilmographie(acteurId,nom){
       +'</div>'
       +'<div id="fc-films">'+grille(cF,false)+'</div>'
       +'<div id="fc-series" style="display:none">'+grille(cS,true)+'</div>';
+    if(!cF.length&&cS.length)switchFilmoTab('series');
   }catch(e){
     console.error('Erreur filmographie acteur:', e);
     document.getElementById('modal-filmo-body').innerHTML=
@@ -7116,7 +7054,7 @@ window.sauvegarderDrive = sauvegarderDrive;
 window.goPage = goPage;
 window.ouvrirDetail = ouvrirDetail;
 window.switchFilmoTab = switchFilmoTab;
-window.switchCFilmoTab = switchCFilmoTab;
+
 window.setSaisonQualite = setSaisonQualite;
 window.noterFilm = noterFilm;
 window.supprimerVersion = supprimerVersion;
