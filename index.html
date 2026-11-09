@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.98</title>
+<title>Vidéothèque v1.7.100</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -975,20 +975,26 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 
 <!-- MODAL ACTIONS RAPIDES (appui long) -->
 <div class="modal-overlay" id="modal-actions-rapides" onclick="if(event.target===this)fermerModal('modal-actions-rapides')">
-  <div class="modal-box" style="padding:16px;max-width:280px;margin:auto">
+  <div class="modal-box" style="padding:16px;max-width:330px;margin:auto;max-height:88vh;overflow-y:auto">
     <div id="modal-actions-titre" style="font-size:16px;font-weight:bold;margin-bottom:16px;color:var(--text)"></div>
-    <div style="display:flex;flex-direction:column;gap:8px">
-      <button class="btn" onclick="actionRapide('trouverplustard')" style="background:#1b4e48;color:#9ae5cf;text-align:left;padding:10px 14px;font-size:13px">🗓️ À trouver plus tard</button>
-      <button class="btn" onclick="actionRapide('trouver')" style="background:#1a3a5c;color:#6ab0ff;text-align:left;padding:10px 14px;font-size:13px">🔍 À trouver</button>
-      <button class="btn" onclick="actionRapide('avoir')" style="background:#2a2a2a;color:#ddd;text-align:left;padding:10px 14px;font-size:13px">📋 À voir</button>
-      <button class="btn" onclick="actionRapide('plustard')" style="background:#3a2a10;color:#f0b060;text-align:left;padding:10px 14px;font-size:13px">⏰ À regarder plus tard</button>
-      <button class="btn" onclick="actionRapide('cours')" style="background:#1a3a1a;color:#6adf6a;text-align:left;padding:10px 14px;font-size:13px">▶ En cours</button>
-      <button class="btn" onclick="actionRapide('vu')" style="background:#1a4a2a;color:#2adf8a;text-align:left;padding:10px 14px;font-size:13px">👁 Vu</button>
-      <button class="btn" onclick="actionRapide('critique')" style="background:#4a1a4a;color:#f0a0ff;text-align:left;padding:10px 14px;font-size:13px">🎬 Regarder critiques</button>
-      <button class="btn" onclick="actionRapide('ccdr')" style="background:#0f4673;color:#9bd3ff;text-align:left;padding:10px 14px;font-size:13px">📀 À prendre CCDR</button>
-      <button class="btn" onclick="actionRapide('meilleurequalite')" style="background:#064c5a;color:#7fe7ff;text-align:left;padding:10px 14px;font-size:13px">🔎 Trouver meilleure qualité</button>
+    <div id="modal-actions-statuts-actuels" style="margin-bottom:12px"></div>
+    <div id="modal-actions-mode" style="margin-bottom:12px"></div>
+    <div style="font-size:11px;font-weight:bold;letter-spacing:.04em;text-transform:uppercase;color:var(--text2);margin-bottom:8px">Changer / ajouter un statut</div>
+    <div id="modal-actions-choix-statuts" style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn" data-statut-action="trouverplustard" onclick="actionRapide('trouverplustard')" style="background:#1b4e48;color:#9ae5cf;text-align:left;padding:10px 14px;font-size:13px">🗓️ À trouver plus tard</button>
+      <button class="btn" data-statut-action="trouver" onclick="actionRapide('trouver')" style="background:#1a3a5c;color:#6ab0ff;text-align:left;padding:10px 14px;font-size:13px">🔍 À trouver</button>
+      <button class="btn" data-statut-action="avoir" onclick="actionRapide('avoir')" style="background:#2a2a2a;color:#ddd;text-align:left;padding:10px 14px;font-size:13px">📋 À voir</button>
+      <button class="btn" data-statut-action="plustard" onclick="actionRapide('plustard')" style="background:#3a2a10;color:#f0b060;text-align:left;padding:10px 14px;font-size:13px">⏰ À regarder plus tard</button>
+      <button class="btn" data-statut-action="cours" onclick="actionRapide('cours')" style="background:#1a3a1a;color:#6adf6a;text-align:left;padding:10px 14px;font-size:13px">▶ En cours</button>
+      <button class="btn" data-statut-action="vu" onclick="actionRapide('vu')" style="background:#1a4a2a;color:#2adf8a;text-align:left;padding:10px 14px;font-size:13px">👁 Vu</button>
+      <button class="btn" data-statut-action="critique" onclick="actionRapide('critique')" style="background:#4a1a4a;color:#f0a0ff;text-align:left;padding:10px 14px;font-size:13px">🎬 Regarder critiques</button>
+      <button class="btn" data-statut-action="ccdr" onclick="actionRapide('ccdr')" style="background:#0f4673;color:#9bd3ff;text-align:left;padding:10px 14px;font-size:13px">📀 À prendre CCDR</button>
+      <button class="btn" data-statut-action="meilleurequalite" onclick="actionRapide('meilleurequalite')" style="background:#064c5a;color:#7fe7ff;text-align:left;padding:10px 14px;font-size:13px">🔎 Trouver meilleure qualité</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid #444">
       <button class="btn" onclick="actionRapide('detail')" style="background:var(--surface2);color:var(--text);text-align:left;padding:10px 14px;font-size:13px">📋 Ouvrir la fiche</button>
-      <button class="btn" onclick="actionRapide('supprimer')" style="background:#5c1a1a;color:#ff6a6a;text-align:left;padding:10px 14px;font-size:13px">🗑 Supprimer</button>
+      <button class="btn" onclick="actionRapide('supprimer')" style="background:#5c1a1a;color:#ff6a6a;text-align:left;padding:10px 14px;font-size:13px">🗑 Supprimer la fiche</button>
+      <button class="btn" onclick="fermerModal('modal-actions-rapides')" style="background:var(--surface2);color:var(--text);text-align:center;padding:10px 14px;font-size:13px">Annuler</button>
     </div>
   </div>
 </div>
@@ -1104,7 +1110,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.98';
+const APP_VERSION='v1.7.100';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -2331,30 +2337,124 @@ function cancelLongPress(){
   if(_longPressTimer){clearTimeout(_longPressTimer);_longPressTimer=null;}
 }
 
+// Éditeur de statuts par clic droit et appui long.
+// Un statut existant est sélectionné pour remplacement ; la croix le retire.
+// L'option « Ajouter sans remplacer » conserve les autres statuts.
+let _statutRapideARemplacer=null;
+
 function ouvrirActionsRapides(id){
   _longPressId=id;
   const f=films.find(f=>f.id===id);if(!f) return;
+  const actifs=getFilmStatuts(f).filter(s=>STATUTS.includes(s));
+  _statutRapideARemplacer=actifs.includes('trouver')?'trouver':(actifs[0]||null);
   document.getElementById('modal-actions-titre').textContent=f.titre;
+  afficherEditeurStatutsRapides(f);
   document.getElementById('modal-actions-rapides').classList.add('open');
+}
+
+function afficherEditeurStatutsRapides(f){
+  const actifs=getFilmStatuts(f).filter(s=>STATUTS.includes(s));
+  if(_statutRapideARemplacer&&!actifs.includes(_statutRapideARemplacer)) _statutRapideARemplacer=actifs[0]||null;
+  const liste=document.getElementById('modal-actions-statuts-actuels');
+  const mode=document.getElementById('modal-actions-mode');
+  if(!liste||!mode)return;
+  const titre='<div style="font-size:11px;font-weight:bold;letter-spacing:.04em;text-transform:uppercase;color:var(--text2);margin-bottom:8px">Statuts actuels</div>';
+  liste.innerHTML=titre+(actifs.length
+    ?actifs.map(st=>{
+      const info=statutInfo(st);
+      const choisi=st===_statutRapideARemplacer;
+      return '<div style="display:flex;gap:6px;margin-bottom:6px">'
+        +'<button type="button" class="btn '+info.cls+'" onclick="selectionnerStatutARemplacer(\''+st+'\')" aria-pressed="'+choisi+'" style="flex:1;min-width:0;text-align:left;padding:9px;font-size:12px;background:'+(choisi?'var(--green-dark)':'var(--surface2)')+';color:var(--text);border:1px solid '+(choisi?'var(--green-light)':'#444')+'">'
+        +info.label+(choisi?'  ✓ À remplacer':'')+'</button>'
+        +'<button type="button" class="btn" aria-label="Retirer '+info.label+'" title="Retirer uniquement ce statut" onclick="retirerStatutRapide(\''+st+'\')" style="flex:0 0 37px;background:#512525;color:#ffaaaa;font-size:17px;border:1px solid #7a3737">✕</button>'
+        +'</div>';
+    }).join('')
+    :'<div style="color:var(--text2);font-size:12px;margin-bottom:8px">Aucun statut attribué.</div>');
+  mode.innerHTML='<div style="font-size:11px;color:var(--text2);margin-bottom:7px">'
+    +(_statutRapideARemplacer?'Le prochain statut remplacera « '+statutInfo(_statutRapideARemplacer).label+' ».':'Le prochain statut sera ajouté sans en retirer d’autre.')
+    +'</div>'
+    +'<button type="button" class="btn" onclick="ajouterSansRemplacerStatutRapide()" style="width:100%;font-size:12px;text-align:center;background:var(--surface2);color:var(--text);border:1px solid '+(_statutRapideARemplacer?'#444':'var(--green-light)')+';padding:8px">＋ Ajouter sans remplacer'+(!_statutRapideARemplacer?' ✓':'')+'</button>';
+  document.querySelectorAll('#modal-actions-choix-statuts [data-statut-action]').forEach(btn=>{
+    const present=actifs.includes(btn.dataset.statutAction);
+    btn.style.outline=present?'1px solid var(--green-light)':'none';
+    btn.title=present?'Déjà attribué à cette fiche':'';
+  });
+}
+
+function selectionnerStatutARemplacer(statut){
+  const f=films.find(f=>f.id===_longPressId);if(!f)return;
+  const cible=normaliserStatut(statut);
+  if(!getFilmStatuts(f).includes(cible))return;
+  _statutRapideARemplacer=cible;
+  afficherEditeurStatutsRapides(f);
+}
+
+function ajouterSansRemplacerStatutRapide(){
+  const f=films.find(f=>f.id===_longPressId);if(!f)return;
+  _statutRapideARemplacer=null;
+  afficherEditeurStatutsRapides(f);
+}
+
+// Éliminer aussi les anciens indicateurs de statut pour qu'ils ne réapparaissent
+// pas après rechargement d'une collection migrée.
+function nettoyerAncienStatutRapide(f,statut,remplacement=''){
+  for(const cle of ['status','etat','statutFilm','collectionStatus']){
+    if(f[cle]&&normaliserStatut(f[cle])===statut)f[cle]=remplacement;
+  }
+  if(statut==='trouver')for(const cle of ['aTrouver','estATrouver','toFind'])if(f[cle]===true)f[cle]=false;
+  if(statut==='critique')for(const cle of ['regarderCritiques','critique'])if(f[cle]===true)f[cle]=false;
+  if(statut==='ccdr')for(const cle of ['aPrendreCcdr','ccdr'])if(f[cle]===true)f[cle]=false;
+}
+
+function retirerStatutRapide(statut){
+  const f=films.find(f=>f.id===_longPressId);if(!f)return;
+  const cible=normaliserStatut(statut);
+  if(!getFilmStatuts(f).includes(cible))return;
+  const resultat=definirStatutFilm(f,cible,false);
+  if(resultat===null)return;
+  nettoyerAncienStatutRapide(f,cible);
+  sauvegarder();renderCollection();renderHome();
+  if(_statutRapideARemplacer===cible)_statutRapideARemplacer=getFilmStatuts(f).filter(s=>STATUTS.includes(s))[0]||null;
+  afficherEditeurStatutsRapides(f);
+  snack('✓ Statut retiré : '+statutInfo(cible).label);
 }
 
 function actionRapide(action){
   const f=films.find(f=>f.id===_longPressId);
-  fermerModal('modal-actions-rapides');
-  if(!f) return;
-  if(action==='detail'){ouvrirDetail(f.id);return;}
+  if(!f)return;
+  if(action==='detail'){fermerModal('modal-actions-rapides');ouvrirDetail(f.id);return;}
   if(action==='supprimer'){
-    if(!confirm('Supprimer "'+f.titre+'" ?')) return;
+    if(!confirm('Supprimer la fiche entière « '+f.titre+' » ?')) return;
+    fermerModal('modal-actions-rapides');
     films=films.filter(x=>x.id!==f.id);
     sauvegarder();renderCollection();renderHome();
-    snack('🗑 Supprimé');
+    snack('🗑 Fiche supprimée');
     return;
   }
-  const actif=definirStatutFilm(f,action);
-  if(actif===null)return;
-  sauvegarder();
-  renderCollection();renderHome();
-  snack((actif?'✓ Ajouté : ':'✓ Retiré : ')+statutInfo(action).label);
+  const cible=normaliserStatut(action);
+  if(!STATUTS.includes(cible)||!cible)return;
+  const actifs=getFilmStatuts(f);
+  const ancien=_statutRapideARemplacer&&actifs.includes(_statutRapideARemplacer)?_statutRapideARemplacer:null;
+  if(ancien===cible||(!ancien&&actifs.includes(cible))){
+    snack('Ce statut est déjà attribué. Utilise ✕ pour le retirer.');
+    return;
+  }
+  if(ancien){
+    // Remplacer un statut précis en conservant tous les autres.
+    const nouveaux=[...new Set(actifs.map(st=>st===ancien?cible:st))];
+    f.statuts=nouveaux;
+    nettoyerAncienStatutRapide(f,ancien,cible);
+    synchroniserStatutsFilm(f);
+    sauvegarder();renderCollection();renderHome();
+    fermerModal('modal-actions-rapides');
+    snack('✓ '+statutInfo(ancien).label+' → '+statutInfo(cible).label);
+  }else{
+    // L'utilisateur a explicitement demandé un ajout sans remplacement.
+    definirStatutFilm(f,cible,true);
+    sauvegarder();renderCollection();renderHome();
+    fermerModal('modal-actions-rapides');
+    snack('✓ Ajouté : '+statutInfo(cible).label);
+  }
 }
 let _selectionIds=new Set();
 
