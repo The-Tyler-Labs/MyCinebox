@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.101</title>
+<title>Vidéothèque v1.7.102</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -387,6 +387,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     <div class="suggested-banner-header"><span>🎲 Suggestions</span><span>À voir / plus tard en priorité</span></div>
     <div class="suggested-track-wrap"><div class="suggested-track"></div></div>
   </div>
+  <button type="button" class="btn btn-primary" onclick="ouvrirChoixSoiree()" style="width:100%;margin:0 0 14px;padding:12px;font-size:14px">🍿 Que regarder ce soir ?</button>
   <div class="stats-row">
     <div class="stat-card"><div class="num" id="stat-total">0</div><div class="lbl">Total</div></div>
     <div class="stat-card"><div class="num" id="stat-vus">0</div><div class="lbl">👁 Vus</div></div>
@@ -608,6 +609,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <button id="collection-tmdb" class="sort-btn" style="display:none" onclick="basculerRechercheVersAjout(document.getElementById('search-local').value)">Continuer la recherche sur TMDB</button><div id="coll-count" style="font-size:12px;color:var(--text2)"></div>
+      <button type="button" onclick="ouvrirChoixSoiree()" style="background:var(--green);border:none;border-radius:20px;color:white;padding:8px 12px;font-weight:bold;cursor:pointer">🍿 Ce soir ?</button>
       <button onclick="suggestionAleatoire()" style="background:linear-gradient(135deg,#6e3d1a,#1a3d6e);border:none;color:#fff;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:bold;cursor:pointer">🎲 Suggestion</button>
         <button id="btn-selectionner" onclick="toggleModeSelection()" style="background:var(--surface2);border:1px solid #333;color:var(--text2);border-radius:20px;padding:7px 14px;font-size:12px;font-weight:bold;cursor:pointer">☑ Sélect.</button>
     </div>
@@ -1017,6 +1019,53 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   </div><div class="modal-body" id="meme-delire-body"></div></div>
 </div>
 
+<!-- Choisir un film : le moteur local est utilisable sans API externe. -->
+<div class="modal-overlay" id="modal-choix-soiree" onclick="if(event.target===this)fermerModal('modal-choix-soiree')">
+  <div class="modal-box" style="width:calc(100% - 20px);max-width:650px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div class="modal-header"><h3>🍿 Que regarder ce soir ?</h3>
+      <button type="button" class="modal-close" aria-label="Fermer" onclick="fermerModal('modal-choix-soiree')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:14px 16px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:12px">
+        <label style="font-size:12px;color:var(--text2)">Genre ou ambiance
+          <select class="version-input" id="soiree-genre" onchange="modifierPrefsSoiree()" style="display:block;width:100%;margin-top:5px">
+            <option value="surprise">🎲 Surprends-moi</option><option value="whodunit">🕵️ Whodunit</option>
+            <option value="thriller">🔍 Thriller / suspense</option><option value="horreur">🩸 Horreur</option>
+            <option value="slasher">🔪 Slasher</option><option value="comedie">😂 Comédie</option>
+            <option value="action">💥 Action</option><option value="scifi">🚀 Science-fiction</option>
+            <option value="policier">👮 Policier</option><option value="animation">🎨 Animation</option>
+          </select>
+        </label>
+        <label style="font-size:12px;color:var(--text2)">Durée
+          <select class="version-input" id="soiree-duree" onchange="modifierPrefsSoiree()" style="display:block;width:100%;margin-top:5px">
+            <option value="0">Sans limite</option><option value="90">90 min maximum</option>
+            <option value="105">1 h 45 maximum</option><option value="120">2 h maximum</option>
+            <option value="150">2 h 30 maximum</option>
+          </select>
+        </label>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+        <label style="font-size:12px"><input type="checkbox" id="soiree-possede" checked onchange="modifierPrefsSoiree()"> Films possédés uniquement</label>
+        <label style="font-size:12px"><input type="checkbox" id="soiree-dejavus" onchange="modifierPrefsSoiree()"> Inclure les déjà vus</label>
+        <label style="font-size:12px"><input type="checkbox" id="soiree-rapide" onchange="modifierPrefsSoiree()"> Privilégier les films courts / rythmés</label>
+      </div>
+      <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:8px">Moteur choisi
+        <select class="version-input" id="soiree-fournisseur" onchange="modifierPrefsSoiree()" style="display:block;width:100%;margin-top:5px">
+          <option value="local">Sans IA (fonctionnel)</option>
+          <option value="chatgpt">ChatGPT — non connecté</option>
+          <option value="gemini">Gemini — non connecté</option>
+          <option value="claude">Claude — non connecté</option>
+          <option value="ollama">Ollama — non connecté</option>
+          <option value="lmstudio">LM Studio — non connecté</option>
+        </select>
+      </label>
+      <p id="soiree-info-moteur" style="font-size:11px;color:var(--text2);margin:0 0 13px;line-height:1.5"></p>
+      <button type="button" class="btn btn-primary" onclick="lancerChoixSoiree()" style="width:100%;padding:12px;margin-bottom:12px">🎬 Propose-moi 5 films</button>
+      <div id="soiree-resultats" aria-live="polite"></div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL SUGGESTION -->
 <div class="modal-overlay" id="modal-suggestion">
   <div class="modal-box">
@@ -1110,7 +1159,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.101';
+const APP_VERSION='v1.7.102';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -4999,6 +5048,132 @@ async function ouvrirFicheFilmDepuisFilmo(tmdbId,type){
       }
     };
   }
+}
+
+// Recommandations locales : pas de spoilers, pas de facture API, pas de fausse IA connectée.
+const SOIREE_CLE='mycinebox_soiree_v102';
+const SOIREE_DEFAUT={genre:'surprise',duree:'0',possede:true,dejavus:false,rapide:false,fournisseur:'local'};
+let _soireeDerniereSelection=[];
+function preferencesSoiree(){
+  try{
+    const p=JSON.parse(localStorage.getItem(SOIREE_CLE)||'{}');
+    return {...SOIREE_DEFAUT,...(p&&typeof p==='object'?p:{})};
+  }catch(_){return {...SOIREE_DEFAUT};}
+}
+function modifierPrefsSoiree(){
+  const el=id=>document.getElementById('soiree-'+id);
+  const p={genre:el('genre').value,duree:el('duree').value,possede:el('possede').checked,
+    dejavus:el('dejavus').checked,rapide:el('rapide').checked,fournisseur:el('fournisseur').value};
+  try{localStorage.setItem(SOIREE_CLE,JSON.stringify(p));}catch(_){}
+  const message=document.getElementById('soiree-info-moteur');
+  message.textContent=p.fournisseur==='local'
+    ?'Classement gratuit à partir de ta collection. Le genre « whodunit » est repéré par indices et peut nécessiter une vérification.'
+    :'Cette IA n’est pas encore reliée à MyCinebox. Le classement ci-dessous utilise donc le moteur local. Une connexion réelle nécessitera un service sécurisé.';
+  return p;
+}
+function ouvrirChoixSoiree(){
+  const p=preferencesSoiree();
+  const el=id=>document.getElementById('soiree-'+id);
+  ['genre','duree','fournisseur'].forEach(k=>{el(k).value=p[k];});
+  ['possede','dejavus','rapide'].forEach(k=>{el(k).checked=!!p[k];});
+  document.getElementById('soiree-resultats').replaceChildren();
+  modifierPrefsSoiree();
+  document.getElementById('modal-choix-soiree').classList.add('open');
+}
+function critereFilmSoiree(f,genre){
+  const tags=normaliser([f.genres,f.sousGenres].filter(Boolean).join(' '));
+  const texte=normaliser([tags,f.resume].filter(Boolean).join(' '));
+  const map={thriller:/thriller|suspense|mystere|enquete|policier/,
+    horreur:/horreur|horror|epouvante|gore|slasher/,
+    slasher:/slasher|tueur en serie|serial killer|massacre/,
+    comedie:/comedie|comedy|humour|burlesque/,
+    action:/action|aventure|espionnage|combat/,
+    scifi:/science fiction|science-fiction|sci-fi|anticipation|dystop|spatial/,
+    policier:/policier|detective|enquete|crime|mystere/,
+    animation:/animation|anime|dessin anime/};
+  if(genre==='surprise')return {oui:true,bonus:0,raison:'Suggestion variée'};
+  if(genre==='whodunit'){
+    const fort=/whodunit|who.?dunnit|murder mystery|cluedo|enquete a suspects|tous suspects|chercher le coupable|qui a tue|identite du meurtrier/.test(texte);
+    const enquete=/enquete|investigation|detective|inspecteur|crime|policier|mystere/.test(texte);
+    const meurtre=/meurtre|assassin|homicide|suspect|coupable|meurtrier/.test(texte);
+    const suspects=/suspects|plusieurs suspects|parmi eux|le coupable|les invites/.test(texte);
+    return fort?{oui:true,bonus:30,raison:'Indices précis de whodunit'}
+      :(enquete&&meurtre&&suspects)?{oui:true,bonus:16,raison:'Meurtre, enquête et suspects mentionnés (à vérifier)'}
+      :{oui:false};
+  }
+  const rx=map[genre];
+  if(!rx||!rx.test(texte))return {oui:false};
+  const precise=rx.test(tags);
+  return {oui:true,bonus:precise?18:6,raison:precise?'Genre ou sous-genre indiqué':'Indices dans le synopsis'};
+}
+function candidatsSoiree(p){
+  const max=Number(p.duree)||0;
+  return films.flatMap(f=>{
+    if(!f||!f.titre||!['films','animation'].includes(f.categorie))return [];
+    if(p.possede&&(filmAStatut(f,'trouver')||filmAStatut(f,'trouverplustard')))return [];
+    if(!p.dejavus&&(filmAStatut(f,'vu')||f.estVu||(Array.isArray(f.visionnages)&&f.visionnages.length)))return [];
+    const duree=Number(f.duree)||0;
+    if(max&&duree>max)return [];
+    const match=critereFilmSoiree(f,p.genre);
+    if(!match.oui)return [];
+    let score=match.bonus+Math.random()*6;
+    const note=Number(f.maNote)||0,tmdb=Number(f.notesTmdb)||0;
+    if(note>0)score+=Math.min(8,note)/2;
+    if(tmdb>0)score+=Math.min(9,tmdb)/3;
+    if(filmAStatut(f,'avoir'))score+=5;
+    if(filmAStatut(f,'plustard'))score+=2;
+    let rythme='';
+    if(p.rapide){
+      const t=normaliser([f.genres,f.sousGenres].filter(Boolean).join(' '));
+      if(/rythme rapide|demarrage rapide|nerveux|soutenu|sans temps mort|effrene|dynamique/.test(t)){
+        score+=8;rythme='Rythme rapide renseigné dans la fiche';
+      }else if(duree>0&&duree<=100){score+=2;rythme='Durée courte (rythme non vérifié)';}
+      else rythme='Rythme inconnu';
+    }
+    return [{f,score,raison:match.raison,rythme}];
+  }).sort((a,b)=>b.score-a.score);
+}
+function lancerChoixSoiree(){
+  const p=modifierPrefsSoiree();
+  const candidats=candidatsSoiree(p);
+  const host=document.getElementById('soiree-resultats');
+  host.replaceChildren();
+  if(!candidats.length){
+    const msg=document.createElement('p');
+    msg.style.cssText='font-size:13px;color:var(--text2);background:var(--surface2);padding:12px;border-radius:9px';
+    msg.textContent='Aucun film ne correspond. Change le genre, la durée ou les filtres de disponibilité.';
+    host.append(msg);return;
+  }
+  let pool=candidats.filter(x=>!_soireeDerniereSelection.includes(String(x.f.id)));
+  if(pool.length<Math.min(5,candidats.length))pool=candidats;
+  const selection=pool.slice(0,5);
+  _soireeDerniereSelection=selection.map(x=>String(x.f.id));
+  const note=document.createElement('p');
+  note.style.cssText='font-size:11px;color:var(--text2);margin-bottom:9px';
+  note.textContent=candidats.length+' candidat(s) · résultats indicatifs, sans spoiler. Le rythme et le whodunit ne sont pas toujours vérifiables dans TMDB.';
+  host.append(note);
+  selection.forEach((x,i)=>{
+    const f=x.f;
+    const line=document.createElement('div');
+    line.style.cssText='display:flex;gap:10px;border:1px solid #333;border-radius:10px;background:var(--surface2);padding:10px;margin-bottom:9px';
+    const img=document.createElement('div');
+    if(f.affichePath){
+      const poster=document.createElement('img');poster.src=f.affichePath;poster.alt='';
+      poster.loading='lazy';poster.style.cssText='height:96px;width:65px;object-fit:cover;border-radius:6px';
+      img.append(poster);
+    }else{img.textContent='🎬';img.style.cssText='width:65px;height:96px;display:grid;place-items:center;background:var(--surface);border-radius:6px';}
+    const details=document.createElement('div');details.style.cssText='flex:1;min-width:0';
+    const title=document.createElement('strong');title.style.fontSize='13px';title.textContent=(i+1)+'. '+f.titre;
+    const meta=document.createElement('div');meta.style.cssText='font-size:11px;color:var(--text2);margin:5px 0';
+    meta.textContent=[f.dateSortie?String(f.dateSortie).slice(0,4):'',Number(f.duree)>0?formatDuree(Number(f.duree)):''].filter(Boolean).join(' · ');
+    const why=document.createElement('div');why.style.cssText='font-size:11px;color:var(--green-light)';
+    why.textContent=x.raison+(x.rythme?' · '+x.rythme:'');
+    const open=document.createElement('button');open.type='button';open.className='btn btn-sm';
+    open.style.cssText='margin-top:8px;background:var(--green-dark);color:var(--text)';
+    open.textContent='Voir la fiche';
+    open.onclick=()=>{fermerModal('modal-choix-soiree');ouvrirDetail(f.id);};
+    details.append(title,meta,why,open);line.append(img,details);host.append(line);
+  });
 }
 
 function suggestionAleatoire(){
