@@ -1,11 +1,12 @@
-// MyCinebox service worker — v1.7.102
-const CACHE_NAME = 'mycinebox-v1.7.102';
+// MyCinebox service worker — v1.7.103
+const CACHE_NAME = 'mycinebox-v1.7.103';
 const APP_SHELL = [
   '/MyCinebox/',
   '/MyCinebox/index.html',
   '/MyCinebox/manifest.json',
   '/MyCinebox/icon-192.png',
-  '/MyCinebox/icon-512.png'
+  '/MyCinebox/icon-512.png',
+  '/MyCinebox/js/ai-connector.js',
 ];
 
 self.addEventListener('install', event => {

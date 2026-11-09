@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.102</title>
+<title>Vidéothèque v1.7.103</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1050,16 +1050,17 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <label style="font-size:12px"><input type="checkbox" id="soiree-rapide" onchange="modifierPrefsSoiree()"> Privilégier les films courts / rythmés</label>
       </div>
       <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:8px">Moteur choisi
-        <select class="version-input" id="soiree-fournisseur" onchange="modifierPrefsSoiree()" style="display:block;width:100%;margin-top:5px">
+        <select class="version-input" id="soiree-fournisseur" onchange="modifierPrefsSoiree();afficherConnexionSoiree()" style="display:block;width:100%;margin-top:5px">
           <option value="local">Sans IA (fonctionnel)</option>
-          <option value="chatgpt">ChatGPT — non connecté</option>
-          <option value="gemini">Gemini — non connecté</option>
-          <option value="claude">Claude — non connecté</option>
-          <option value="ollama">Ollama — non connecté</option>
-          <option value="lmstudio">LM Studio — non connecté</option>
+          <option value="chatgpt">OpenAI / ChatGPT (clé API)</option>
+          <option value="gemini">Gemini (Google)</option>
+          <option value="claude">Claude (Anthropic)</option>
+          <option value="ollama">Ollama (local)</option>
+          <option value="lmstudio">LM Studio (local)</option>
         </select>
       </label>
-      <p id="soiree-info-moteur" style="font-size:11px;color:var(--text2);margin:0 0 13px;line-height:1.5"></p>
+      <p id="soiree-info-moteur" style="font-size:11px;color:var(--text2);margin:0 0 10px;line-height:1.5"></p>
+      <div id="soiree-connexion-config" style="margin:0 0 12px"></div>
       <button type="button" class="btn btn-primary" onclick="lancerChoixSoiree()" style="width:100%;padding:12px;margin-bottom:12px">🎬 Propose-moi 5 films</button>
       <div id="soiree-resultats" aria-live="polite"></div>
     </div>
@@ -1159,7 +1160,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.102';
+const APP_VERSION='v1.7.103';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -5068,7 +5069,7 @@ function modifierPrefsSoiree(){
   const message=document.getElementById('soiree-info-moteur');
   message.textContent=p.fournisseur==='local'
     ?'Classement gratuit à partir de ta collection. Le genre « whodunit » est repéré par indices et peut nécessiter une vérification.'
-    :'Cette IA n’est pas encore reliée à MyCinebox. Le classement ci-dessous utilise donc le moteur local. Une connexion réelle nécessitera un service sécurisé.';
+    :'Configure et teste le fournisseur choisi. Les recommandations lui seront envoyées, sans retour silencieux au moteur local.';
   return p;
 }
 function ouvrirChoixSoiree(){
@@ -5078,6 +5079,7 @@ function ouvrirChoixSoiree(){
   ['possede','dejavus','rapide'].forEach(k=>{el(k).checked=!!p[k];});
   document.getElementById('soiree-resultats').replaceChildren();
   modifierPrefsSoiree();
+  afficherConnexionSoiree();
   document.getElementById('modal-choix-soiree').classList.add('open');
 }
 function critereFilmSoiree(f,genre){
@@ -5133,8 +5135,9 @@ function candidatsSoiree(p){
     return [{f,score,raison:match.raison,rythme}];
   }).sort((a,b)=>b.score-a.score);
 }
-function lancerChoixSoiree(){
+async function lancerChoixSoiree(){
   const p=modifierPrefsSoiree();
+  if(p.fournisseur!=='local')return await lancerChoixSoireeIA(p);
   const candidats=candidatsSoiree(p);
   const host=document.getElementById('soiree-resultats');
   host.replaceChildren();
@@ -8261,5 +8264,6 @@ window.addEventListener('online',()=>classicSession.check());
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)classicSession.check();});
 
 </script>
+<script src="js/ai-connector.js"></script>
 </body>
 </html>
