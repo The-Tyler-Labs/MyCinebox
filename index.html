@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.97</title>
+<title>Vidéothèque v1.7.98</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -117,6 +117,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .film-card .fc-stars{font-size:11px;color:var(--gold)}
 .vu-badge{position:absolute;top:6px;right:6px;border-radius:20px;padding:3px 7px;font-size:10px;font-weight:bold;cursor:pointer;border:none;z-index:2;white-space:nowrap}
 .vu-badge.s-vide{background:rgba(0,0,0,.4);color:rgba(255,255,255,.3)}
+.vu-badge.s-trouverplustard{background:rgba(28,70,70,.9);color:#9ae5cf}
 .vu-badge.s-trouver{background:rgba(80,40,0,.85);color:#f5a623}
 .vu-badge.s-avoir{background:rgba(0,0,0,.65);color:var(--text2)}
 .vu-badge.s-plustard{background:rgba(90,50,10,.8);color:#f0b060}
@@ -248,6 +249,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .star{font-size:24px;color:#333;cursor:pointer;transition:color .15s}
 .star.on{color:var(--gold)}
 .vu-btn{width:100%;margin-bottom:8px;padding:11px;font-size:13px;border-radius:10px;cursor:pointer;font-weight:600;border:none;text-align:center}
+.vu-btn.s-trouverplustard{background:#1b4e48;color:#9ae5cf}
 .vu-btn.s-trouver{background:#5a2d00;color:#f5a623}
 .vu-btn.s-avoir{background:#2a2a2a;color:#aaa}
 .vu-btn.s-plustard{background:#3a2a10;color:#f0b060}
@@ -259,6 +261,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 /* Statut buttons dans détail */
 .statut-row{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
 .statut-opt{flex:1;min-width:70px;padding:8px 4px;border-radius:10px;font-size:11px;font-weight:600;border:1px solid #333;background:none;color:var(--text2);cursor:pointer;text-align:center}
+.statut-opt.active.s-trouverplustard{background:#1b4e48;color:#9ae5cf;border-color:#36998a}
 .statut-opt.active.s-trouver{background:#5a2d00;color:#f5a623;border-color:#8a4d00}
 .statut-opt.active.s-avoir{background:#2a2a2a;color:#ddd;border-color:#555}
 .statut-opt.active.s-plustard{background:#3a2a10;color:#f0b060;border-color:#f0b060}
@@ -455,6 +458,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     <div class="carousel" id="carousel-ccdr"></div>
   </div>
 
+  <div id="home-section-trouverplustard"><div class="section-header"><span class="section-title">🗓️ À trouver plus tard</span><button class="see-all" onclick="goCollectionCatStatut('trouverplustard')">Voir tout →</button></div><div class="carousel" id="carousel-trouverplustard"></div></div>
   <div id="home-section-trouver">
     <div class="section-header" id="section-header-trouver">
       <span class="section-title">🔍 À trouver</span>
@@ -506,6 +510,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <button class="cat-tab" id="ctab-saga" onclick="setCatTab('saga')" style="background:var(--surface);border:1px solid #333;color:var(--text2)">🎯 Sagas/Filmo</button>
       <button class="cat-tab" id="ctab-avoir" onclick="setCatTab('avoir')" style="background:var(--surface);border:1px solid #333;color:#ddd">📋 À voir</button>
       <button class="cat-tab" id="ctab-plustard" onclick="setCatTab('plustard')" style="background:var(--surface);border:1px solid #333;color:#f0b060">⏰ Plus tard</button>
+      <button class="cat-tab" id="ctab-atrouverplustard" onclick="setCatTab('atrouverplustard')" style="background:var(--surface);border:1px solid #333;color:#9ae5cf">🗓️ À trouver plus tard</button>
       <button class="cat-tab" id="ctab-atrouver" onclick="setCatTab('atrouver')" style="background:var(--surface);border:1px solid #333;color:#f5a623">🔍 À trouver</button>
       <button class="cat-tab" id="ctab-acritique" onclick="setCatTab('acritique')" style="background:var(--surface);border:1px solid #333;color:#f0a0ff">🎬 Critiques</button>
     </div>
@@ -522,6 +527,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <div class="tags-scroll" id="tags-statut">
           <button class="tag active" onclick="setTagFiltre('statut','tous',this)">Tous</button>
           <button class="tag" onclick="setTagFiltre('statut','trouver',this)">🔍 À trouver</button>
+          <button class="tag" onclick="setTagFiltre('statut','trouverplustard',this)">🗓️ À trouver plus tard</button>
           <button class="tag" onclick="setTagFiltre('statut','avoir',this)">📋 À voir</button>
           <button class="tag" onclick="setTagFiltre('statut','plustard',this)">⏰ Plus tard</button>
                     <button class="tag" onclick="setTagFiltre('statut','vu',this)">👁 Vus</button>
@@ -589,6 +595,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <button class="sel-btn" onclick="toggleModeSelection()" style="background:none;color:#aaa;border:1px solid #444">✕</button>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="sel-btn" onclick="selAction('trouverplustard')" style="background:#1b4e48;color:#9ae5cf">🗓️ Trouver + tard</button>
         <button class="sel-btn" onclick="selAction('trouver')" style="background:#1a3a5c;color:#6ab0ff">🔍 Trouver</button>
         <button class="sel-btn" onclick="selAction('avoir')" style="background:#2a2a2a;color:#ddd">📋 À voir</button>
         <button class="sel-btn" onclick="selAction('plustard')" style="background:#3a2a10;color:#f0b060">⏰ + tard</button>
@@ -967,6 +974,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   <div class="modal-box" style="padding:16px;max-width:280px;margin:auto">
     <div id="modal-actions-titre" style="font-size:16px;font-weight:bold;margin-bottom:16px;color:var(--text)"></div>
     <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn" onclick="actionRapide('trouverplustard')" style="background:#1b4e48;color:#9ae5cf;text-align:left;padding:10px 14px;font-size:13px">🗓️ À trouver plus tard</button>
       <button class="btn" onclick="actionRapide('trouver')" style="background:#1a3a5c;color:#6ab0ff;text-align:left;padding:10px 14px;font-size:13px">🔍 À trouver</button>
       <button class="btn" onclick="actionRapide('avoir')" style="background:#2a2a2a;color:#ddd;text-align:left;padding:10px 14px;font-size:13px">📋 À voir</button>
       <button class="btn" onclick="actionRapide('plustard')" style="background:#3a2a10;color:#f0b060;text-align:left;padding:10px 14px;font-size:13px">⏰ À regarder plus tard</button>
@@ -1092,7 +1100,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.97';
+const APP_VERSION='v1.7.98';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1221,6 +1229,7 @@ function normaliserStatut(statut){
   const alias={
     '':'',
     'trouver':'trouver','atrouver':'trouver','rechercher':'trouver','wanted':'trouver','tofind':'trouver',
+    'trouverplustard':'trouverplustard','atrouverplustard':'trouverplustard','findlater':'trouverplustard',
     'avoir':'avoir','avoir':'avoir','towatch':'avoir',
     'plustard':'plustard','aplustard':'plustard','watchlater':'plustard',
     'cours':'cours','encours':'cours','watching':'cours',
@@ -1414,12 +1423,13 @@ function lireVisibiliteStatuts(){
   }catch(e){stored={};}
   return {
     trouver: typeof stored.trouver==='boolean' ? stored.trouver : true,
+    trouverplustard: typeof stored.trouverplustard==='boolean' ? stored.trouverplustard : true,
     critique: typeof stored.critique==='boolean' ? stored.critique : true,
     ccdr: typeof stored.ccdr==='boolean' ? stored.ccdr : true
   };
 }
 function ecrireVisibiliteStatuts(vis){
-  const propre={trouver:!!vis.trouver,critique:!!vis.critique,ccdr:!!vis.ccdr};
+  const propre={trouver:!!vis.trouver,trouverplustard:!!vis.trouverplustard,critique:!!vis.critique,ccdr:!!vis.ccdr};
   try{localStorage.setItem(STATUS_VISIBILITY_KEY,JSON.stringify(propre));}catch(e){}
   // Compatibilité avec les anciennes préférences, sans les utiliser comme source principale.
   prefs.showTrouver=propre.trouver;
@@ -1460,6 +1470,7 @@ function statutEstVisible(statutOuFilm){
   if(typeof statutOuFilm!=='object'){
     const statut=normaliserStatut(statutOuFilm);
     if(statut==='trouver') return vis.trouver;
+    if(statut==='trouverplustard') return vis.trouverplustard;
     if(statut==='critique') return vis.critique;
     if(statut==='ccdr') return vis.ccdr;
     return true;
@@ -1470,6 +1481,7 @@ function statutEstVisible(statutOuFilm){
   // statuts est affichable. Elle peut donc être « À trouver » et « À voir ».
   return statuts.some(statut=>{
     if(statut==='trouver') return vis.trouver;
+    if(statut==='trouverplustard') return vis.trouverplustard;
     if(statut==='critique') return vis.critique;
     if(statut==='ccdr') return vis.ccdr;
     return true;
@@ -1477,7 +1489,7 @@ function statutEstVisible(statutOuFilm){
 }
 function appliquerVisibiliteAccueil(){
   const vis=lireVisibiliteStatuts();
-  for(const statut of ['trouver','critique','ccdr']){
+  for(const statut of ['trouver','trouverplustard','critique','ccdr']){
     const visible=!!vis[statut];
     const section=document.getElementById('home-section-'+statut);
     if(!section) continue;
@@ -1497,7 +1509,7 @@ function setAfficherStatut(statut,visible){
   renderHome();
   appliquerVisibiliteAccueil();
   if(typeof renderCollection==='function') renderCollection();
-  const libelles={trouver:'À trouver',critique:'Regarder critiques',ccdr:'À prendre CCDR'};
+  const libelles={trouver:'À trouver',trouverplustard:'À trouver plus tard',critique:'Regarder critiques',ccdr:'À prendre CCDR'};
   snack((visible?'✓ Affiché : ':'✓ Masqué : ')+(libelles[statut]||statut));
 }
 function nouvelIdentifiantFiche(occupes){
@@ -1733,6 +1745,22 @@ function renderHome(){
     }).join('');
   }
 
+  // Carousel À trouver plus tard
+  const aTrouverPlusTard=[...films].filter(f=>filmAStatut(f,'trouverplustard')).sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
+  const elTrouverPlusTard=document.getElementById('carousel-trouverplustard');
+  if(elTrouverPlusTard){
+    elTrouverPlusTard.innerHTML=aTrouverPlusTard.length===0
+      ?'<p style="color:var(--text2);font-size:13px;padding:8px 0">Aucun titre à trouver plus tard</p>'
+      :aTrouverPlusTard.map(f=>{
+        const cat=CATS[f.categorie]||CATS.films;
+        return '<div class="carousel-card" onclick="ouvrirDetail('+f.id+')">'
+          +'<img src="'+(f.affichePath||'')+'" onerror="this.src=\'\';this.style.background=\'var(--green-dark)\'" alt="">'
+          +'<div class="cc-title">'+esc(f.titre)+'</div>'
+          +'<div class="cc-cat">'+cat.icon+' '+(f.dateSortie||'').slice(0,4)+'</div>'
+          +'</div>';
+      }).join('');
+  }
+
   // Carousel Regarder critiques
   const critiques=[...films].filter(f=>filmAStatut(f,'critique')).sort((a,b)=>(b.dateAjout||0)-(a.dateAjout||0)).slice(0,15);
   const elCritique=document.getElementById('carousel-critique');
@@ -1964,6 +1992,7 @@ function renderQuickGenres(){
   let src;
   if(catsNormales.includes(catTab)) src=films.filter(f=>f.categorie===catTab);
   else if(catTab==='atrouver') src=films.filter(f=>filmAStatut(f,'trouver'));
+  else if(catTab==='atrouverplustard') src=films.filter(f=>filmAStatut(f,'trouverplustard'));
   else if(catTab==='acritique') src=films.filter(f=>filmAStatut(f,'critique'));
   else if(catTab==='avoir') src=films.filter(f=>filmAStatut(f,'avoir'));
   else if(catTab==='plustard') src=films.filter(f=>filmAStatut(f,'plustard'));
@@ -2170,7 +2199,8 @@ function calculerCollection(){
       // le reste des filtres (genre, année, qualité, etc.). Avant v1.7.87,
       // ces branches faisaient un `return true` trop tôt : le clic sur un genre
       // était donc ignoré dans À voir / À trouver / Plus tard / Critiques.
-      if(catTab==='atrouver'&&(!filmAStatut(f,'trouver')||(tagFiltres.catFilter!==''&&f.categorie!==tagFiltres.catFilter))) return false;
+      if(catTab==='atrouverplustard'&&(!filmAStatut(f,'trouverplustard')||(tagFiltres.catFilter!==''&&f.categorie!==tagFiltres.catFilter))) return false;
+       if(catTab==='atrouver'&&(!filmAStatut(f,'trouver')||(tagFiltres.catFilter!==''&&f.categorie!==tagFiltres.catFilter))) return false;
       if(catTab==='acritique'&&(!filmAStatut(f,'critique')||(tagFiltres.catFilter!==''&&f.categorie!==tagFiltres.catFilter))) return false;
       if(catTab==='avoir'&&!filmAStatut(f,'avoir')) return false;
       if(catTab==='plustard'&&!filmAStatut(f,'plustard')) return false;
@@ -2178,7 +2208,7 @@ function calculerCollection(){
       if(catTab==='animation'){
         const estAnimation=f.categorie==='animation'||(f.genres||'').toLowerCase().split(',').map(g=>g.trim()).includes('animation');
         if(!estAnimation) return false;
-      } else if(!['tous','atrouver','acritique','avoir','plustard'].includes(catTab)&&f.categorie!==catTab) return false;
+      } else if(!['tous','atrouver','atrouverplustard','acritique','avoir','plustard'].includes(catTab)&&f.categorie!==catTab) return false;
       // Les statuts spéciaux restent visibles dans Collection lorsque leur option
       // d'affichage est activée dans les Paramètres. Leur masquage est déjà géré
       // au début du filtre par statutEstVisible(f).
@@ -2228,7 +2258,7 @@ function calculerCollection(){
   _listeFiltreCourante=liste;
 
   // Mini-tabs catégorie pour atrouver/acritique
-  if(!rechercheGlobale&&(catTab==='atrouver'||catTab==='acritique')){
+  if(!rechercheGlobale&&(catTab==='atrouver'||catTab==='atrouverplustard'||catTab==='acritique')){
     const cats=['','films','series','spectacles','documentaires','theatre','animation','humour'];
     const catLabels={'':'Tout','films':'🎬','series':'📺','spectacles':'🎭','documentaires':'🎥','theatre':'🎪','animation':'🎨','humour':'😂'};
     const catTabsEl=document.getElementById('cat-filter-tabs');
@@ -2244,7 +2274,7 @@ function calculerCollection(){
   }
 
   const actifs=[];
-  const statutLabels={trouver:'🔍 À trouver',avoir:'📋 À voir',plustard:'⏰ Plus tard',cours:'▶️ En cours',vu:'👁 Vus',critique:'🎬 Critiques',ccdr:'📀 À prendre CCDR',meilleurequalite:'🔎 Trouver meilleure qualité'};
+  const statutLabels={trouver:'🔍 À trouver',trouverplustard:'🗓️ À trouver plus tard',avoir:'📋 À voir',plustard:'⏰ Plus tard',cours:'▶️ En cours',vu:'👁 Vus',critique:'🎬 Critiques',ccdr:'📀 À prendre CCDR',meilleurequalite:'🔎 Trouver meilleure qualité'};
   if(rechercheGlobale) actifs.push('🔎 Recherche dans toute la médiathèque');
   if(tagFiltres.statut!=='tous') actifs.push(statutLabels[tagFiltres.statut]||tagFiltres.statut);
   if(tagFiltres.decennie&&tagFiltres.decennie.size>0) actifs.push('Décennie: '+[...tagFiltres.decennie].join(', '));
@@ -2261,10 +2291,10 @@ function calculerCollection(){
 
   const grid=document.getElementById('coll-grid');
   const empty=document.getElementById('coll-empty');
-  const nbColl=liste.filter(f=>!filmAStatut(f,'trouver')&&!filmAStatut(f,'critique')&&!filmAStatut(f,'ccdr')).length;
+  const nbColl=liste.filter(f=>!filmAStatut(f,'trouver')&&!filmAStatut(f,'trouverplustard')&&!filmAStatut(f,'critique')&&!filmAStatut(f,'ccdr')).length;
   const totalTxt=rechercheGlobale
     ?liste.length+' résultat(s) dans toute la médiathèque'
-    :(catTab==='atrouver'||catTab==='acritique'?liste.length+' élément(s)':nbColl+' élément(s)'+(liste.length!==nbColl?' (+'+( liste.length-nbColl)+' hors collection)':''));
+    :(catTab==='atrouver'||catTab==='atrouverplustard'||catTab==='acritique'?liste.length+' élément(s)':nbColl+' élément(s)'+(liste.length!==nbColl?' (+'+( liste.length-nbColl)+' hors collection)':''));
   document.getElementById('coll-count').textContent=totalTxt;
   if(liste.length===0){grid.innerHTML='';empty.style.display='block';}
   else{
@@ -2275,7 +2305,7 @@ function calculerCollection(){
 }
 
 function statutInfo(s){
-  const m={trouver:{cls:'s-trouver',label:'🔍 À trouver'},avoir:{cls:'s-avoir',label:'📋 À voir'},plustard:{cls:'s-plustard',label:'⏰ Plus tard'},cours:{cls:'s-cours',label:'▶ En cours'},vu:{cls:'s-vu',label:'👁 Vu'},critique:{cls:'s-critique',label:'🎬 Regarder critiques'},ccdr:{cls:'s-ccdr',label:'📀 À prendre CCDR'},meilleurequalite:{cls:'s-meilleurequalite',label:'🔎 Trouver meilleure qualité'}};
+  const m={trouver:{cls:'s-trouver',label:'🔍 À trouver'},trouverplustard:{cls:'s-trouverplustard',label:'🗓️ À trouver plus tard'},avoir:{cls:'s-avoir',label:'📋 À voir'},plustard:{cls:'s-plustard',label:'⏰ Plus tard'},cours:{cls:'s-cours',label:'▶ En cours'},vu:{cls:'s-vu',label:'👁 Vu'},critique:{cls:'s-critique',label:'🎬 Regarder critiques'},ccdr:{cls:'s-ccdr',label:'📀 À prendre CCDR'},meilleurequalite:{cls:'s-meilleurequalite',label:'🔎 Trouver meilleure qualité'}};
   return m[s]||{cls:'s-vide',label:'—'};
 }
 
@@ -2882,7 +2912,7 @@ function selAction(action){
 }
 
 
-const STATUTS=['','trouver','avoir','plustard','cours','vu','critique','ccdr','meilleurequalite'];
+const STATUTS=['','trouver','trouverplustard','avoir','plustard','cours','vu','critique','ccdr','meilleurequalite'];
 
 // ── TRAILERS TMDB ──
 // Les séries et les films utilisent la même règle : français en priorité,
