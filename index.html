@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vidéothèque">
-<title>Vidéothèque v1.7.100</title>
+<title>Vidéothèque v1.7.101</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1110,7 +1110,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </script>
 <script>
 const DB_KEY='videotheque_films', PREFS_KEY='videotheque_prefs';
-const APP_VERSION='v1.7.100';
+const APP_VERSION='v1.7.101';
 
 // Le bouton + d'ajout doit rester uniquement dans Collection, entre la recherche locale et ⚙️.
 // On supprime tout ancien bouton d'ajout qui aurait été injecté dans l'écran Recherche.
@@ -1279,6 +1279,7 @@ function charger(){
     const legacyVersions=Array.isArray(f.versions)?f.versions:[];
     const editions=Array.isArray(f.editions)
       ?f.editions.map((e,i)=>({
+          ...e,
           id:e.id||('ed-'+(f.id||'x')+'-'+i),
           label:e.label||e.nom||('Édition '+(i+1)),
           rawName:e.rawName||e.nomFichier||'',
@@ -3164,6 +3165,22 @@ function ouvrirDetail(id){
   }
 }
 
+// Date de création des fiches et des éditions : ne jamais inventer celle des données anciennes.
+function dateAjoutAffichable(valeur){
+  if(valeur===undefined||valeur===null||valeur==='')return '';
+  let d;
+  if(typeof valeur==='number'){
+    if(!Number.isFinite(valeur)||valeur<=0)return '';
+    d=new Date(valeur);
+  }else{
+    const brut=String(valeur).trim();
+    if(!brut)return '';
+    d=/^\\d{10,13}$/.test(brut)?new Date(Number(brut)):new Date(brut);
+  }
+  if(Number.isNaN(d.getTime())||d.getFullYear()<1995||d.getTime()>Date.now()+86400000)return '';
+  return d.toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).replace(',', ' à');
+}
+
 function afficherDetail(f){
   const cat=CATS[f.categorie]||CATS.films;
   const genres=f.genres?(f.genres.split(',').map(g=>'<span class="genre-tag">'+esc(g.trim())+'</span>').join('')):'';
@@ -3249,6 +3266,7 @@ function afficherDetail(f){
   document.getElementById('detail-content').innerHTML=
     renderPhotosDuHaut(f,cat)
     +'<div class="detail-body">'
+    +'<div style="font-size:11px;color:var(--text2);margin:0 0 10px;display:flex;align-items:center;gap:6px">🗓️ Fiche ajoutée : '+(dateAjoutAffichable(f.dateAjout)||'date non renseignée')+'</div>'
     +'<div class="detail-header">'
     +'<img class="detail-poster" src="'+(f.affichePath||'')+'" onerror="this.style.background=\'var(--green-dark)\';this.src=\'\'" alt="" onclick="voirPhoto(\''+(f.affichePath||'')+'\')" style="cursor:pointer" title="Voir en grand">'
     +'<div style="font-size:9px;color:var(--text2);text-align:center;margin-top:3px;cursor:pointer" onclick="choisirAfficheFilm('+f.id+')">🖼 Affiche / importer</div>'
@@ -3638,6 +3656,7 @@ function renderEditionsList(f){
       +'<div class="edition-card-head">'
       +'<button class="edition-drag-handle" draggable="true" aria-label="Maintenir puis déplacer cette édition" title="Maintiens ici puis déplace la version" ondragstart="editionNativeDragStart(event,'+f.id+','+i+')" ondragend="editionNativeDragEnd()" onpointerdown="editionPointerDown(event,'+f.id+','+i+')">⋮⋮</button>'
       +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:#d8c8ff">💿 '+esc(e.label||('Édition '+(i+1)))+'</div>'
+      +'<div style="font-size:10px;color:var(--text2);margin-top:3px">🗓️ Ajoutée : '+(dateAjoutAffichable(e.dateAjout)||'date non enregistrée')+'</div>'
       +(infos.length?'<div style="font-size:11px;color:var(--text2);margin-top:4px">'+infos.map(esc).join(' · ')+'</div>':'')
       +(e.rawName?'<details style="margin-top:7px"><summary style="font-size:11px;color:var(--green-light);cursor:pointer">Nom complet du fichier / release</summary><div style="font-size:10px;color:var(--text2);margin-top:5px;word-break:break-word">'+esc(e.rawName)+'</div></details>':'')
       +'</div><button class="btn btn-sm" style="background:#3a1f25;color:#ffb0b8;border:1px solid #74333c" onclick="supprimerEdition('+f.id+','+i+')">✕</button>'
@@ -3776,7 +3795,7 @@ function ajouterEdition(id){
   const duplicate=editions.some(e=>String(e.label||'').toLowerCase()===label.toLowerCase() && String(e.rawName||'').toLowerCase()===raw.toLowerCase());
   if(duplicate){snack('Cette édition est déjà présente');return;}
 
-  editions.push({id:editionId(),label,rawName:raw,details:analysed.details,languages:analysed.languages,source:analysed.source,emplacement:f.emplacement||''});
+  editions.push({id:editionId(),label,rawName:raw,details:analysed.details,languages:analysed.languages,source:analysed.source,emplacement:f.emplacement||'',dateAjout:Date.now()});
   editionsOpenState[id]=true;
   // Conserve la compatibilité avec les anciennes sauvegardes et enrichit les filtres.
   f.versions=editions.map(e=>e.label);
@@ -3799,7 +3818,7 @@ function ajouterEditionRapide(id,label){
   const f=films.find(x=>x.id===id); if(!f) return;
   const editions=getEditions(f);
   if(editions.some(e=>String(e.label||'').toLowerCase()===String(label).toLowerCase())){snack('Cette édition est déjà présente');return;}
-  editions.push({id:editionId(),label:String(label),rawName:'',details:[],languages:[],source:'',emplacement:f.emplacement||''});
+  editions.push({id:editionId(),label:String(label),rawName:'',details:[],languages:[],source:'',emplacement:f.emplacement||'',dateAjout:Date.now()});
   editionsOpenState[id]=true;
   f.versions=editions.map(e=>e.label);
   sauvegarder(); rafraichirEditions(f); renderCollection(); renderHome();
