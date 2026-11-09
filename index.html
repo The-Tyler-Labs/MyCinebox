@@ -755,6 +755,10 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <input type="checkbox" id="pref-show-trouver" onchange="setAfficherStatut('trouver',this.checked)" style="width:20px;height:20px;accent-color:var(--green)">
       </label>
       <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #333">
+        <span>🗓️ Afficher À trouver plus tard</span>
+        <input type="checkbox" id="pref-show-trouverplustard" onchange="setAfficherStatut('trouverplustard',this.checked)" style="width:20px;height:20px;accent-color:var(--green)">
+      </label>
+      <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #333">
         <span>🎬 Afficher Regarder critiques</span>
         <input type="checkbox" id="pref-show-critique" onchange="setAfficherStatut('critique',this.checked)" style="width:20px;height:20px;accent-color:var(--green)">
       </label>
@@ -5235,6 +5239,7 @@ window.addEventListener('popstate', (e)=>{
     +'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px 22px">'+bycat+'</div>'+backupInfo;
   const visStatuts=lireVisibiliteStatuts();
   const prefTrouver=document.getElementById('pref-show-trouver');if(prefTrouver) prefTrouver.checked=visStatuts.trouver;
+  const prefTrouverPlusTard=document.getElementById('pref-show-trouverplustard');if(prefTrouverPlusTard) prefTrouverPlusTard.checked=visStatuts.trouverplustard;
   const prefCritique=document.getElementById('pref-show-critique');if(prefCritique) prefCritique.checked=visStatuts.critique;
   const prefCcdr=document.getElementById('pref-show-ccdr');if(prefCcdr) prefCcdr.checked=visStatuts.ccdr;
   const tmdbKey=ensureTmdbApiKey();
