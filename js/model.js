@@ -9,6 +9,7 @@ export const categories = {
 };
 export const statuses = {
   trouver: "À trouver",
+  trouverplustard: "À trouver plus tard",
   avoir: "À regarder",
   plustard: "Pour plus tard",
   cours: "En cours",
