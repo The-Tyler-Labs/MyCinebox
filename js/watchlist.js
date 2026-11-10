@@ -1,4 +1,4 @@
-/* MyCinebox — onglet À voir v1.7.106. Sans dépendance externe. */
+/* MyCinebox — onglet À voir v1.7.107. Sans dépendance externe. */
 (function(){
 'use strict';
 const KEY='mycinebox_watchlist_preferences_v1';
@@ -101,8 +101,8 @@ function setup(){if(bound||!document.querySelector('.bottom-nav'))return;bound=t
  // Pour les autres chemins de création de statuts (fusion, import, modification directe),
  // l'onglet les affiche quand même grâce à filmAStatut.
  if(typeof APP_VERSION!=='undefined'){
-  const version=document.getElementById('app-version-label');if(version)version.textContent='v1.7.106';
-  document.title='Vidéothèque v1.7.106';
+  const version=document.getElementById('app-version-label');if(version)version.textContent='v1.7.107';
+  document.title='Vidéothèque v1.7.107';
  }
  if(typeof currentPage!=='undefined'&&currentPage==='a-voir')render();
 }
@@ -261,13 +261,16 @@ function render(){const page=document.getElementById('page-a-voir');if(!page)ret
  const toolbar=document.getElementById('wl-subtoolbar');toolbar.replaceChildren();toolbar.append(el('span','wl-muted',visible.length+' titre(s) à voir'+(visible.length!==total.length?' · '+(total.length-visible.length)+' masqué(s)':'')));
  const hint=el('span','wl-note','Maintiens ⠿ puis déplace une fiche avec la souris ou le doigt.');hint.id='wl-drag-hint';toolbar.append(hint);
  if(prefs.sort==='manuel')toolbar.append(el('span','wl-note','✓ Ordre manuel mémorisé'));
- const root=document.getElementById('wl-results');root.replaceChildren();root.classList.remove('wl-columns','wl-sections','wl-size-mini','wl-size-petit','wl-size-moyen','wl-size-grand');root.classList.add('wl-size-'+prefs.size);if(!visible.length){root.append(el('p','wl-empty',total.length?'Aucun titre dans les catégories affichées.':'Aucun titre « À voir ». Ajoute ce statut depuis une fiche.'));return;}
+ const root=document.getElementById('wl-results');root.replaceChildren();root.classList.remove('wl-columns','wl-sections','wl-size-mini','wl-size-petit','wl-size-moyen','wl-size-grand');root.classList.add('wl-size-'+prefs.size);root.style.removeProperty('--wl-group-count');if(!visible.length){root.append(el('p','wl-empty',total.length?'Aucun titre dans les catégories affichées.':'Aucun titre « À voir ». Ajoute ce statut depuis une fiche.'));return;}
  if(prefs.group){
-  root.classList.add('wl-sections');
-  const known=TYPES.filter(t=>prefs.types.includes(t));
-  known.forEach(t=>makeGroup(root,(TYPE_ICONS[t]||'')+' '+TYPE_NAMES[t],visible.filter(f=>typeOf(f)===t)));
+  // Une colonne d'égale largeur par catégorie, toutes alignées sur UNE MÊME ligne.
+  // Les fiches de chaque colonne remplissent leurs propres lignes de gauche à droite.
+  const groupes=TYPES.filter(t=>prefs.types.includes(t)).map(t=>({t,items:visible.filter(f=>typeOf(f)===t)})).filter(g=>g.items.length);
+  root.classList.add('wl-columns');
+  root.style.setProperty('--wl-group-count',String(groupes.length));
+  groupes.forEach(g=>makeGroup(root,(TYPE_ICONS[g.t]||'')+' '+TYPE_NAMES[g.t],g.items));
  }else{
-  root.classList.remove('wl-sections');makeGroup(root,'',visible);
+  makeGroup(root,'',visible);
  }
 }
 function init(){setup();}

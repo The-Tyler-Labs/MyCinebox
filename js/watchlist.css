@@ -1,4 +1,4 @@
-/* MyCinebox v1.7.106 : vue À voir, responsive pour tablette Android. */
+/* MyCinebox v1.7.107 : vue À voir, responsive pour tablette Android. */
 .bottom-nav{overflow-x:auto;scrollbar-width:none;white-space:nowrap;justify-content:flex-start}
 .bottom-nav::-webkit-scrollbar{display:none}
 .bottom-nav .nav-btn{flex:1 0 60px;min-width:60px}
@@ -58,24 +58,56 @@
 .wl-modal-actions{display:flex;justify-content:flex-end;gap:8px;padding-top:15px}
 @media(max-width:420px){.bottom-nav .nav-btn{flex:0 0 59px}.wl-controls .wl-control{min-width:100%;}.wl-card.wl-liste .wl-poster{width:75px}.wl-card.wl-liste .wl-card-actions{flex-direction:column;justify-content:center}.wl-card.wl-liste .wl-arrows{flex-direction:column}.wl-card.wl-liste .wl-card-main{padding:7px}}
 
-/* v1.7.106 — Sections de catégories sur toute la largeur ; les fiches se rangent de gauche à droite. */
-#wl-results.wl-sections{display:block;width:100%;max-width:none;overflow:visible}
-#wl-results.wl-sections>.wl-section{display:block;width:100%;min-width:0;margin:0 0 26px;padding:12px 12px 15px;background:var(--surface2);border:1px solid #434343;border-left:3px solid var(--green-light);border-radius:12px}
-#wl-results.wl-sections .wl-section-title{position:static;font-size:15px;padding:2px 0 10px;margin-bottom:12px;border-bottom:1px solid #494949}
-#wl-results.wl-sections .wl-card-container{display:grid;grid-auto-flow:row;gap:11px;align-items:stretch;justify-content:stretch}
-#wl-results.wl-sections .wl-layout-liste{grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr))}
-#wl-results.wl-sections .wl-layout-carre.wl-size-mini,#wl-results.wl-sections .wl-layout-affiche.wl-size-mini{grid-template-columns:repeat(auto-fill,minmax(84px,1fr))}
-#wl-results.wl-sections .wl-layout-carre.wl-size-petit,#wl-results.wl-sections .wl-layout-affiche.wl-size-petit{grid-template-columns:repeat(auto-fill,minmax(115px,1fr))}
-#wl-results.wl-sections .wl-layout-carre.wl-size-moyen,#wl-results.wl-sections .wl-layout-affiche.wl-size-moyen{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
-#wl-results.wl-sections .wl-layout-carre.wl-size-grand,#wl-results.wl-sections .wl-layout-affiche.wl-size-grand{grid-template-columns:repeat(auto-fill,minmax(225px,1fr))}
-#wl-results.wl-sections .wl-card{width:100%;min-width:0;max-width:none;margin:0}
-#wl-results:not(.wl-sections){width:100%}
+/* v1.7.107 : CATÉGORIES CÔTE À CÔTE, de gauche à droite, jamais empilées. */
+#wl-results.wl-columns{
+  display:grid;
+  grid-template-columns:repeat(var(--wl-group-count,1),minmax(300px,1fr));
+  grid-auto-flow:column;
+  gap:12px;
+  width:100%;min-width:0;max-width:100%;overflow-x:auto;overflow-y:visible;
+  align-items:start;scrollbar-width:thin;scrollbar-color:var(--green-light) var(--surface2);
+  padding-bottom:12px;
+}
+#wl-results.wl-columns>.wl-section{
+  min-width:0;width:auto;margin:0;
+  padding:11px 10px 15px;
+  background:var(--surface2);border:1px solid #444;
+  border-top:3px solid var(--green-light);border-radius:12px;
+}
+#wl-results.wl-columns .wl-section-title{
+  position:sticky;top:0;z-index:1;font-size:15px;padding:2px 0 10px;
+  margin:0 0 11px;border-bottom:1px solid #494949;
+  background:var(--surface2);
+}
+/* Dans chaque catégorie : les fiches vont de gauche à droite, PUIS à la ligne. */
+#wl-results.wl-columns .wl-card-container{
+  display:grid;grid-auto-flow:row;gap:9px;
+  justify-content:stretch;align-content:start;align-items:start;min-width:0;
+}
+#wl-results.wl-columns .wl-layout-liste{grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr))}
+#wl-results.wl-columns .wl-layout-liste.wl-size-mini{grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),1fr))}
+#wl-results.wl-columns .wl-layout-carre.wl-size-mini,
+#wl-results.wl-columns .wl-layout-affiche.wl-size-mini{grid-template-columns:repeat(auto-fill,minmax(min(100%,86px),1fr))}
+#wl-results.wl-columns .wl-layout-carre.wl-size-petit,
+#wl-results.wl-columns .wl-layout-affiche.wl-size-petit{grid-template-columns:repeat(auto-fill,minmax(min(100%,120px),1fr))}
+#wl-results.wl-columns .wl-layout-carre.wl-size-moyen,
+#wl-results.wl-columns .wl-layout-affiche.wl-size-moyen{grid-template-columns:repeat(auto-fill,minmax(min(100%,160px),1fr))}
+#wl-results.wl-columns .wl-layout-carre.wl-size-grand,
+#wl-results.wl-columns .wl-layout-affiche.wl-size-grand{grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr))}
+#wl-results.wl-columns .wl-card{width:100%;min-width:0;max-width:none;margin:0}
+/* En mode non séparé, grille de miniatures sur toute la largeur également. */
+#wl-results:not(.wl-columns){width:100%;min-width:0}
 .wl-card-container.wl-size-mini.wl-layout-carre,.wl-card-container.wl-size-mini.wl-layout-affiche{grid-template-columns:repeat(auto-fill,minmax(84px,1fr))}
 .wl-card-container.wl-size-mini.wl-layout-liste{grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr))}
 .wl-card.wl-liste.wl-mini{min-height:72px}
 .wl-card.wl-liste.wl-mini .wl-poster{width:54px}
 .wl-card.wl-mini .wl-card-main{padding:6px}
 .wl-card.wl-mini .wl-card-main h3{font-size:11px}
+@media(max-width:700px){
+  #wl-results.wl-columns{gap:9px;grid-template-columns:repeat(var(--wl-group-count,1),minmax(255px,1fr));}
+  #wl-results.wl-columns>.wl-section{padding:8px 6px 12px}
+  #wl-results.wl-columns .wl-card-container{gap:7px}
+}
 /* Minimal : une affiche + le titre, pas les trois dates ni le badge de type. */
 .wl-card.wl-compact .wl-chip,.wl-card.wl-compact .wl-meta,.wl-card.wl-compact .wl-open,.wl-card.wl-compact .wl-arrows{display:none!important}
 .wl-card.wl-compact{cursor:pointer}
@@ -88,7 +120,7 @@
 .wl-card.wl-compact.wl-carre .wl-drag,.wl-card.wl-compact.wl-affiche .wl-drag{font-size:18px;min-width:30px;min-height:34px;padding:3px;background:#111b;color:#fff;border:1px solid #888;border-radius:6px}
 .wl-card.wl-compact.wl-affiche .wl-poster{aspect-ratio:2/3}
 .wl-card.wl-compact.wl-carre .wl-poster{aspect-ratio:1/1}
-@media(max-width:700px){#wl-results.wl-sections>.wl-section{padding:9px 7px}#wl-results.wl-sections .wl-card-container{gap:7px}#wl-results.wl-sections .wl-layout-carre.wl-size-mini,#wl-results.wl-sections .wl-layout-affiche.wl-size-mini{grid-template-columns:repeat(auto-fill,minmax(80px,1fr))}}
+
 .wl-drag{touch-action:none;user-select:none;-webkit-user-select:none;min-width:37px;min-height:38px;font-size:24px;cursor:grab;position:relative;z-index:3}
 .wl-reordering .wl-drag{cursor:grabbing}
 .wl-reordering{user-select:none;-webkit-user-select:none}
@@ -111,7 +143,7 @@
 .wl-card.wl-carre .wl-arrows{display:none}
 @media(pointer:coarse){.wl-card.wl-carre .wl-drag{min-width:44px;min-height:44px}}
 
-/* v1.7.106 : détails et titre minimisés dans tous les formats */
+/* v1.7.107 : détails et titre minimisés dans tous les formats */
 .wl-card.wl-compact.wl-carre .wl-card-main h3,.wl-card.wl-compact.wl-affiche .wl-card-main h3{font-size:11px!important;line-height:1.16!important;margin:0!important}
 .wl-card.wl-compact.wl-carre .wl-card-actions,.wl-card.wl-compact.wl-affiche .wl-card-actions{justify-content:flex-end!important}
 .wl-card.wl-compact.wl-affiche .wl-poster{width:100%}
