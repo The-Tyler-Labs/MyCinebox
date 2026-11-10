@@ -1,13 +1,14 @@
-/* MyCinebox — onglet À voir v1.7.104. Sans dépendance externe. */
+/* MyCinebox — onglet À voir v1.7.105. Sans dépendance externe. */
 (function(){
 'use strict';
 const KEY='mycinebox_watchlist_preferences_v1';
-const TYPES=['films','series','documentaires','animation','spectacles','theatre','humour'];
-const TYPE_NAMES={films:'Films',series:'Séries',documentaires:'Documentaires',animation:'Animation',spectacles:'Spectacles',theatre:'Théâtre',humour:'Humour'};
-const TYPE_ICONS={films:'🎬',series:'📺',documentaires:'🎥',animation:'🎨',spectacles:'🎭',theatre:'🎪',humour:'😄'};
+const TYPES=['films','series','documentaires','animation','spectacles','theatre','humour','autres'];
+const TYPE_NAMES={films:'Films',series:'Séries',documentaires:'Documentaires',animation:'Animation',spectacles:'Spectacles',theatre:'Théâtre',humour:'Humour',autres:'Autres'};
+const TYPE_ICONS={films:'🎬',series:'📺',documentaires:'🎥',animation:'🎨',spectacles:'🎭',theatre:'🎪',humour:'😄',autres:'🎞️'};
 const DEFAULT={sort:'ajout-a-voir',direction:'desc',group:true,types:TYPES.slice(),layout:'liste',size:'moyen'};
 let prefs={...DEFAULT};
-let draggedId=null, bound=false;
+let bound=false;
+let pointerDrag=null; // Un seul glisser-déposer, compatible souris et tactile Android.
 const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e;};
 const safeNum=v=>{const n=Number(v);return Number.isFinite(n)&&n>0?n:0;};
 const filmId=f=>String(f.id);
@@ -19,6 +20,7 @@ function dateStr(v){const n=safeNum(v);if(!n)return 'Non renseignée';const d=ne
 function dateFilm(f){const text=String(f.dateSortie||'').slice(0,4);return Number(text)||0;}
 function dateAvoir(f){return safeNum(f.dateAjoutAVoir);}
 function order(f){return safeNum(f.ordreAVoir);}
+function typeOf(f){return TYPES.includes(f.categorie)?f.categorie:'autres';}
 function list(){const arr=getFilms().filter(f=>f&&hasAvoir(f));const collate=new Intl.Collator('fr',{numeric:true,sensitivity:'base'});
  arr.sort((a,b)=>{
   let n=0;
@@ -27,7 +29,7 @@ function list(){const arr=getFilms().filter(f=>f&&hasAvoir(f));const collate=new
    if(!n)n=(dateAvoir(b)||safeNum(b.dateAjout))-(dateAvoir(a)||safeNum(a.dateAjout));
   }else if(prefs.sort==='date-film')n=dateFilm(a)-dateFilm(b);
   else if(prefs.sort==='date-videotheque')n=safeNum(a.dateAjout)-safeNum(b.dateAjout);
-  else if(prefs.sort==='type')n=TYPES.indexOf(a.categorie)-TYPES.indexOf(b.categorie);
+  else if(prefs.sort==='type')n=TYPES.indexOf(typeOf(a))-TYPES.indexOf(typeOf(b));
   else n=dateAvoir(a)-dateAvoir(b);
   if(prefs.sort!=='manuel'&&prefs.direction==='desc')n=-n;
   return n||collate.compare(String(a.titre||''),String(b.titre||''));
@@ -99,8 +101,8 @@ function setup(){if(bound||!document.querySelector('.bottom-nav'))return;bound=t
  // Pour les autres chemins de création de statuts (fusion, import, modification directe),
  // l'onglet les affiche quand même grâce à filmAStatut.
  if(typeof APP_VERSION!=='undefined'){
-  const version=document.getElementById('app-version-label');if(version)version.textContent='v1.7.104';
-  document.title='Vidéothèque v1.7.104';
+  const version=document.getElementById('app-version-label');if(version)version.textContent='v1.7.105';
+  document.title='Vidéothèque v1.7.105';
  }
  if(typeof currentPage!=='undefined'&&currentPage==='a-voir')render();
 }
@@ -131,40 +133,139 @@ function card(f){const row=el('article','wl-card wl-'+prefs.layout+' wl-'+prefs.
  content.append(el('h3','',f.titre||'Sans titre'));content.append(metadata(f));
  const actions=el('div','wl-card-actions');
  const open=click('Ouvrir',()=>ouvrirDetail(f.id),'wl-open');open.setAttribute('aria-label','Ouvrir la fiche '+f.titre);actions.append(open);
+ const drag=el('button','wl-drag','⠿');drag.type='button';drag.title='Maintenir puis déplacer à la souris ou au doigt';
+ drag.setAttribute('aria-label','Déplacer '+f.titre+' dans la liste À voir');actions.append(drag);
+ drag.addEventListener('pointerdown',ev=>commencerGlisserAVoir(ev,f,row,drag));
+ drag.addEventListener('click',ev=>ev.preventDefault());
  if(prefs.sort==='manuel'){
-  const drag=el('button','wl-drag','⠿');drag.type='button';drag.draggable=true;drag.title='Maintenir puis glisser pour déplacer';drag.setAttribute('aria-label','Déplacer '+f.titre);actions.append(drag);
-  drag.addEventListener('dragstart',ev=>{draggedId=filmId(f);row.classList.add('wl-dragging');ev.dataTransfer.effectAllowed='move';ev.dataTransfer.setData('text/plain',draggedId);});
-  drag.addEventListener('dragend',()=>{draggedId=null;row.classList.remove('wl-dragging');});
   const arrows=el('div','wl-arrows');arrows.append(click('↑',()=>move(f,-1)));arrows.append(click('↓',()=>move(f,1)));actions.append(arrows);
  }
  row.append(poster,content,actions);
- if(prefs.sort==='manuel'){
-  row.addEventListener('dragover',ev=>{if(draggedId){ev.preventDefault();row.classList.add('wl-drop-target');}});
-  row.addEventListener('dragleave',()=>row.classList.remove('wl-drop-target'));
-  row.addEventListener('drop',ev=>{ev.preventDefault();row.classList.remove('wl-drop-target');if(draggedId)placeBefore(draggedId,filmId(f));});
- }
+
  return row;
 }
+// Ordre tactile : Pointer Events fonctionne sur souris, stylet et Android 10.
+// On n'utilise pas le drag HTML natif, qui est peu fiable dans WebView.
+function commencerGlisserAVoir(ev,film,row,poignee){
+ if(ev.button!==undefined&&ev.button!==0)return;
+ if(pointerDrag)terminerGlisserAVoir(null,true);
+ const x=ev.clientX,y=ev.clientY;
+ pointerDrag={pointerId:ev.pointerId,from:filmId(film),categorie:typeOf(film),row,poignee,
+   startX:x,startY:y,x,y,started:false,targetId:null,after:false,
+   timer:null,scrollView:document.querySelector('#wl-results'),scrollStamp:0};
+ const d=pointerDrag;
+ // Un appui long sur tactile évite de confondre le défilement avec le déplacement.
+ if(ev.pointerType==='mouse'||ev.pointerType==='pen'){
+  d.timer=null;
+ }else{
+  d.timer=setTimeout(()=>{if(pointerDrag===d)activerGlisserAVoir();},250);
+ }
+ try{poignee.setPointerCapture(ev.pointerId);}catch(_){}
+ poignee.addEventListener('pointermove',bougerGlisserAVoir);
+ poignee.addEventListener('pointerup',relacherGlisserAVoir,{once:true});
+ poignee.addEventListener('pointercancel',annulerGlisserAVoir,{once:true});
+ poignee.addEventListener('lostpointercapture',annulerGlisserAVoir,{once:true});
+}
+function activerGlisserAVoir(){
+ const d=pointerDrag;if(!d||d.started)return;
+ if(d.timer)clearTimeout(d.timer);d.timer=null;
+ d.started=true;d.row.classList.add('wl-dragging');
+ document.body.classList.add('wl-reordering');
+ d.poignee.setAttribute('aria-grabbed','true');
+ const e=document.getElementById('wl-drag-hint');
+ if(e)e.textContent='Déplace la fiche puis relâche. Ton ordre manuel sera enregistré.';
+}
+function bougerGlisserAVoir(ev){
+ const d=pointerDrag;if(!d||ev.pointerId!==d.pointerId)return;
+ d.x=ev.clientX;d.y=ev.clientY;
+ const distance=Math.hypot(d.x-d.startX,d.y-d.startY);
+ if(!d.started&&ev.pointerType==='mouse'&&distance>5)activerGlisserAVoir();
+ // Sur écran tactile, un glissement précoce sans appui long est un défilement normal.
+ if(!d.started){if(distance>15&&d.timer){clearTimeout(d.timer);d.timer=null;}return;}
+ ev.preventDefault();
+ document.querySelectorAll('#wl-results .wl-drop-target').forEach(x=>x.classList.remove('wl-drop-target'));
+ const underneath=document.elementFromPoint(ev.clientX,ev.clientY);
+ const target=underneath?.closest?.('.wl-card[data-fid]');
+ d.targetId=null;
+ if(target&&target!==d.row){
+  const f=getFilms().find(x=>filmId(x)===target.dataset.fid);
+  if(f&&(!prefs.group||typeOf(f)===d.categorie)){
+   d.targetId=target.dataset.fid;
+   const rect=target.getBoundingClientRect();
+   const horizontal=prefs.group&&getComputedStyle(document.getElementById('wl-results')).getPropertyValue('display')==='grid'&&prefs.layout!=='liste';
+   d.after=horizontal?ev.clientX>rect.left+rect.width/2:ev.clientY>rect.top+rect.height/2;
+   target.classList.add('wl-drop-target');
+   target.dataset.wlDropSide=d.after?'after':'before';
+  }
+ }
+ // Défilement doux au bord de l'écran pendant le déplacement.
+ const zone=55;if(ev.clientY<zone)window.scrollBy(0,-12);
+ else if(ev.clientY>window.innerHeight-zone)window.scrollBy(0,12);
+}
+function relacherGlisserAVoir(ev){terminerGlisserAVoir(ev,false);}
+function annulerGlisserAVoir(ev){if(pointerDrag&&(!ev||ev.pointerId===pointerDrag.pointerId))terminerGlisserAVoir(null,true);}
+function terminerGlisserAVoir(ev,cancelled){
+ const d=pointerDrag;if(!d)return;
+ pointerDrag=null;
+ if(d.timer)clearTimeout(d.timer);
+ d.poignee.removeEventListener('pointermove',bougerGlisserAVoir);
+ d.poignee.removeEventListener('pointercancel',annulerGlisserAVoir);
+ d.poignee.removeEventListener('lostpointercapture',annulerGlisserAVoir);
+ try{d.poignee.releasePointerCapture(d.pointerId);}catch(_){}
+ d.poignee.removeAttribute('aria-grabbed');
+ d.row.classList.remove('wl-dragging');
+ document.body.classList.remove('wl-reordering');
+ document.querySelectorAll('#wl-results .wl-drop-target').forEach(x=>{x.classList.remove('wl-drop-target');delete x.dataset.wlDropSide;});
+ const e=document.getElementById('wl-drag-hint');if(e)e.textContent='Maintiens ⠿ puis déplace une fiche avec la souris ou le doigt.';
+ if(cancelled||!d.started)return;
+ if(d.targetId&&d.from!==d.targetId)placeRelative(d.from,d.targetId,d.after);
+}
 function orderedIds(){return list().map(f=>filmId(f));}
-function storeOrder(ids){const rank=new Map(ids.map((id,i)=>[id,i+1]));getFilms().filter(hasAvoir).forEach(f=>{const r=rank.get(filmId(f));if(r!==undefined)f.ordreAVoir=r;});prefs.sort='manuel';remember();save();render();}
-function move(f,delta){const ids=orderedIds();const from=ids.indexOf(filmId(f)),to=from+delta;if(from<0||to<0||to>=ids.length)return;[ids[from],ids[to]]=[ids[to],ids[from]];storeOrder(ids);}
-function placeBefore(source,target){const ids=orderedIds();const from=ids.indexOf(source),to=ids.indexOf(target);if(from<0||to<0||from===to)return;ids.splice(from,1);ids.splice(ids.indexOf(target),0,source);storeOrder(ids);}
+function storeOrder(ids){
+ const rank=new Map(ids.map((id,i)=>[id,i+1]));
+ getFilms().filter(hasAvoir).forEach(f=>{const r=rank.get(filmId(f));if(r!==undefined)f.ordreAVoir=r;});
+ prefs.sort='manuel';remember();save();render();
+}
+function move(f,delta){
+ const ids=orderedIds(),from=ids.indexOf(filmId(f)),to=from+delta;
+ if(from<0||to<0||to>=ids.length)return;
+ if(prefs.group){const target=getFilms().find(x=>filmId(x)===ids[to]);if(!target||typeOf(target)!==typeOf(f))return;}
+ [ids[from],ids[to]]=[ids[to],ids[from]];storeOrder(ids);
+}
+function placeRelative(source,target,after=false){
+ // Un déplacement ne change jamais la catégorie d'une fiche.
+ const ids=orderedIds(),from=ids.indexOf(source),to=ids.indexOf(target);
+ if(from<0||to<0||from===to)return;
+ const src=getFilms().find(f=>filmId(f)===source),dst=getFilms().find(f=>filmId(f)===target);
+ if(!src||!dst||(prefs.group&&typeOf(src)!==typeOf(dst)))return;
+ ids.splice(from,1);
+ const index=ids.indexOf(target)+(after?1:0);
+ ids.splice(index,0,source);
+ storeOrder(ids);
+}
+function placeBefore(source,target){placeRelative(source,target,false);}
 function makeGroup(parent,title,items){if(!items.length)return;
  const section=el('section','wl-section');if(title)section.append(el('h3','wl-section-title',title+' · '+items.length));
  const box=el('div','wl-card-container wl-layout-'+prefs.layout+' wl-size-'+prefs.size);
  items.forEach(f=>box.append(card(f)));section.append(box);parent.append(section);
 }
 function render(){const page=document.getElementById('page-a-voir');if(!page)return;
- const total=list(),visible=total.filter(f=>prefs.types.includes(f.categorie));
+ const total=list(),visible=total.filter(f=>prefs.types.includes(typeOf(f)));
  const controls=document.getElementById('wl-controls');controls.replaceChildren();
  controls.append(select([['ajout-a-voir','Date d’ajout à À voir'],['manuel','Ordre manuel'],['date-film','Date du film / série'],['date-videotheque','Ajout à la vidéothèque'],['type','Catégorie']],prefs.sort,setSort,'Trier par'));
  if(prefs.sort!=='manuel')controls.append(click(prefs.direction==='desc'?'↓ Décroissant':'↑ Croissant',()=>setPref('direction',prefs.direction==='desc'?'asc':'desc')));
  controls.append(click('⚙️ Affichage',showSettings,'wl-settings-button'));
  const toolbar=document.getElementById('wl-subtoolbar');toolbar.replaceChildren();toolbar.append(el('span','wl-muted',visible.length+' titre(s) à voir'+(visible.length!==total.length?' · '+(total.length-visible.length)+' masqué(s)':'')));
- if(prefs.sort==='manuel')toolbar.append(el('span','wl-note','↕ Glisse les poignées ou utilise ↑ ↓ pour ordonner'));
- const root=document.getElementById('wl-results');root.replaceChildren();if(!visible.length){root.append(el('p','wl-empty',total.length?'Aucun titre dans les catégories affichées.':'Aucun titre « À voir ». Ajoute ce statut depuis une fiche.'));return;}
- if(prefs.group){const known=TYPES.filter(t=>prefs.types.includes(t));known.forEach(t=>makeGroup(root,(TYPE_ICONS[t]||'')+' '+TYPE_NAMES[t],visible.filter(f=>f.categorie===t)));const others=visible.filter(f=>!TYPES.includes(f.categorie));makeGroup(root,'Autres',others);}
- else makeGroup(root,'',visible);
+ const hint=el('span','wl-note','Maintiens ⠿ puis déplace une fiche avec la souris ou le doigt.');hint.id='wl-drag-hint';toolbar.append(hint);
+ if(prefs.sort==='manuel')toolbar.append(el('span','wl-note','✓ Ordre manuel mémorisé'));
+ const root=document.getElementById('wl-results');root.replaceChildren();root.classList.remove('wl-columns','wl-size-petit','wl-size-moyen','wl-size-grand');root.classList.add('wl-size-'+prefs.size);if(!visible.length){root.append(el('p','wl-empty',total.length?'Aucun titre dans les catégories affichées.':'Aucun titre « À voir ». Ajoute ce statut depuis une fiche.'));return;}
+ if(prefs.group){
+  root.classList.add('wl-columns');
+  const known=TYPES.filter(t=>prefs.types.includes(t));
+  known.forEach(t=>makeGroup(root,(TYPE_ICONS[t]||'')+' '+TYPE_NAMES[t],visible.filter(f=>typeOf(f)===t)));
+ }else{
+  root.classList.remove('wl-columns');makeGroup(root,'',visible);
+ }
 }
 function init(){setup();}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
