@@ -1,11 +1,11 @@
-/* MyCinebox — onglet À voir v1.7.105. Sans dépendance externe. */
+/* MyCinebox — onglet À voir v1.7.106. Sans dépendance externe. */
 (function(){
 'use strict';
 const KEY='mycinebox_watchlist_preferences_v1';
 const TYPES=['films','series','documentaires','animation','spectacles','theatre','humour','autres'];
 const TYPE_NAMES={films:'Films',series:'Séries',documentaires:'Documentaires',animation:'Animation',spectacles:'Spectacles',theatre:'Théâtre',humour:'Humour',autres:'Autres'};
 const TYPE_ICONS={films:'🎬',series:'📺',documentaires:'🎥',animation:'🎨',spectacles:'🎭',theatre:'🎪',humour:'😄',autres:'🎞️'};
-const DEFAULT={sort:'ajout-a-voir',direction:'desc',group:true,types:TYPES.slice(),layout:'liste',size:'moyen'};
+const DEFAULT={sort:'ajout-a-voir',direction:'desc',group:true,types:TYPES.slice(),layout:'liste',size:'moyen',compact:false};
 let prefs={...DEFAULT};
 let bound=false;
 let pointerDrag=null; // Un seul glisser-déposer, compatible souris et tactile Android.
@@ -101,8 +101,8 @@ function setup(){if(bound||!document.querySelector('.bottom-nav'))return;bound=t
  // Pour les autres chemins de création de statuts (fusion, import, modification directe),
  // l'onglet les affiche quand même grâce à filmAStatut.
  if(typeof APP_VERSION!=='undefined'){
-  const version=document.getElementById('app-version-label');if(version)version.textContent='v1.7.105';
-  document.title='Vidéothèque v1.7.105';
+  const version=document.getElementById('app-version-label');if(version)version.textContent='v1.7.106';
+  document.title='Vidéothèque v1.7.106';
  }
  if(typeof currentPage!=='undefined'&&currentPage==='a-voir')render();
 }
@@ -111,9 +111,10 @@ function showSettings(){const modal=document.getElementById('wl-overlay');const 
  const layout=el('div','wl-radio-grid');[['liste','☰ Liste horizontale'],['carre','▦ Cartes carrées'],['affiche','▤ Affiches verticales']].forEach(([v,label])=>{
   const item=el('label','wl-radio-item');const input=el('input');input.type='radio';input.name='wl-layout';input.value=v;input.checked=prefs.layout===v;input.addEventListener('change',()=>setPref('layout',v));item.append(input,el('span','',label));layout.append(item);
  });root.append(field('Format des fiches',layout));
- const sizes=el('div','wl-radio-grid');[['petit','Petit'],['moyen','Moyen'],['grand','Grand']].forEach(([v,label])=>{
+ const sizes=el('div','wl-radio-grid');[['mini','Miniatures'],['petit','Petit'],['moyen','Moyen'],['grand','Grand']].forEach(([v,label])=>{
   const item=el('label','wl-radio-item');const input=el('input');input.type='radio';input.name='wl-size';input.value=v;input.checked=prefs.size===v;input.addEventListener('change',()=>setPref('size',v));item.append(input,el('span','',label));sizes.append(item);
  });root.append(field('Taille des fiches',sizes));
+ const compact=el('label','wl-toggle');const checkCompact=el('input');checkCompact.type='checkbox';checkCompact.checked=!!prefs.compact;checkCompact.addEventListener('change',()=>setPref('compact',checkCompact.checked));compact.append(checkCompact,el('span','','Mode compact : affiche et titre seulement'));root.append(field('Informations affichées',compact));
  const group=el('label','wl-toggle');const togg=el('input');togg.type='checkbox';togg.checked=prefs.group;togg.addEventListener('change',()=>setPref('group',togg.checked));group.append(togg,el('span','','Séparer les types (Films, Séries, Documentaires…)'));root.append(field('Organisation',group));
  const cats=el('div','wl-type-grid');TYPES.forEach(t=>{const label=el('label','wl-toggle');const input=el('input');input.type='checkbox';input.checked=prefs.types.includes(t);input.addEventListener('change',()=>{if(input.checked&&!prefs.types.includes(t))prefs.types.push(t);if(!input.checked)prefs.types=prefs.types.filter(x=>x!==t);remember();render();});label.append(input,el('span','',TYPE_ICONS[t]+' '+TYPE_NAMES[t]));cats.append(label);});root.append(field('Catégories à afficher',cats));
  const defSort=select([['ajout-a-voir','Ajout à À voir (récent d’abord)'],['manuel','Ordre manuel'],['date-film','Date du film / série'],['date-videotheque','Ajout à la vidéothèque'],['type','Catégorie']],prefs.sort,setSort,'Tri par défaut');root.append(field('Tri',defSort));
@@ -127,7 +128,7 @@ function metadata(f){const meta=el('div','wl-meta');
  if(f.dateSortie)meta.append(el('span','','🎞️ '+String(f.dateSortie).slice(0,4)));
  return meta;
 }
-function card(f){const row=el('article','wl-card wl-'+prefs.layout+' wl-'+prefs.size);row.dataset.fid=filmId(f);
+function card(f){const row=el('article','wl-card wl-'+prefs.layout+' wl-'+prefs.size+(prefs.compact?' wl-compact':''));row.dataset.fid=filmId(f);
  const poster=el('div','wl-poster');if(f.affichePath){const img=el('img');img.src=f.affichePath;img.loading='lazy';img.alt='Affiche de '+(f.titre||'');img.onerror=()=>img.remove();poster.append(img);}else poster.append(el('div','wl-no-image',TYPE_ICONS[f.categorie]||'🎬'));
  const content=el('div','wl-card-main');const type=el('span','wl-chip wl-cat-'+(f.categorie||'autre'),(TYPE_ICONS[f.categorie]||'🎬')+' '+(TYPE_NAMES[f.categorie]||'Autre'));content.append(type);
  content.append(el('h3','',f.titre||'Sans titre'));content.append(metadata(f));
@@ -141,7 +142,7 @@ function card(f){const row=el('article','wl-card wl-'+prefs.layout+' wl-'+prefs.
   const arrows=el('div','wl-arrows');arrows.append(click('↑',()=>move(f,-1)));arrows.append(click('↓',()=>move(f,1)));actions.append(arrows);
  }
  row.append(poster,content,actions);
-
+ if(prefs.compact){row.tabIndex=0;row.setAttribute('role','button');row.setAttribute('aria-label','Ouvrir '+(f.titre||'la fiche'));row.addEventListener('click',ev=>{if(!ev.target.closest('button'))ouvrirDetail(f.id);});row.addEventListener('keydown',ev=>{if((ev.key==='Enter'||ev.key===' ')&&ev.target===row){ev.preventDefault();ouvrirDetail(f.id);}});}
  return row;
 }
 // Ordre tactile : Pointer Events fonctionne sur souris, stylet et Android 10.
@@ -192,7 +193,9 @@ function bougerGlisserAVoir(ev){
   if(f&&(!prefs.group||typeOf(f)===d.categorie)){
    d.targetId=target.dataset.fid;
    const rect=target.getBoundingClientRect();
-   const horizontal=prefs.group&&getComputedStyle(document.getElementById('wl-results')).getPropertyValue('display')==='grid'&&prefs.layout!=='liste';
+   const parent=target.parentElement;
+   const columns=parent?getComputedStyle(parent).gridTemplateColumns.split(' ').length:1;
+   const horizontal=columns>1;
    d.after=horizontal?ev.clientX>rect.left+rect.width/2:ev.clientY>rect.top+rect.height/2;
    target.classList.add('wl-drop-target');
    target.dataset.wlDropSide=d.after?'after':'before';
@@ -254,17 +257,17 @@ function render(){const page=document.getElementById('page-a-voir');if(!page)ret
  const controls=document.getElementById('wl-controls');controls.replaceChildren();
  controls.append(select([['ajout-a-voir','Date d’ajout à À voir'],['manuel','Ordre manuel'],['date-film','Date du film / série'],['date-videotheque','Ajout à la vidéothèque'],['type','Catégorie']],prefs.sort,setSort,'Trier par'));
  if(prefs.sort!=='manuel')controls.append(click(prefs.direction==='desc'?'↓ Décroissant':'↑ Croissant',()=>setPref('direction',prefs.direction==='desc'?'asc':'desc')));
- controls.append(click('⚙️ Affichage',showSettings,'wl-settings-button'));
+ controls.append(click(prefs.compact?'☑ Compact':'▣ Compact',()=>setPref('compact',!prefs.compact),'wl-compact-toggle')); controls.append(click('⚙️ Affichage',showSettings,'wl-settings-button'));
  const toolbar=document.getElementById('wl-subtoolbar');toolbar.replaceChildren();toolbar.append(el('span','wl-muted',visible.length+' titre(s) à voir'+(visible.length!==total.length?' · '+(total.length-visible.length)+' masqué(s)':'')));
  const hint=el('span','wl-note','Maintiens ⠿ puis déplace une fiche avec la souris ou le doigt.');hint.id='wl-drag-hint';toolbar.append(hint);
  if(prefs.sort==='manuel')toolbar.append(el('span','wl-note','✓ Ordre manuel mémorisé'));
- const root=document.getElementById('wl-results');root.replaceChildren();root.classList.remove('wl-columns','wl-size-petit','wl-size-moyen','wl-size-grand');root.classList.add('wl-size-'+prefs.size);if(!visible.length){root.append(el('p','wl-empty',total.length?'Aucun titre dans les catégories affichées.':'Aucun titre « À voir ». Ajoute ce statut depuis une fiche.'));return;}
+ const root=document.getElementById('wl-results');root.replaceChildren();root.classList.remove('wl-columns','wl-sections','wl-size-mini','wl-size-petit','wl-size-moyen','wl-size-grand');root.classList.add('wl-size-'+prefs.size);if(!visible.length){root.append(el('p','wl-empty',total.length?'Aucun titre dans les catégories affichées.':'Aucun titre « À voir ». Ajoute ce statut depuis une fiche.'));return;}
  if(prefs.group){
-  root.classList.add('wl-columns');
+  root.classList.add('wl-sections');
   const known=TYPES.filter(t=>prefs.types.includes(t));
   known.forEach(t=>makeGroup(root,(TYPE_ICONS[t]||'')+' '+TYPE_NAMES[t],visible.filter(f=>typeOf(f)===t)));
  }else{
-  root.classList.remove('wl-columns');makeGroup(root,'',visible);
+  root.classList.remove('wl-sections');makeGroup(root,'',visible);
  }
 }
 function init(){setup();}
