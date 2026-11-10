@@ -1,4 +1,4 @@
-/* MyCinebox v1.7.107 : vue À voir, responsive pour tablette Android. */
+/* MyCinebox v1.7.108 : vue À voir, tris indépendants, mini-liste. */
 .bottom-nav{overflow-x:auto;scrollbar-width:none;white-space:nowrap;justify-content:flex-start}
 .bottom-nav::-webkit-scrollbar{display:none}
 .bottom-nav .nav-btn{flex:1 0 60px;min-width:60px}
@@ -147,3 +147,26 @@
 .wl-card.wl-compact.wl-carre .wl-card-main h3,.wl-card.wl-compact.wl-affiche .wl-card-main h3{font-size:11px!important;line-height:1.16!important;margin:0!important}
 .wl-card.wl-compact.wl-carre .wl-card-actions,.wl-card.wl-compact.wl-affiche .wl-card-actions{justify-content:flex-end!important}
 .wl-card.wl-compact.wl-affiche .wl-poster{width:100%}
+
+/* v1.7.108 — en-têtes indépendants par catégorie */
+.wl-section-heading{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:9px;margin:0 0 11px;padding-bottom:9px;border-bottom:1px solid #484848}
+.wl-section-heading .wl-section-title{position:static!important;margin:0!important;padding:0!important;border:0!important;background:none!important;white-space:nowrap}
+.wl-category-controls{display:flex;gap:6px;align-items:end;flex-wrap:wrap;min-width:0}
+.wl-category-controls .wl-control{flex:1 1 155px;min-width:140px}
+.wl-category-controls .wl-control-label{font-size:10px}
+.wl-category-controls .wl-select{min-height:34px;padding:5px 7px;font-size:11px}
+.wl-category-controls .wl-button{min-height:34px;padding:6px 8px;font-size:10px}
+.wl-global-hint{font-size:12px;color:var(--green-light);padding:8px 0;flex:1}
+#wl-results.wl-columns .wl-section-heading{position:sticky;top:0;z-index:2;background:var(--surface2)}
+/* Mini-liste : une petite affiche et un titre par ligne, sans les métadonnées. */
+.wl-card-container.wl-layout-mini-liste,
+#wl-results.wl-columns .wl-card-container.wl-layout-mini-liste{display:grid;grid-template-columns:minmax(0,1fr);gap:4px}
+.wl-card.wl-mini-liste{display:flex;flex-direction:row;align-items:center;min-height:44px!important;height:44px;aspect-ratio:auto!important;cursor:pointer;border-radius:7px}
+.wl-card.wl-mini-liste .wl-poster{position:relative;inset:auto;flex:0 0 30px;width:30px;height:42px;aspect-ratio:auto!important;}
+.wl-card.wl-mini-liste .wl-poster img{object-fit:cover}
+.wl-card.wl-mini-liste .wl-card-main{position:static;background:none;min-width:0;flex:1;padding:3px 8px;pointer-events:none}
+.wl-card.wl-mini-liste .wl-card-main h3{font-size:11px!important;font-weight:600;line-height:1.25;margin:0!important;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.wl-card.wl-mini-liste .wl-chip,.wl-card.wl-mini-liste .wl-meta,.wl-card.wl-mini-liste .wl-open,.wl-card.wl-mini-liste .wl-arrows{display:none!important}
+.wl-card.wl-mini-liste .wl-card-actions{position:static;padding:1px 3px;max-width:none;flex:0 0 auto}
+.wl-card.wl-mini-liste .wl-drag{min-width:34px;min-height:40px;padding:4px;font-size:19px;z-index:2}
+@media(pointer:coarse){.wl-card.wl-mini-liste{height:48px;min-height:48px!important}.wl-card.wl-mini-liste .wl-poster{height:46px}.wl-card.wl-mini-liste .wl-drag{min-height:44px;min-width:42px}}
