@@ -1,6 +1,6 @@
-// MyCinebox v1.7.105 — mise à jour « À voir » / tablette.
+// MyCinebox v1.7.106 — mise à jour « À voir » / tablette.
 // La nouvelle interface se charge via le service worker, sans modifier index.html.
-const CACHE_NAME = 'mycinebox-v1.7.105';
+const CACHE_NAME = 'mycinebox-v1.7.106';
 const BASE = '/MyCinebox/';
 const APP_SHELL = [
   BASE,
