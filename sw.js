@@ -1,6 +1,6 @@
-// MyCinebox v1.7.110 — onglet À voir par catégorie, listes fines.
+// MyCinebox v1.7.111 — onglet À voir par catégorie, listes fines.
 // Tout se dépose à la racine du dépôt : sw.js + watchlist.js.
-const CACHE_NAME='mycinebox-v1.7.110';
+const CACHE_NAME='mycinebox-v1.7.111';
 const BASE='/MyCinebox/';
 const SHELL=[BASE,BASE+'index.html',BASE+'manifest.json',BASE+'icon-192.png',BASE+'icon-512.png',BASE+'js/ai-connector.js',BASE+'watchlist.js'];
 function isHtmlRequest(req){
@@ -15,8 +15,8 @@ async function addWatchlist(response){
   html=html.replace(/<script\b[^>]*src=["']\/MyCinebox\/js\/watchlist\.js["'][^>]*><\/script>/gi,'');
   // Strip any previous version's injected script to avoid executing 2 controllers.
   html=html.replace(/<script\b[^>]*data-mycinebox-watchlist-v\d+[^>]*><\/script>/gi,'');
-  if(!html.includes('data-mycinebox-watchlist-v110')){
-    html=html.replace(/<\/body>/i,'<script data-mycinebox-watchlist-v110 src="/MyCinebox/watchlist.js"></script>\n</body>');
+  if(!html.includes('data-mycinebox-watchlist-v111')){
+    html=html.replace(/<\/body>/i,'<script data-mycinebox-watchlist-v111 src="/MyCinebox/watchlist.js"></script>\n</body>');
   }
   const headers=new Headers(response.headers);headers.delete('content-length');headers.delete('content-encoding');
   return new Response(html,{status:response.status,statusText:response.statusText,headers});
